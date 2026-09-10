@@ -1,1 +1,98 @@
-if(sessionStorage.tigrayAdmin!=='1')location='login.html';const LK='tigrayLotteryV2_lotteries',TK='tigrayLotteryV2_tickets';function L(){return JSON.parse(localStorage.getItem(LK)||'[]')}function SL(x){localStorage.setItem(LK,JSON.stringify(x))}function T(){return JSON.parse(localStorage.getItem(TK)||'[]')}function ST(x){localStorage.setItem(TK,JSON.stringify(x))}function showCreate(){editId.value='';lotForm.reset();createPanel.style.display='block'}lotForm.onsubmit=e=>{e.preventDefault();let a=L(),id=editId.value;if(Number(min.value)>Number(max.value))return alert('Minimum cannot be greater than maximum.');if(id){let x=a.find(x=>x.id===id);Object.assign(x,{name:lotName.value.trim(),price:Number(price.value),min:Number(min.value),max:Number(max.value),status:status.value})}else{a.push({id:'LOT-'+String(Date.now()).slice(-6),name:lotName.value.trim(),price:Number(price.value),min:Number(min.value),max:Number(max.value),status:status.value,createdAt:new Date().toISOString()})}SL(a);createPanel.style.display='none';render()};function editLot(id){let x=L().find(x=>x.id===id);editId.value=x.id;lotName.value=x.name;price.value=x.price;min.value=x.min;max.value=x.max;status.value=x.status;createPanel.style.display='block'}function delLot(id){if(!confirm('Delete this lottery?'))return;SL(L().filter(x=>x.id!==id));render()}function rand(ts,lot){let used=new Set(ts.filter(x=>x.lotteryId===lot.id&&x.status==='approved').map(x=>Number(x.ticketNumber)));let range=lot.max-lot.min+1;if(used.size>=range)throw Error('No numbers left');for(let i=0;i<200;i++){let n=Math.floor(Math.random()*range)+lot.min;if(!used.has(n))return String(n)}for(let n=lot.min;n<=lot.max;n++)if(!used.has(n))return String(n)}function approve(id){let ts=T(),x=ts.find(x=>x.id===id),lot=L().find(l=>l.id===x.lotteryId);if(!lot)return alert('Lottery was deleted.');try{x.ticketNumber=rand(ts,lot);x.status='approved';x.approvedAt=new Date().toISOString();ST(ts);render();alert('Approved! Random number: '+x.ticketNumber)}catch(e){alert(e.message)}}function reject(id){if(!confirm('Reject request?'))return;let a=T(),x=a.find(x=>x.id===id);x.status='rejected';ST(a);render()}function render(){let a=L(),ts=T();lotteries.innerHTML=a.length?a.map(x=>`<div class="lot-row"><b>${x.name}</b> (${x.id})<br>${x.price} Birr · ${x.min}-${x.max} · <span class="${x.status}">${x.status}</span><div class="actions"><button onclick="editLot('${x.id}')">Edit / Rename</button><button class="danger" onclick="delLot('${x.id}')">Delete</button></div></div>`).join(''):'No lotteries yet.';requests.innerHTML=ts.length?ts.slice().reverse().map(x=>{let lot=a.find(l=>l.id===x.lotteryId);return `<div class="lot-row"><b>${x.name}</b> · ${x.phone}<br>Lottery: ${lot?lot.name:x.lotteryId}<br>Reference: ${x.reference}<br>Status: <b>${x.status}</b>${x.ticketNumber?'<br>🎟️ Number: <b>'+x.ticketNumber+'</b>':''}${x.screenshot?'<br><img src="'+x.screenshot+'" style="max-width:220px;margin-top:8px;border-radius:8px">':''}${x.status==='pending'?'<div class="actions"><button onclick="approve(\''+x.id+'\')">✓ Approve</button><button class="danger" onclick="reject(\''+x.id+'\')">✕ Reject</button></div>':''}</div>`}).join(''):'No requests yet.'}render();
+import { db, auth } from '../firebase.js';
+import { onAuthStateChanged, signOut } from 'https://www.gstatic.com/firebasejs/12.2.1/firebase-auth.js';
+import { collection, getDocs, doc, getDoc, addDoc, updateDoc, serverTimestamp, query, where, runTransaction } from 'https://www.gstatic.com/firebasejs/12.2.1/firebase-firestore.js';
+
+const $ = (id) => document.getElementById(id);
+const message = $('message');
+const createPanel = $('createPanel');
+const lotForm = $('lotForm');
+const lotsEl = $('lotteries');
+const requestsEl = $('requests');
+let me = null, profile = null, lots = [];
+
+$('logoutBtn').addEventListener('click', async () => { await signOut(auth); location.href = 'login.html'; });
+$('showCreateBtn').addEventListener('click', () => { createPanel.style.display = createPanel.style.display === 'none' ? 'block' : 'none'; });
+$('refreshBtn').addEventListener('click', render);
+
+onAuthStateChanged(auth, async (u) => {
+  if (!u) { location.href = 'login.html'; return; }
+  me = u;
+  try {
+    const p = await getDoc(doc(db, 'users', u.uid));
+    if (!p.exists()) {
+      message.innerHTML = '<p class="error">Your Firebase account is authenticated, but no admin profile exists yet. Create users/' + u.uid + ' in Firestore with role and lotteryIds.</p>';
+      lotsEl.innerHTML = '';
+      requestsEl.innerHTML = '';
+      return;
+    }
+    profile = p.data();
+    await render();
+  } catch (e) {
+    console.error(e);
+    message.innerHTML = '<p class="error">Could not load your admin profile. Check Firestore rules.</p>';
+  }
+});
+
+lotForm.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  if (!profile || profile.role !== 'generalAdmin') return alert('Only General Admin can create lotteries.');
+  const min = Number($('min').value), max = Number($('max').value), price = Number($('price').value);
+  if (min > max || price <= 0) return alert('Check the lottery values.');
+  try {
+    await addDoc(collection(db, 'lotteries'), { name: $('lotName').value.trim(), price, min, max, status: $('status').value, adminIds: [], createdAt: serverTimestamp() });
+    lotForm.reset(); createPanel.style.display = 'none'; await render();
+  } catch (e) { console.error(e); alert('Could not create lottery: ' + e.message); }
+});
+
+function allowed(l) { return profile.role === 'generalAdmin' || (profile.role === 'lotteryAdmin' && (profile.lotteryIds || []).includes(l.id)); }
+
+async function render() {
+  if (!profile) return;
+  const s = await getDocs(collection(db, 'lotteries'));
+  lots = s.docs.map(d => ({ id: d.id, ...d.data() })).filter(allowed);
+  lotsEl.innerHTML = lots.length ? lots.map(x => `<div class="lot-row"><b>${escapeHtml(x.name)}</b> (${x.id})<br>${x.price} Birr · ${x.min}-${x.max} · <span class="${x.status}">${x.status}</span></div>`).join('') : 'No assigned lotteries.';
+
+  if (profile.role === 'generalAdmin') {
+    const rs = await getDocs(collection(db, 'ticketRequests'));
+    renderRequests(rs);
+  } else if (lots.length) {
+    const ids = lots.map(x => x.id).slice(0, 10);
+    const rs = await getDocs(query(collection(db, 'ticketRequests'), where('lotteryId', 'in', ids)));
+    renderRequests(rs);
+  } else requestsEl.innerHTML = 'No requests.';
+}
+
+function renderRequests(rs) {
+  requestsEl.innerHTML = rs.docs.map(d => {
+    const x = d.data(), lot = lots.find(l => l.id === x.lotteryId);
+    return `<div class="lot-row"><b>${escapeHtml(x.name)}</b> · ${escapeHtml(x.phone)}<br>Lottery: ${escapeHtml(lot?.name || x.lotteryId)}<br>Tickets requested: ${x.quantity || 1}<br>Total: ${x.total || x.price || 0} Birr<br>Reference: ${escapeHtml(x.reference || '')}<br>Status: <b>${escapeHtml(x.status)}</b>${x.ticketNumbers?.length ? '<br>🎟️ ' + x.ticketNumbers.join(', ') : ''}${x.status === 'pending' ? `<div class="actions"><button data-action="approve" data-id="${d.id}">✓ Approve</button><button class="danger" data-action="reject" data-id="${d.id}">✕ Reject</button></div>` : ''}</div>`;
+  }).join('') || 'No requests.';
+  requestsEl.querySelectorAll('[data-action="reject"]').forEach(b => b.addEventListener('click', () => rejectRequest(b.dataset.id)));
+  requestsEl.querySelectorAll('[data-action="approve"]').forEach(b => b.addEventListener('click', () => approveRequest(b.dataset.id)));
+}
+
+async function rejectRequest(id) {
+  try { await updateDoc(doc(db, 'ticketRequests', id), { status: 'rejected', reviewedBy: me.uid, reviewedAt: serverTimestamp() }); await render(); }
+  catch (e) { alert(e.message); }
+}
+
+async function approveRequest(id) {
+  try {
+    await runTransaction(db, async tx => {
+      const r = doc(db, 'ticketRequests', id), rs = await tx.get(r);
+      if (!rs.exists() || rs.data().status !== 'pending') throw Error('This request has already been reviewed.');
+      const x = rs.data(), lot = lots.find(l => l.id === x.lotteryId);
+      if (!lot) throw Error('You are not authorized for this lottery.');
+      const all = await getDocs(query(collection(db, 'ticketRequests'), where('lotteryId', '==', lot.id), where('status', '==', 'approved')));
+      const used = new Set(all.docs.flatMap(d => d.data().ticketNumbers || []).map(Number));
+      const count = Number(x.quantity || 1), range = lot.max - lot.min + 1;
+      if (used.size + count > range) throw Error('Not enough ticket numbers left.');
+      const out = [];
+      while (out.length < count) { const n = Math.floor(Math.random() * range) + lot.min; if (!used.has(n) && !out.includes(n)) { used.add(n); out.push(n); } }
+      tx.update(r, { status: 'approved', ticketNumbers: out, reviewedBy: me.uid, reviewedAt: serverTimestamp() });
+    });
+    await render();
+  } catch (e) { alert(e.message); console.error(e); }
+}
+
+function escapeHtml(s) { return String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
