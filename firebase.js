@@ -3,7 +3,7 @@ import { getFirestore } from 'https://www.gstatic.com/firebasejs/12.2.1/firebase
 import { getAuth } from 'https://www.gstatic.com/firebasejs/12.2.1/firebase-auth.js';
 
 const firebaseConfig = {
-  apiKey: 'AIzaSyC_D-mWZWEhEnFnb99mti8svD5smSkmq4',
+  apiKey: 'AIzaSyC_D-mWZWEhEnfNbx99tmi8svD5smSkmq4',
   authDomain: 'tigiray-lottery.firebaseapp.com',
   projectId: 'tigiray-lottery',
   storageBucket: 'tigiray-lottery.firebasestorage.app',
