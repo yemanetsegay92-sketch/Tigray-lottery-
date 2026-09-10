@@ -25,3 +25,6 @@ Lottery admin profile is created by the General Admin dashboard.
 Use an HTTP server, not file://:
 python -m http.server 8158
 Then open http://localhost:8158/
+
+
+V4.0.1 fix: customer payment submission no longer queries private ticketRequests before creating a request. The payment reference is hashed to a deterministic request document ID, so duplicate references are rejected by Firestore document creation semantics.

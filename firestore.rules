@@ -14,7 +14,8 @@ service cloud.firestore {
     }
 
     match /ticketRequests/{requestId} {
-      allow create: if request.resource.data.status == 'pending';
+      allow create: if request.resource.data.status == 'pending'
+                    && requestId == requestId;
       allow read: if isGeneral() || (isLotteryAdmin() && resource.data.lotteryId in user().lotteryIds);
       allow update: if isGeneral() || (isLotteryAdmin() && resource.data.lotteryId in user().lotteryIds);
       allow delete: if false;
