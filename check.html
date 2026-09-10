@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Check Ticket · Tigray Lottery</title><link rel="stylesheet" href="style.css"></head>
+<body>
+<header><a href="index.html">← Home</a><div class="brand">🎟️ Tigray Lottery</div><a href="admin/login.html">Admin</a></header>
+<main class="wrap">
+  <div class="card lookup-box">
+    <h1 class="center">Check Your Ticket</h1>
+    <p class="center muted">Enter the same phone number used with your payment request.</p>
+    <form id="checkForm" class="stack">
+      <label>Phone Number<input id="phone" type="tel" required placeholder="09…"></label>
+      <button type="submit">Check Status</button>
+    </form>
+    <div id="message"></div>
+  </div>
+  <div id="results" class="result"></div>
+</main>
+<script type="module" src="js/check.js"></script>
+</body>
+</html>

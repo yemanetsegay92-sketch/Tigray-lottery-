@@ -1,1 +1,24 @@
-<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Buy Ticket</title><link rel="stylesheet" href="style.css"></head><body><header><a href="index.html">← Back</a><b>🎟️ Tigray Lottery</b></header><main class="wrap"><div id="lotteryInfo"></div><form id="buyForm" class="card"><label>Full Name *<input id="name" required></label><label>Phone Number *<input id="phone" type="tel" required></label><label>Transaction / Reference Number *<input id="reference" required></label><label>Payment Screenshot <small>(optional)</small><input id="screenshot" type="file" accept="image/*"></label><button>Submit Payment</button></form><div id="message"></div></main><script type="module" src="app.js"></script></body></html>
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Buy Ticket · Tigray Lottery</title><link rel="stylesheet" href="style.css"></head>
+<body>
+<header><a href="index.html">← Back</a><div class="brand">🎟️ Tigray Lottery</div><a href="check.html">Check</a></header>
+<main class="wrap">
+  <div id="lotteryInfo"><div class="card">Loading lottery…</div></div>
+  <form id="buyForm" class="card" style="margin-top:16px">
+    <div class="two">
+      <label>Full Name *<input id="name" required></label>
+      <label>Phone Number *<input id="phone" type="tel" required placeholder="09…"></label>
+    </div>
+    <label>How many tickets?<input id="quantity" type="number" min="1" max="100" value="1" required></label>
+    <div id="total" class="badge">Total: —</div>
+    <label>Transaction / Reference Number *<input id="reference" required></label>
+    <label>Payment Screenshot <small>(optional in V4)</small><input id="screenshot" type="file" accept="image/*"></label>
+    <p class="form-note">Payment is checked manually. Your ticket number is assigned only after approval.</p>
+    <button id="submitBtn" type="submit">Submit Payment Request</button>
+  </form>
+  <div id="message"></div>
+</main>
+<script type="module" src="js/buy.js"></script>
+</body>
+</html>

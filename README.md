@@ -1,27 +1,27 @@
-# Tigray Lottery V3 — Firebase foundation
+# Tigray Lottery V4
 
-This build is based on the V2 project and fixes the browser-module/admin-login problems.
+V4 keeps the Firebase/Firestore foundation from V3 and adds:
 
-## Included
-- Firestore shared data
-- Firebase Authentication login
-- Multiple lotteries
-- Multiple tickets per buyer
-- General Admin and Lottery Admin roles
-- Lottery Admin visibility limited by `lotteryIds`
-- Pending/approved/rejected requests
-- Random unique ticket numbers on approval (development implementation)
-- Vercel-ready static deployment
-
-## Required setup
-1. Firebase configuration is already filled in `firebase.js` for project `tigiray-lottery`.
-2. In Firestore create `users/{YOUR_ADMIN_UID}` with:
-   `{ role: "generalAdmin", lotteryIds: [] }`
-3. Publish `firestore.rules`.
-
-## Find your UID
-Firebase Console → Authentication → Users → open your admin user → copy User UID.
-Then Firestore Database → Data → create collection `users` → document ID = that UID.
+1. Customer phone-based status lookup.
+2. Approved ticket numbers shown to the customer.
+3. Separate General Admin and Lottery Admin dashboards.
+4. Lottery admins are routed only to their assigned lottery dashboard.
+5. Lottery admins can rename and change price, and approve/reject requests for their own lottery.
+6. General Admin can create lotteries and create lottery-admin Firebase accounts from the dashboard.
+7. Multi-ticket requests and unique ticket document reservation using Firestore transactions.
 
 ## Important
-The included ticket assignment is for development/testing. For a real-money launch, move approval and ticket assignment to a trusted server/Cloud Function and tighten Firestore rules further.
+The public phone lookup is intentionally simple for V4 and should be hardened before handling real-money activity. Current Firestore rules are much safer than the V3 test rules, but ticket assignment is still initiated by the browser. For a production-money launch, move approval/ticket assignment to a trusted server/Cloud Function and add stronger customer privacy controls.
+
+## Admin profile setup
+General admin profile:
+users/{UID}
+- role: generalAdmin
+- lotteryIds: []
+
+Lottery admin profile is created by the General Admin dashboard.
+
+## Local testing
+Use an HTTP server, not file://:
+python -m http.server 8158
+Then open http://localhost:8158/
