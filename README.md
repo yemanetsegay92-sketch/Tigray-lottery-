@@ -11,3 +11,5 @@ V5 improves the V4 workflow:
 
 ## Important production note
 This is still a prototype for testing. The approval/ticket assignment is browser-initiated. Before any real-money public launch, move approval/ticket assignment to trusted server-side code (Cloud Functions/Cloud Run), strengthen phone-status privacy, validate all fields in Firestore rules, and verify lottery/payment licensing and compliance requirements.
+
+V5.1: General Admin does not approve individual requests. Lottery Admins handle approvals/rejections. One Lottery Admin can be assigned to multiple lotteries. General Admin can create new Lottery Admin accounts or assign another lottery to an existing Lottery Admin. Approved records can be exported as CSV or copied for Excel. Payment screenshots are compressed in the browser before storage.
