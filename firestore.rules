@@ -1,47 +1,7 @@
 rules_version = '2';
-service cloud.firestore {
-  match /databases/{database}/documents {
-    function signed() { return request.auth != null; }
-    function user() { return get(/databases/$(database)/documents/users/$(request.auth.uid)).data; }
-    function isGeneral() { return signed() && user().role == 'generalAdmin'; }
-    function isLotteryAdmin() { return signed() && user().role == 'lotteryAdmin'; }
-    function canManageLottery(id) { return isGeneral() || (isLotteryAdmin() && id in user().lotteryIds); }
-
-    match /lotteries/{lotteryId} {
-      allow read: if true;
-      allow create: if isGeneral();
-      allow update, delete: if canManageLottery(lotteryId);
-    }
-
-    match /ticketRequests/{requestId} {
-      allow create: if request.resource.data.status == 'pending'
-                    && requestId == requestId;
-      allow read: if isGeneral() || (isLotteryAdmin() && resource.data.lotteryId in user().lotteryIds);
-      allow update: if isGeneral() || (isLotteryAdmin() && resource.data.lotteryId in user().lotteryIds);
-      allow delete: if false;
-    }
-
-    // Public, phone-hash-based status records. These deliberately omit the buyer's name
-    // and payment reference. Harden further before real-money launch.
-    match /publicStatus/{phoneHash}/requests/{requestId} {
-      allow read: if true;
-      allow create: if request.resource.data.status == 'pending';
-      allow update: if isGeneral() || (isLotteryAdmin() && resource.data.lotteryId in user().lotteryIds);
-      allow delete: if false;
-    }
-
-    match /tickets/{ticketId} {
-      allow read: if isGeneral() || isLotteryAdmin();
-      allow create: if isGeneral() || isLotteryAdmin();
-      allow update, delete: if false;
-    }
-
-    match /users/{userId} {
-      allow read: if signed() && (request.auth.uid == userId || isGeneral());
-      allow create: if isGeneral();
-      // Do not allow users to change their own role or lottery assignment.
-      allow update: if isGeneral();
-      allow delete: if isGeneral();
-    }
-  }
-}
+service cloud.firestore { match /databases/{database}/documents {
+function signed(){return request.auth!=null;} function admin(){return signed() && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['generalAdmin','lotteryAdmin'];}
+match /lotteries/{id}{allow read: if true; allow write: if admin();}
+match /ticketRequests/{id}{allow create: if request.resource.data.status=='pending'; allow read,update: if admin();}
+match /users/{id}{allow read: if signed() && request.auth.uid==id; allow write: if false;}
+}}
