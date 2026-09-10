@@ -1,6 +1,6 @@
 import { db, auth, createSecondaryAuth } from '../../firebase.js';
 import { onAuthStateChanged, signOut, createUserWithEmailAndPassword, updateProfile, signOut as authSignOut } from 'https://www.gstatic.com/firebasejs/12.2.1/firebase-auth.js';
-import { collection, getDocs, doc, getDoc, addDoc, updateDoc, deleteDoc, setDoc, serverTimestamp, query, where, orderBy } from 'https://www.gstatic.com/firebasejs/12.2.1/firebase-firestore.js';
+import { collection, getDocs, doc, getDoc, addDoc, updateDoc, deleteDoc, setDoc, serverTimestamp, query, where, orderBy, arrayUnion } from 'https://www.gstatic.com/firebasejs/12.2.1/firebase-firestore.js';
 
 const $=id=>document.getElementById(id);
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -35,36 +35,88 @@ $('createForm').addEventListener('submit',async e=>{
   }catch(err){console.error(err);$('message').innerHTML=`<div class="error">${esc(err.message)}</div>`;}
 });
 
+async function findAdminByEmail(email){
+  const qs=await getDocs(query(collection(db,'users'),where('email','==',email)));
+  const hit=qs.docs.find(d=>d.data().role==='lotteryAdmin');
+  return hit?{id:hit.id,...hit.data()}:null;
+}
+
+async function setAdminMessage(text,ok=false){$('adminMessage').innerHTML=`<div class="${ok?'success':'error'}">${esc(text)}</div>`;}
+
+async function createNewLotteryAdmin({email,password,displayName,lotteryId}){
+  const existing=await findAdminByEmail(email);
+  if(existing) throw new Error('This email is already a Lottery Admin. Use “Assign another lottery” below instead.');
+  let secondaryAuth;
+  try{
+    secondaryAuth=createSecondaryAuth(`creator_${Date.now()}`);
+    const cred=await createUserWithEmailAndPassword(secondaryAuth,email,password);
+    await updateProfile(cred.user,{displayName});
+    await setDoc(doc(db,'users',cred.user.uid),{
+      role:'lotteryAdmin', lotteryIds:[lotteryId], displayName, email, createdAt:serverTimestamp()
+    });
+    return cred.user.uid;
+  }finally{
+    if(secondaryAuth) try{await authSignOut(secondaryAuth);}catch{}
+  }
+}
+
 $('adminForm').addEventListener('submit',async e=>{
   e.preventDefault();
   const btn=e.target.querySelector('button');btn.disabled=true;
   try{
     if(!lots.length) throw new Error('Create a lottery first.');
     const lotteryId=$('adminLottery').value;
-    const email=$('adminEmail').value.trim();
+    const email=$('adminEmail').value.trim().toLowerCase();
     const password=$('adminPassword').value;
     const displayName=$('adminName').value.trim();
-    if(!lotteryId||!email||password.length<6||!displayName) throw new Error('Complete all lottery-admin fields.');
-
-    const secondaryAuth=createSecondaryAuth();
-    const cred=await createUserWithEmailAndPassword(secondaryAuth,email,password);
-    await updateProfile(cred.user,{displayName});
-    await setDoc(doc(db,'users',cred.user.uid),{
-      role:'lotteryAdmin',lotteryIds:[lotteryId],displayName,email,createdAt:serverTimestamp()
-    });
-    await authSignOut(secondaryAuth);
-    $('adminForm').reset();
-    $('adminMessage').innerHTML='<div class="success">Lottery admin account created and assigned.</div>';
+    if(!lotteryId||!email||password.length<6||!displayName) throw new Error('Complete all new-admin fields.');
+    await createNewLotteryAdmin({email,password,displayName,lotteryId});
+    e.target.reset();
+    await renderAdminList();
+    await setAdminMessage('Lottery admin account created and assigned.',true);
   }catch(err){
     console.error(err);
-    $('adminMessage').innerHTML=`<div class="error">${esc(err.message||'Could not create lottery admin.')}</div>`;
+    const msg=err?.code==='auth/email-already-in-use'
+      ? 'This email already exists in Firebase Authentication. Use “Assign another lottery” if this is an existing Lottery Admin.'
+      : (err?.code==='permission-denied' ? 'Firestore permission denied while saving the admin profile. Make sure the General Admin profile exists and the V5.1 Firestore rules are published.' : (err.message||'Could not create lottery admin.'));
+    await setAdminMessage(msg,false);
   }finally{btn.disabled=false;}
 });
+
+$('assignForm').addEventListener('submit',async e=>{
+  e.preventDefault();
+  const btn=e.target.querySelector('button');btn.disabled=true;
+  try{
+    const email=$('assignEmail').value.trim().toLowerCase();
+    const lotteryId=$('assignLottery').value;
+    if(!email||!lotteryId) throw new Error('Enter the admin email and choose a lottery.');
+    const admin=await findAdminByEmail(email);
+    if(!admin) throw new Error('No Lottery Admin profile was found for this email. Create the admin account first.');
+    const ids=Array.isArray(admin.lotteryIds)?admin.lotteryIds:[];
+    if(ids.includes(lotteryId)) throw new Error('This admin is already assigned to that lottery.');
+    await updateDoc(doc(db,'users',admin.id),{lotteryIds:arrayUnion(lotteryId)});
+    e.target.reset();
+    await renderAdminList();
+    await setAdminMessage('Lottery assigned successfully. This admin can now manage both lotteries.',true);
+  }catch(err){
+    console.error(err);
+    await setAdminMessage(err.message||'Could not assign lottery.',false);
+  }finally{btn.disabled=false;}
+});
+
+async function renderAdminList(){
+  const host=$('adminList');
+  try{
+    const qs=await getDocs(query(collection(db,'users'),where('role','==','lotteryAdmin')));
+    const rows=qs.docs.map(d=>({id:d.id,...d.data()}));
+    host.innerHTML=rows.length?`<table><thead><tr><th>Admin</th><th>Email</th><th>Assigned lotteries</th></tr></thead><tbody>${rows.map(a=>`<tr><td>${esc(a.displayName||'')}</td><td>${esc(a.email||'')}</td><td>${(a.lotteryIds||[]).map(id=>{const l=lots.find(x=>x.id===id);return esc(l?l.name:id)}).join(', ')}</td></tr>`).join('')}</tbody></table>`:'<p class="muted">No lottery admins yet.</p>';
+  }catch(e){host.innerHTML=`<div class="error">${esc(e.message||'Could not load lottery admins.')}</div>`;}
+}
 
 async function renderLotteries(){
   const ls=await getDocs(collection(db,'lotteries'));
   lots=ls.docs.map(d=>({id:d.id,...d.data()}));
-  $('adminLottery').innerHTML=lots.map(x=>`<option value="${esc(x.id)}">${esc(x.name)} (${esc(x.id)})</option>`).join('');
+  const lotOptions=lots.map(x=>`<option value="${esc(x.id)}">${esc(x.name)} (${esc(x.id)})</option>`).join(''); $('adminLottery').innerHTML=lotOptions; $('assignLottery').innerHTML=lotOptions;
   $('lotteries').innerHTML=lots.map(x=>`<div class="row">
     <b>${esc(x.name)}</b> <span class="badge ${esc(x.status)}">${esc(x.status)}</span>
     <br><span class="muted">ID: ${esc(x.id)} · ${Number(x.price||0)} Birr · ${esc(x.min)}–${esc(x.max)}</span>
@@ -77,6 +129,7 @@ async function renderLotteries(){
   document.querySelectorAll('[data-edit]').forEach(b=>b.addEventListener('click',()=>editLottery(b.dataset.edit)));
   document.querySelectorAll('[data-delete]').forEach(b=>b.addEventListener('click',()=>removeLottery(b.dataset.delete)));
   document.querySelectorAll('[data-summary]').forEach(b=>b.addEventListener('click',()=>openLotterySummary(b.dataset.summary)));
+  await renderAdminList();
 }
 
 async function renderSummaryOverview(){
