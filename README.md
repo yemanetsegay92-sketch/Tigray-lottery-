@@ -1,30 +1,13 @@
-# Tigray Lottery V4
+# Tigray Lottery V5
 
-V4 keeps the Firebase/Firestore foundation from V3 and adds:
+V5 improves the V4 workflow:
 
-1. Customer phone-based status lookup.
-2. Approved ticket numbers shown to the customer.
-3. Separate General Admin and Lottery Admin dashboards.
-4. Lottery admins are routed only to their assigned lottery dashboard.
-5. Lottery admins can rename and change price, and approve/reject requests for their own lottery.
-6. General Admin can create lotteries and create lottery-admin Firebase accounts from the dashboard.
-7. Multi-ticket requests and unique ticket document reservation using Firestore transactions.
+1. General Admin no longer sees individual payment request cards. Lottery Admins are responsible for approving/rejecting their assigned lottery's payments.
+2. Pending payment cards disappear after approval/rejection.
+3. Every approved request stays in a report table for the lottery admin and can be downloaded as CSV or copied as tab-separated data directly into Excel/Google Sheets.
+4. General Admin sees lottery-level counts/value and can open an approved-only summary report.
+5. Payment screenshots are compressed in the buyer's browser before being stored. The target is <= 300 KB (with a hard safety ceiling of 360 KB).
+6. General Admin creation of lottery-admin accounts uses a secondary Firebase Auth instance, so the General Admin session is not replaced.
 
-## Important
-The public phone lookup is intentionally simple for V4 and should be hardened before handling real-money activity. Current Firestore rules are much safer than the V3 test rules, but ticket assignment is still initiated by the browser. For a production-money launch, move approval/ticket assignment to a trusted server/Cloud Function and add stronger customer privacy controls.
-
-## Admin profile setup
-General admin profile:
-users/{UID}
-- role: generalAdmin
-- lotteryIds: []
-
-Lottery admin profile is created by the General Admin dashboard.
-
-## Local testing
-Use an HTTP server, not file://:
-python -m http.server 8158
-Then open http://localhost:8158/
-
-
-V4.0.1 fix: customer payment submission no longer queries private ticketRequests before creating a request. The payment reference is hashed to a deterministic request document ID, so duplicate references are rejected by Firestore document creation semantics.
+## Important production note
+This is still a prototype for testing. The approval/ticket assignment is browser-initiated. Before any real-money public launch, move approval/ticket assignment to trusted server-side code (Cloud Functions/Cloud Run), strengthen phone-status privacy, validate all fields in Firestore rules, and verify lottery/payment licensing and compliance requirements.

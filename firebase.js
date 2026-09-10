@@ -3,7 +3,7 @@ import { getFirestore } from 'https://www.gstatic.com/firebasejs/12.2.1/firebase
 import { getAuth } from 'https://www.gstatic.com/firebasejs/12.2.1/firebase-auth.js';
 
 const firebaseConfig = {
-  apiKey: 'AIzaSyC_D-mWZWEhEnfNbx99tmi8svD5smSkmq4',
+  apiKey: 'AIzaSyC_D-mWZWEhEnFnb99mti8svD5smSkmq4',
   authDomain: 'tigiray-lottery.firebaseapp.com',
   projectId: 'tigiray-lottery',
   storageBucket: 'tigiray-lottery.firebasestorage.app',
@@ -14,5 +14,10 @@ const firebaseConfig = {
 const app = getApps().length ? getApp() : initializeApp(firebaseConfig);
 export const db = getFirestore(app);
 export const auth = getAuth(app);
-export { initializeApp, getAuth };
-export const firebaseConfigExport = firebaseConfig;
+
+// Used only by General Admin to create a second Firebase Auth user
+// without logging the current General Admin out.
+export function createSecondaryAuth(name = `creator_${Date.now()}`) {
+  const secondaryApp = initializeApp(firebaseConfig, name);
+  return getAuth(secondaryApp);
+}
