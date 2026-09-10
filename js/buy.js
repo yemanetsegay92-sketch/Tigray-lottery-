@@ -1,5 +1,5 @@
 import { db } from '../firebase.js';
-import { collection, getDocs, query, where, doc, getDoc, addDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/firebasejs/12.2.1/firebase-firestore.js';
+import { collection, doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/firebasejs/12.2.1/firebase-firestore.js';
 import { phoneHash, normalizePhone } from './phoneHash.js';
 
 const $ = id => document.getElementById(id);
@@ -29,9 +29,13 @@ $('buyForm').addEventListener('submit', async e=>{
   const quantity=Math.max(1,Math.min(100,Number($('quantity').value)||1));
   if(!name || !phone || !reference){ $('message').innerHTML='<div class="error">Please complete all required fields.</div>'; submit.disabled=false; submit.textContent='Submit Payment Request'; return; }
   try{
-    const dup=await getDocs(query(collection(db,'ticketRequests'),where('reference','==',reference)));
-    if(!dup.empty) throw new Error('This payment reference was already submitted.');
-    const requestRef=await addDoc(collection(db,'ticketRequests'),{
+    // Buyers cannot query the private ticketRequests collection.
+    // Instead, make the request ID a deterministic SHA-256 hash of the
+    // normalized payment reference. Firestore will reject a second create
+    // with the same reference because the document already exists.
+    const refHash=await phoneHash(`REF:${reference}`);
+    const requestRef=doc(db,'ticketRequests',refHash);
+    await setDoc(requestRef,{
       lotteryId:lot.id, lotteryName:lot.name, name, phone, reference,
       quantity, price:Number(lot.price), total:Number(lot.price)*quantity,
       status:'pending', ticketNumbers:[], createdAt:serverTimestamp()
