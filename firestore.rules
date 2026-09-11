@@ -1,16 +1,16 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    function signed() { return request.auth != null; }
-    function user() { return get(/databases/$(database)/documents/users/$(request.auth.uid)).data; }
-    function isGeneral() { return signed() && user().role == 'generalAdmin'; }
-    function isLotteryAdmin() { return signed() && user().role == 'lotteryAdmin'; }
-    function canManageLottery(id) { return isGeneral() || (isLotteryAdmin() && id in user().lotteryIds); }
+    function signed(){ return request.auth != null; }
+    function profile(){ return get(/databases/$(database)/documents/users/$(request.auth.uid)).data; }
+    function isGeneral(){ return signed() && profile().role == 'generalAdmin'; }
+    function isLotteryAdmin(){ return signed() && profile().role == 'lotteryAdmin'; }
+    function managesLottery(id){ return isGeneral() || (isLotteryAdmin() && id in profile().lotteryIds); }
 
     match /lotteries/{lotteryId} {
       allow read: if true;
       allow create: if isGeneral();
-      allow update, delete: if canManageLottery(lotteryId);
+      allow update, delete: if managesLottery(lotteryId);
     }
 
     match /ticketRequests/{requestId} {
@@ -18,24 +18,33 @@ service cloud.firestore {
         && request.resource.data.quantity is int
         && request.resource.data.quantity >= 1
         && request.resource.data.quantity <= 100
-        && request.resource.data.reference is string
         && request.resource.data.name is string
-        && request.resource.data.phone is string;
-      allow read: if isGeneral() || (isLotteryAdmin() && resource.data.lotteryId in user().lotteryIds);
-      allow update: if isGeneral() || (isLotteryAdmin() && resource.data.lotteryId in user().lotteryIds);
+        && request.resource.data.name.size() > 0
+        && request.resource.data.phone is string
+        && request.resource.data.phone.size() > 0
+        && ((request.resource.data.reference is string && request.resource.data.reference.size() > 0)
+            || (request.resource.data.screenshotData is string && request.resource.data.screenshotData.size() > 0));
+      allow read: if isGeneral() || (isLotteryAdmin() && resource.data.lotteryId in profile().lotteryIds);
+      allow update: if isGeneral() || (isLotteryAdmin() && resource.data.lotteryId in profile().lotteryIds);
       allow delete: if false;
     }
 
     match /publicStatus/{phoneHash}/requests/{requestId} {
       allow read: if true;
       allow create: if request.resource.data.status == 'pending';
-      allow update: if isGeneral() || (isLotteryAdmin() && resource.data.lotteryId in user().lotteryIds);
+      allow update: if isGeneral() || (isLotteryAdmin() && resource.data.lotteryId in profile().lotteryIds);
       allow delete: if false;
     }
 
     match /tickets/{ticketId} {
       allow read: if isGeneral() || isLotteryAdmin();
       allow create: if isGeneral() || isLotteryAdmin();
+      allow update, delete: if false;
+    }
+
+    match /auditLogs/{logId} {
+      allow create: if signed() && (isGeneral() || isLotteryAdmin());
+      allow read: if isGeneral() || (isLotteryAdmin() && resource.data.lotteryId in profile().lotteryIds);
       allow update, delete: if false;
     }
 
@@ -46,3 +55,4 @@ service cloud.firestore {
     }
   }
 }
+

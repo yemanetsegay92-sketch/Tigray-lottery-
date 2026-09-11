@@ -1,15 +1,31 @@
-# Tigray Lottery V5
+# Tigray Lottery
 
-V5 improves the V4 workflow:
+Professional customer-facing lottery management prototype using Firebase and Vercel.
 
-1. General Admin no longer sees individual payment request cards. Lottery Admins are responsible for approving/rejecting their assigned lottery's payments.
-2. Pending payment cards disappear after approval/rejection.
-3. Every approved request stays in a report table for the lottery admin and can be downloaded as CSV or copied as tab-separated data directly into Excel/Google Sheets.
-4. General Admin sees lottery-level counts/value and can open an approved-only summary report.
-5. Payment screenshots are compressed in the buyer's browser before being stored. The target is <= 300 KB (with a hard safety ceiling of 360 KB).
-6. General Admin creation of lottery-admin accounts uses a secondary Firebase Auth instance, so the General Admin session is not replaced.
+## Customer side
+- English and Tigrigna language support
+- Mobile-first ticket purchase flow
+- Quantity minus/plus controls
+- Payment proof: reference number, screenshot, or both
+- Screenshot compression before saving
+- Customer status lookup by phone number
+- Approved ticket numbers shown only after approval
 
-## Important production note
-This is still a prototype for testing. The approval/ticket assignment is browser-initiated. Before any real-money public launch, move approval/ticket assignment to trusted server-side code (Cloud Functions/Cloud Run), strengthen phone-status privacy, validate all fields in Firestore rules, and verify lottery/payment licensing and compliance requirements.
+## Admin side
+- General Admin manages lotteries and Lottery Admin accounts
+- One Lottery Admin can manage multiple lotteries
+- Lottery Admin handles payment verification for assigned lotteries
+- Sequential ticket allocation without exposing the next number to customers
+- Approved/rejected requests leave the pending queue
+- Approved sales table with CSV download and Excel copy
+- Basic operational statistics
 
-V5.1: General Admin does not approve individual requests. Lottery Admins handle approvals/rejections. One Lottery Admin can be assigned to multiple lotteries. General Admin can create new Lottery Admin accounts or assign another lottery to an existing Lottery Admin. Approved records can be exported as CSV or copied for Excel. Payment screenshots are compressed in the browser before storage.
+## Firebase
+Use the Firebase web configuration already included in `firebase.js`.
+Publish `firestore.rules` in Firebase Firestore Rules before testing.
+
+## Deployment
+Extract the project and deploy the folder containing `index.html` directly to Vercel.
+
+## Important
+This build records payment information and supports manual verification. It does not implement an online money-transfer gateway. Real-money operation should be enabled only after required regulatory and operational approvals.

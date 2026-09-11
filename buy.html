@@ -2,23 +2,35 @@
 <html lang="en">
 <head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Buy Ticket · Tigray Lottery</title><link rel="stylesheet" href="style.css"></head>
 <body>
-<header><a href="index.html">← Back</a><div class="brand">🎟️ Tigray Lottery</div><a href="check.html">Check</a></header>
-<main class="wrap">
-  <div id="lotteryInfo"><div class="card">Loading lottery…</div></div>
-  <form id="buyForm" class="card" style="margin-top:16px">
-    <div class="two">
-      <label>Full Name *<input id="name" required></label>
-      <label>Phone Number *<input id="phone" type="tel" required placeholder="09…"></label>
-    </div>
-    <label>How many tickets?<input id="quantity" type="number" min="1" max="100" value="1" required></label>
-    <div id="total" class="badge">Total: —</div>
-    <label>Transaction / Reference Number *<input id="reference" required></label>
-    <label>Payment Screenshot <small>(optional)</small><input id="screenshot" type="file" accept="image/*"></label><div id="screenshotInfo" class="form-note">Optional. Screenshot will be compressed automatically.</div>
-    <p class="form-note">Payment is checked manually. Your ticket number is assigned only after approval.</p>
-    <button id="submitBtn" type="submit">Submit Payment Request</button>
-  </form>
+<header class="site-header">
+  <a class="brand" href="index.html"><span class="brand-mark">✦</span><span>Tigray Lottery</span></a>
+  <nav><a href="check.html" data-i18n="navCheck">Check Ticket</a><a href="#" id="langToggle" class="lang-link">ትግርኛ</a></nav>
+</header>
+<main class="content narrow">
+  <a href="index.html" class="back-link" data-i18n="backHome">← Back to lotteries</a>
+  <div id="lotteryInfo" class="buy-lottery-head"><div class="loading-card">Loading lottery…</div></div>
+  <div class="buy-layout">
+    <form id="buyForm" class="card form-card">
+      <div class="form-step"><span>01</span><div><h2 data-i18n="yourDetails">Your details</h2><p class="form-note" data-i18n="detailsNote">Use the same phone number you will use to check your ticket.</p></div></div>
+      <label><span data-i18n="fullName">Full name</span><input id="name" required autocomplete="name"></label>
+      <label><span data-i18n="phoneNumber">Phone number</span><input id="phone" type="tel" required autocomplete="tel" placeholder="09…"></label>
+
+      <div class="form-step"><span>02</span><div><h2 data-i18n="tickets">Tickets</h2><p class="form-note" data-i18n="ticketsNote">Choose how many tickets you want.</p></div></div>
+      <div class="quantity-control"><button type="button" id="qtyMinus" class="qty-btn" aria-label="Decrease">−</button><input id="quantity" type="number" min="1" max="100" value="1" inputmode="numeric" aria-label="Quantity"><button type="button" id="qtyPlus" class="qty-btn" aria-label="Increase">+</button></div>
+      <div id="total" class="total-box">Total: —</div>
+
+      <div class="form-step"><span>03</span><div><h2 data-i18n="paymentProof">Payment proof</h2><p class="form-note" data-i18n="proofNote">Provide at least one of the following.</p></div></div>
+      <label><span data-i18n="referenceNumber">Transaction / reference number</span><input id="reference" autocomplete="off"></label>
+      <div class="or-divider"><span data-i18n="or">OR</span></div>
+      <label class="upload-box"><span data-i18n="paymentScreenshot">Payment screenshot</span><input id="screenshot" type="file" accept="image/*"><span id="screenshotInfo" class="upload-hint" data-i18n="uploadHint">Choose an image</span></label>
+      <p class="form-note proof-rule" data-i18n="proofRule">A reference number or screenshot is required. You may provide both.</p>
+
+      <div class="review-box"><div><span data-i18n="ticketPrice">Ticket price</span><b id="reviewPrice">—</b></div><div><span data-i18n="numberOfTickets">Number of tickets</span><b id="reviewQty">1</b></div><div class="review-total"><span data-i18n="total">Total</span><b id="reviewTotal">—</b></div></div>
+      <button id="submitBtn" type="submit" class="btn btn-primary full" data-i18n="submitRequest">Submit ticket request</button>
+      <p class="form-note center" data-i18n="manualNote">Payment is verified manually. Ticket numbers are assigned after approval.</p>
+    </form>
+  </div>
   <div id="message"></div>
 </main>
 <script type="module" src="js/buy.js"></script>
-</body>
-</html>
+</body></html>

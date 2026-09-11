@@ -2,19 +2,21 @@
 <html lang="en">
 <head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Check Ticket · Tigray Lottery</title><link rel="stylesheet" href="style.css"></head>
 <body>
-<header><a href="index.html">← Home</a><div class="brand">🎟️ Tigray Lottery</div><a href="admin/login.html">Admin</a></header>
-<main class="wrap">
+<header class="site-header">
+  <a class="brand" href="index.html"><span class="brand-mark">✦</span><span>Tigray Lottery</span></a>
+  <nav><a href="index.html" data-i18n="navHome">Home</a><a href="#" id="langToggle" class="lang-link">ትግርኛ</a></nav>
+</header>
+<main class="content narrow">
+  <div class="lookup-hero"><div class="eyebrow dark">TICKET STATUS</div><h1 data-i18n="checkTitle">Check your ticket</h1><p data-i18n="checkText">Enter the same phone number used with your ticket request.</p></div>
   <div class="card lookup-box">
-    <h1 class="center">Check Your Ticket</h1>
-    <p class="center muted">Enter the same phone number used with your payment request.</p>
     <form id="checkForm" class="stack">
-      <label>Phone Number<input id="phone" type="tel" required placeholder="09…"></label>
-      <button type="submit">Check Status</button>
+      <label><span data-i18n="phoneNumber">Phone number</span><input id="phone" type="tel" required placeholder="09…" autocomplete="tel"></label>
+      <button type="submit" class="btn btn-primary" data-i18n="checkStatus">Check status</button>
     </form>
     <div id="message"></div>
   </div>
   <div id="results" class="result"></div>
 </main>
+<footer><div class="brand footer-brand">✦ Tigray Lottery</div><small>© 2026 Tigray Lottery</small></footer>
 <script type="module" src="js/check.js"></script>
-</body>
-</html>
+</body></html>
