@@ -26,11 +26,11 @@ $('createForm').addEventListener('submit',async e=>{
   try{
     const min=Number($('min').value),max=Number($('max').value),price=Number($('price').value);
     if(!Number.isFinite(min)||!Number.isFinite(max)||min>max||price<=0) throw new Error('Check price and number range.');
-    await addDoc(collection(db,'lotteries'),{
+    const newLottery=await addDoc(collection(db,'lotteries'),{
       name:$('name').value.trim(),price,min,max,status:$('status').value,
-      description:$('description').value.trim(),createdAt:serverTimestamp(),adminIds:[]
+      description:$('description').value.trim(),createdAt:serverTimestamp(),adminIds:[],nextTicketNumber:min
     });
-    e.target.reset(); $('message').innerHTML='<div class="success">Lottery created.</div>';
+    await addDoc(collection(db,'auditLogs'),{action:'createLottery',lotteryId:newLottery.id,adminId:auth.currentUser.uid,createdAt:serverTimestamp()});e.target.reset(); $('message').innerHTML='<div class="success">Lottery created.</div>';
     await renderLotteries(); await renderSummaryOverview();
   }catch(err){console.error(err);$('message').innerHTML=`<div class="error">${esc(err.message)}</div>`;}
 });
@@ -54,7 +54,7 @@ async function createNewLotteryAdmin({email,password,displayName,lotteryId}){
     await setDoc(doc(db,'users',cred.user.uid),{
       role:'lotteryAdmin', lotteryIds:[lotteryId], displayName, email, createdAt:serverTimestamp()
     });
-    return cred.user.uid;
+    await addDoc(collection(db,'auditLogs'),{action:'createLotteryAdmin',lotteryId,adminId:auth.currentUser.uid,targetUserId:cred.user.uid,createdAt:serverTimestamp()});return cred.user.uid;
   }finally{
     if(secondaryAuth) try{await authSignOut(secondaryAuth);}catch{}
   }
@@ -94,7 +94,7 @@ $('assignForm').addEventListener('submit',async e=>{
     if(!admin) throw new Error('No Lottery Admin profile was found for this email. Create the admin account first.');
     const ids=Array.isArray(admin.lotteryIds)?admin.lotteryIds:[];
     if(ids.includes(lotteryId)) throw new Error('This admin is already assigned to that lottery.');
-    await updateDoc(doc(db,'users',admin.id),{lotteryIds:arrayUnion(lotteryId)});
+    await updateDoc(doc(db,'users',admin.id),{lotteryIds:arrayUnion(lotteryId)});await addDoc(collection(db,'auditLogs'),{action:'assignLottery',lotteryId,adminId:auth.currentUser.uid,targetUserId:admin.id,createdAt:serverTimestamp()});
     e.target.reset();
     await renderAdminList();
     await setAdminMessage('Lottery assigned successfully. This admin can now manage both lotteries.',true);
@@ -108,14 +108,14 @@ async function renderAdminList(){
   const host=$('adminList');
   try{
     const qs=await getDocs(query(collection(db,'users'),where('role','==','lotteryAdmin')));
-    const rows=qs.docs.map(d=>({id:d.id,...d.data()}));
+    const rows=qs.docs.map(d=>({id:d.id,...d.data()}));$('statAdmins').textContent=rows.length;
     host.innerHTML=rows.length?`<table><thead><tr><th>Admin</th><th>Email</th><th>Assigned lotteries</th></tr></thead><tbody>${rows.map(a=>`<tr><td>${esc(a.displayName||'')}</td><td>${esc(a.email||'')}</td><td>${(a.lotteryIds||[]).map(id=>{const l=lots.find(x=>x.id===id);return esc(l?l.name:id)}).join(', ')}</td></tr>`).join('')}</tbody></table>`:'<p class="muted">No lottery admins yet.</p>';
   }catch(e){host.innerHTML=`<div class="error">${esc(e.message||'Could not load lottery admins.')}</div>`;}
 }
 
 async function renderLotteries(){
   const ls=await getDocs(collection(db,'lotteries'));
-  lots=ls.docs.map(d=>({id:d.id,...d.data()}));
+  lots=ls.docs.map(d=>({id:d.id,...d.data()}));$('statLotteries').textContent=lots.length;
   const lotOptions=lots.map(x=>`<option value="${esc(x.id)}">${esc(x.name)} (${esc(x.id)})</option>`).join(''); $('adminLottery').innerHTML=lotOptions; $('assignLottery').innerHTML=lotOptions;
   $('lotteries').innerHTML=lots.map(x=>`<div class="row">
     <b>${esc(x.name)}</b> <span class="badge ${esc(x.status)}">${esc(x.status)}</span>
@@ -136,16 +136,17 @@ async function renderSummaryOverview(){
   const host=$('overview');
   host.innerHTML='<p class="muted">Loading summary…</p>';
   try{
-    const rows=[];
+    const rows=[];let totalTickets=0,totalRevenue=0;
     for(const lot of lots){
       const qs=await getDocs(query(collection(db,'ticketRequests'),where('lotteryId','==',lot.id)));
       const approved=qs.docs.filter(d=>d.data().status==='approved');
       const pending=qs.docs.filter(d=>d.data().status==='pending');
       const rejected=qs.docs.filter(d=>d.data().status==='rejected');
       const revenue=approved.reduce((s,d)=>s+Number(d.data().total||0),0);
+      totalTickets+=approved.reduce((s,d)=>s+Number(d.data().quantity||0),0);totalRevenue+=revenue;
       rows.push(`<div class="row"><b>${esc(lot.name)}</b><br><span class="muted">Approved: ${approved.length} · Pending: ${pending.length} · Rejected: ${rejected.length} · Approved value: ${revenue} Birr</span></div>`);
     }
-    host.innerHTML=rows.join('')||'<p class="muted">No lotteries yet.</p>';
+    $('statTickets').textContent=totalTickets;$('statRevenue').textContent=`${totalRevenue} Birr`;host.innerHTML=rows.join('')||'<p class="muted">No lotteries yet.</p>';
   }catch(e){host.innerHTML=`<div class="error">${esc(e.message||'Could not load summary.')}</div>`;}
 }
 
@@ -190,5 +191,5 @@ function downloadCsv(name,rows){
 function safeFileName(s){return String(s||'lottery').replace(/[^a-z0-9_-]+/gi,'_').slice(0,60);}
 
 $('closeSummary')?.addEventListener('click',()=>{$('summaryPanel').style.display='none';});
-async function editLottery(id){const x=lots.find(l=>l.id===id);if(!x)return;const name=prompt('Lottery name',x.name);if(name===null)return;const price=Number(prompt('Ticket price (Birr)',x.price));if(!price||price<=0)return alert('Invalid price.');const status=prompt('Status: active, upcoming, closed, drawn',x.status)||x.status;try{await updateDoc(doc(db,'lotteries',id),{name:name.trim(),price,status});await renderLotteries();await renderSummaryOverview();}catch(e){alert(e.message);}}
-async function removeLottery(id){if(!confirm('Delete this lottery? This is only recommended for test lotteries.'))return;try{await deleteDoc(doc(db,'lotteries',id));await renderLotteries();await renderSummaryOverview();}catch(e){alert(e.message);}}
+async function editLottery(id){const x=lots.find(l=>l.id===id);if(!x)return;const name=prompt('Lottery name',x.name);if(name===null)return;const price=Number(prompt('Ticket price (Birr)',x.price));if(!price||price<=0)return alert('Invalid price.');const status=prompt('Status: active, upcoming, closed, drawn',x.status)||x.status;try{await updateDoc(doc(db,'lotteries',id),{name:name.trim(),price,status});await addDoc(collection(db,'auditLogs'),{action:'editLottery',lotteryId:id,adminId:auth.currentUser.uid,createdAt:serverTimestamp()});await renderLotteries();await renderSummaryOverview();}catch(e){alert(e.message);}}
+async function removeLottery(id){if(!confirm('Delete this lottery? This action should only be used when the lottery is no longer needed.'))return;try{await deleteDoc(doc(db,'lotteries',id));await addDoc(collection(db,'auditLogs'),{action:'deleteLottery',lotteryId:id,adminId:auth.currentUser.uid,createdAt:serverTimestamp()});await renderLotteries();await renderSummaryOverview();}catch(e){alert(e.message);}}
