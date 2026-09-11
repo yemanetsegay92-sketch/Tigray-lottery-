@@ -88,10 +88,9 @@ async function approve(id){
 
     await runTransaction(db, async tx => {
 
-      // ==========================================
-      // 1. READ THE REQUEST FIRST
-      // ==========================================
-
+      // ==============================
+      // 1. READ REQUEST
+      // ==============================
       const reqRef = doc(db,'ticketRequests',id);
       const reqSnap = await tx.get(reqRef);
 
@@ -110,10 +109,9 @@ async function approve(id){
       }
 
 
-      // ==========================================
-      // 2. CALCULATE HOW MANY TICKETS ARE NEEDED
-      // ==========================================
-
+      // ==============================
+      // 2. TICKET SETTINGS
+      // ==============================
       const count = Math.max(
         1,
         Math.min(100, Number(x.quantity || 1))
@@ -128,43 +126,52 @@ async function approve(id){
       }
 
 
-      // ==========================================
-      // 3. CREATE RANDOM CANDIDATE NUMBERS
-      //    NO WRITES YET!
-      // ==========================================
+      // ==============================
+      // 3. CREATE RANDOM CANDIDATES
+      // READ ONLY A SMALL NUMBER
+      // ==============================
 
       const candidates = [];
+      const neededCandidates = Math.min(
+        range,
+        Math.max(count * 10, 20)
+      );
 
-      for(let n = min; n <= max; n++){
-        candidates.push(n);
+      let attempts = 0;
+
+      while(
+        candidates.length < neededCandidates &&
+        attempts < neededCandidates * 10
+      ){
+        attempts++;
+
+        const n =
+          Math.floor(Math.random() * range) + min;
+
+        if(!candidates.includes(n)){
+          candidates.push(n);
+        }
       }
 
-      // Shuffle candidates randomly
-      for(let i = candidates.length - 1; i > 0; i--){
-        const j = Math.floor(Math.random() * (i + 1));
 
-        const temp = candidates[i];
-        candidates[i] = candidates[j];
-        candidates[j] = temp;
-      }
-
-
-      // ==========================================
-      // 4. READ ALL CANDIDATE TICKETS FIRST
-      // ==========================================
+      // ==============================
+      // 4. READ ALL CANDIDATES FIRST
+      // ==============================
 
       const ticketRefs = candidates.map(n =>
         doc(db,'tickets',`${lot.id}_${n}`)
       );
 
-      const ticketSnaps = await Promise.all(
-        ticketRefs.map(ref => tx.get(ref))
-      );
+      const ticketSnaps = [];
+
+      for(const ref of ticketRefs){
+        ticketSnaps.push(await tx.get(ref));
+      }
 
 
-      // ==========================================
-      // 5. FIND FREE TICKET NUMBERS
-      // ==========================================
+      // ==============================
+      // 5. FIND FREE TICKETS
+      // ==============================
 
       const picks = [];
 
@@ -174,28 +181,26 @@ async function approve(id){
           picks.push(candidates[i]);
         }
 
-        if(picks.length === count){
+        if(picks.length >= count){
           break;
         }
       }
 
       if(picks.length < count){
-        throw new Error('Not enough free ticket numbers available.');
+        throw new Error(
+          'Could not find enough free ticket numbers. Please approve again.'
+        );
       }
 
 
-      // ==========================================
-      // FROM HERE: WRITES ONLY
-      // ==========================================
+      // ==============================
+      // 6. WRITES START HERE
+      // ==============================
 
-      // Create ticket records
       for(const n of picks){
 
-        const ticketRef = doc(
-          db,
-          'tickets',
-          `${lot.id}_${n}`
-        );
+        const ticketRef =
+          doc(db,'tickets',`${lot.id}_${n}`);
 
         tx.set(ticketRef,{
           lotteryId: lot.id,
@@ -207,7 +212,7 @@ async function approve(id){
       }
 
 
-      // Update payment request
+      // Update ticket request
       tx.update(reqRef,{
         status:'approved',
         ticketNumbers:picks,
@@ -216,7 +221,7 @@ async function approve(id){
       });
 
 
-      // Update customer public status
+      // Update public customer status
       if(publicHash){
 
         const publicRef = doc(
