@@ -1,7 +1,11 @@
-<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Lottery Admin · Tigray Lottery V5</title><link rel="stylesheet" href="admin.css"></head>
-<body><header class="admin-header"><div class="title">🎟️ Lottery Admin <span id="lotteryName"></span></div><button id="logoutBtn">Logout</button></header><main class="admin-wrap"><div id="message"></div>
-<section class="panel"><h2>My Lottery</h2><div id="lotteryInfo">Loading…</div><div class="actions"><button id="editBtn">Rename / Change Price</button><button class="secondary" id="refreshBtn">↻ Refresh</button></div></section>
-<section class="panel"><div class="summary-head"><div><h2>💳 Pending Payment Requests</h2><div id="pendingCount" class="muted">Loading…</div></div></div><p class="muted">Approve/reject here. Once reviewed, the request card disappears. Approved requests are kept in the summary below.</p><div id="requests">Loading…</div></section>
-<section class="panel"><div class="summary-head"><div><h2>📊 Approved Summary</h2><div id="summaryCount" class="muted"></div></div></div><div class="actions"><button id="downloadCsv">⬇ Download CSV</button><button class="secondary" id="copyExcel">📋 Copy for Excel</button></div><div id="summaryMessage"></div><div id="summaryTable" class="table-wrap"></div></section>
-<div id="summaryPanel" style="display:none"></div><button id="closeSummary" style="display:none">Close</button>
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Lottery Admin · Tigray Lottery</title><link rel="stylesheet" href="admin.css"></head>
+<body>
+<header class="admin-header"><div class="title"><span class="admin-mark">✦</span> Lottery Admin <span id="lotteryName" class="muted-light"></span></div><button id="logoutBtn">Logout</button></header>
+<main class="admin-wrap">
+<div id="message"></div>
+<section class="panel hero-admin"><div><div class="eyebrow-admin">OPERATIONS</div><h1>Lottery workspace</h1><p class="muted">Review payments, assign sequential ticket numbers, and manage your assigned lotteries.</p></div><button class="secondary" id="refreshBtn">↻ Refresh</button></section>
+<section class="panel"><div class="section-title"><div><h2>My lotteries</h2><p class="muted">You can manage every lottery assigned to your account.</p></div></div><select id="lotterySelect" aria-label="Choose lottery"></select><div id="lotteryInfo" class="lottery-meta">Loading…</div><div class="actions"><button id="editBtn">Edit lottery</button></div></section>
+<section class="stats"><div class="stat"><span>Pending</span><b id="statPending">—</b></div><div class="stat"><span>Approved</span><b id="statApproved">—</b></div><div class="stat"><span>Rejected</span><b id="statRejected">—</b></div><div class="stat"><span>Tickets sold</span><b id="statTickets">—</b></div></section>
+<section class="panel"><div class="section-title"><div><h2>Payment verification</h2><div id="pendingCount" class="muted">Loading…</div></div></div><div id="requests">Loading…</div></section>
+<section class="panel"><div class="section-title"><div><h2>Approved sales</h2><div id="summaryCount" class="muted"></div></div></div><div class="actions"><button id="downloadCsv">⬇ Download CSV</button><button class="secondary" id="copyExcel">📋 Copy for Excel</button></div><div id="summaryMessage"></div><div id="summaryTable" class="table-wrap"></div></section>
 </main><script type="module" src="js/lottery.js"></script></body></html>
