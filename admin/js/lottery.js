@@ -73,18 +73,180 @@ function safeFileName(s){return String(s||'lottery').replace(/[^a-z0-9_-]+/gi,'_
 
 async function editLottery(){const name=prompt('Lottery name',lot.name);if(name===null)return;const price=Number(prompt('Ticket price (Birr)',lot.price));if(!price||price<=0)return alert('Invalid price.');try{await updateDoc(doc(db,'lotteries',lot.id),{name:name.trim(),price});lot={...lot,name:name.trim(),price};await renderAll();$('message').innerHTML='<div class="success">Lottery updated.</div>';}catch(e){alert(e.message);}}
 async function reject(id){if(!confirm('Reject this payment request?'))return;try{const r=doc(db,'ticketRequests',id);const rs=await getDoc(r);if(!rs.exists())throw new Error('Request not found.');const data=rs.data();if(data.status!=='pending')throw new Error('This request has already been reviewed.');if(data.lotteryId!==lot.id)throw new Error('Not authorized for this lottery.');await updateDoc(r,{status:'rejected',reviewedBy:me.uid,reviewedAt:serverTimestamp()});const h=await phoneHash(data.phone||'');if(h)await updateDoc(doc(db,'publicStatus',h,'requests',id),{status:'rejected',reviewedAt:serverTimestamp()});await renderAll();}catch(e){$('message').innerHTML=`<div class="error">${esc(e.message)}</div>`;}}
-async function approve(id){if(!confirm('Approve this payment and assign random ticket number(s)?'))return;try{
-  const initial=await getDoc(doc(db,'ticketRequests',id)); if(!initial.exists())throw new Error('Request not found.'); const initialData=initial.data(); const publicHash=await phoneHash(initialData.phone||'');
-  await runTransaction(db,async tx=>{
-    const reqRef=doc(db,'ticketRequests',id); const reqSnap=await tx.get(reqRef); if(!reqSnap.exists())throw new Error('Request not found.'); const x=reqSnap.data();
-    if(x.status!=='pending')throw new Error('This request has already been reviewed.'); if(x.lotteryId!==lot.id)throw new Error('Not authorized for this lottery.');
-    const count=Math.max(1,Math.min(100,Number(x.quantity||1))); const range=Number(lot.max)-Number(lot.min)+1; if(count>range)throw new Error('Not enough ticket numbers in this lottery.');
-    const picks=[]; let attempts=0;
-    while(picks.length<count && attempts<count*100){attempts++;const n=Math.floor(Math.random()*range)+Number(lot.min);if(picks.includes(n))continue;const tRef=doc(db,'tickets',`${lot.id}_${n}`);const tSnap=await tx.get(tRef);if(tSnap.exists())continue;picks.push(n);tx.set(tRef,{lotteryId:lot.id,number:n,requestId:id,assignedAt:serverTimestamp(),assignedBy:me.uid});}
-    if(picks.length<count)throw new Error('Could not find enough free ticket numbers.');
-    tx.update(reqRef,{status:'approved',ticketNumbers:picks,reviewedBy:me.uid,reviewedAt:serverTimestamp()});
-    if(publicHash)tx.update(doc(db,'publicStatus',publicHash,'requests',id),{status:'approved',ticketNumbers:picks,reviewedAt:serverTimestamp()});
-  });
-  $('message').innerHTML='<div class="success">Payment approved and ticket number(s) assigned.</div>';
-  await renderAll();
-}catch(e){console.error(e);$('message').innerHTML=`<div class="error">${esc(e.message)}</div>`;}}
+async function approve(id){
+  if(!confirm('Approve this payment and assign random ticket number(s)?')) return;
+
+  try{
+    const initial = await getDoc(doc(db,'ticketRequests',id));
+
+    if(!initial.exists()){
+      throw new Error('Request not found.');
+    }
+
+    const initialData = initial.data();
+    const publicHash = await phoneHash(initialData.phone || '');
+
+    await runTransaction(db, async tx => {
+
+      // ==========================================
+      // 1. READ THE REQUEST FIRST
+      // ==========================================
+
+      const reqRef = doc(db,'ticketRequests',id);
+      const reqSnap = await tx.get(reqRef);
+
+      if(!reqSnap.exists()){
+        throw new Error('Request not found.');
+      }
+
+      const x = reqSnap.data();
+
+      if(x.status !== 'pending'){
+        throw new Error('This request has already been reviewed.');
+      }
+
+      if(x.lotteryId !== lot.id){
+        throw new Error('Not authorized for this lottery.');
+      }
+
+
+      // ==========================================
+      // 2. CALCULATE HOW MANY TICKETS ARE NEEDED
+      // ==========================================
+
+      const count = Math.max(
+        1,
+        Math.min(100, Number(x.quantity || 1))
+      );
+
+      const min = Number(lot.min);
+      const max = Number(lot.max);
+      const range = max - min + 1;
+
+      if(count > range){
+        throw new Error('Not enough ticket numbers in this lottery.');
+      }
+
+
+      // ==========================================
+      // 3. CREATE RANDOM CANDIDATE NUMBERS
+      //    NO WRITES YET!
+      // ==========================================
+
+      const candidates = [];
+
+      for(let n = min; n <= max; n++){
+        candidates.push(n);
+      }
+
+      // Shuffle candidates randomly
+      for(let i = candidates.length - 1; i > 0; i--){
+        const j = Math.floor(Math.random() * (i + 1));
+
+        const temp = candidates[i];
+        candidates[i] = candidates[j];
+        candidates[j] = temp;
+      }
+
+
+      // ==========================================
+      // 4. READ ALL CANDIDATE TICKETS FIRST
+      // ==========================================
+
+      const ticketRefs = candidates.map(n =>
+        doc(db,'tickets',`${lot.id}_${n}`)
+      );
+
+      const ticketSnaps = await Promise.all(
+        ticketRefs.map(ref => tx.get(ref))
+      );
+
+
+      // ==========================================
+      // 5. FIND FREE TICKET NUMBERS
+      // ==========================================
+
+      const picks = [];
+
+      for(let i = 0; i < candidates.length; i++){
+
+        if(!ticketSnaps[i].exists()){
+          picks.push(candidates[i]);
+        }
+
+        if(picks.length === count){
+          break;
+        }
+      }
+
+      if(picks.length < count){
+        throw new Error('Not enough free ticket numbers available.');
+      }
+
+
+      // ==========================================
+      // FROM HERE: WRITES ONLY
+      // ==========================================
+
+      // Create ticket records
+      for(const n of picks){
+
+        const ticketRef = doc(
+          db,
+          'tickets',
+          `${lot.id}_${n}`
+        );
+
+        tx.set(ticketRef,{
+          lotteryId: lot.id,
+          number: n,
+          requestId: id,
+          assignedAt: serverTimestamp(),
+          assignedBy: me.uid
+        });
+      }
+
+
+      // Update payment request
+      tx.update(reqRef,{
+        status:'approved',
+        ticketNumbers:picks,
+        reviewedBy:me.uid,
+        reviewedAt:serverTimestamp()
+      });
+
+
+      // Update customer public status
+      if(publicHash){
+
+        const publicRef = doc(
+          db,
+          'publicStatus',
+          publicHash,
+          'requests',
+          id
+        );
+
+        tx.update(publicRef,{
+          status:'approved',
+          ticketNumbers:picks,
+          reviewedAt:serverTimestamp()
+        });
+      }
+
+    });
+
+
+    $('message').innerHTML =
+      '<div class="success">Payment approved and ticket number(s) assigned successfully.</div>';
+
+    await renderAll();
+
+  }catch(e){
+
+    console.error(e);
+
+    $('message').innerHTML =
+      `<div class="error">${esc(e.message)}</div>`;
+  }
+}
