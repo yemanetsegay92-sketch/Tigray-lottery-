@@ -3,4 +3,4 @@
 
 .telegram-connect-box{margin-top:12px;padding:14px;border:1px solid #d9e2ec;border-radius:14px;background:#f8fafc}
 .telegram-command{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:12px 0;padding:10px;border-radius:10px;background:#eef2f7}
-.telegram-command code{word-break:break-all;flex:1;min-width:220px}
+.telegram-command code{word-break:break-all;flex:1;min-width:220px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
