@@ -6,8 +6,8 @@ module.exports = async (req,res)=>{
   try{
     const authz=req.headers.authorization||'';
     if(!authz.startsWith('Bearer ')) return res.status(401).json({ok:false,error:'Missing Firebase ID token.'});
-    const uid=(await getAuth().verifyIdToken(authz.slice(7))).uid;
     const db=adminDb();
+    const uid=(await getAuth().verifyIdToken(authz.slice(7))).uid;
     const p=await db.collection('users').doc(uid).get();
     if(!p.exists || p.data().role!=='lotteryAdmin') return res.status(403).json({ok:false,error:'Only a Lottery Admin can use this endpoint.'});
     const d=p.data();
