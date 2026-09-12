@@ -14,7 +14,9 @@ module.exports = async (req, res) => {
     const db = adminDb();
 
     if (text.startsWith('/start')) {
-      const startParam = text.split(/\s+/,2)[1] || '';
+      const tokens = text.trim().split(/\s+/);
+      const command = String(tokens[0] || '').split('@')[0];
+      const startParam = command === '/start' ? (tokens[1] || '') : '';
 
       if (startParam.startsWith('admin_')) {
         const token = startParam.slice(6);
@@ -37,7 +39,7 @@ module.exports = async (req, res) => {
             }
           }
         }
-        await telegram('sendMessage', {chat_id:chatId, text:'This admin connection link is invalid or expired. Please generate a new link from the admin dashboard.'});
+        await telegram('sendMessage', {chat_id:chatId, text:'This admin connection link is invalid or expired. Please generate a new link from the Lottery Admin dashboard.'});
         return res.status(200).json({ok:true});
       }
 
