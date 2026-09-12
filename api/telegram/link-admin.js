@@ -11,8 +11,8 @@ module.exports = async (req,res)=>{
     const uid=(await getAuth().verifyIdToken(authz.slice(7))).uid;
     const profileSnap=await db.collection('users').doc(uid).get();
     if(!profileSnap.exists || profileSnap.data().role!=='lotteryAdmin') return res.status(403).json({ok:false,error:'Only a Lottery Admin can connect Telegram.'});
-    const token=crypto.randomBytes(18).toString('base64url');
+    const token=crypto.randomBytes(12).toString('hex');
     await db.collection('telegramAdminLinks').doc(token).set({userId:uid,createdAt:FieldValue.serverTimestamp(),expiresAt:new Date(Date.now()+10*60*1000),used:false});
-    return res.status(200).json({ok:true,url:botLink(`admin_${token}`)});
+    return res.status(200).json({ok:true,url:botLink(`admin_${token}`),token,expiresInSeconds:600});
   }catch(e){console.error(e);return res.status(500).json({ok:false,error:e.message});}
 };
