@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Tigray Lottery · Telegram</title>
+<link rel="stylesheet" href="style.css">
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+</head>
+<body>
+<header class="site-header"><a class="brand" href="telegram.html"><span class="brand-mark">✦</span><span>Tigray Lottery</span></a><nav><a href="telegram.html">Home</a><a href="check.html">Check Ticket</a></nav></header>
+<section class="hero"><div class="hero-inner"><div class="eyebrow">TELEGRAM MINI APP</div><h1>Your chance. Your ticket. Your future.</h1><p>Choose a lottery, submit your payment proof, and receive updates from Tigray Lottery in Telegram.</p></div></section>
+<main id="lotteries" class="content"><div class="section-heading"><div><div class="eyebrow dark">AVAILABLE LOTTERIES</div><h2>Choose a lottery</h2></div><div class="trust-pill">✓ Secure Telegram session</div></div><div id="lotteryList" class="lottery-grid"><div class="loading-card">Loading lotteries…</div></div></main>
+<footer><div class="brand footer-brand">✦ Tigray Lottery</div><small>© 2026 Tigray Lottery</small></footer>
+<script type="module">
+import { db } from './firebase.js';
+import { collection, getDocs, query, orderBy } from 'https://www.gstatic.com/firebasejs/12.2.1/firebase-firestore.js';
+const tg=window.Telegram?.WebApp; if(tg){try{tg.ready();tg.expand()}catch{}}
+const $=id=>document.getElementById(id); const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+async function verify(){if(!tg?.initData)return;const r=await fetch('/api/telegram/validate-webapp',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({initData:tg.initData})});if(!r.ok)throw new Error('Open this page from the Tigray Lottery Telegram bot.');}
+async function load(){try{await verify();const snap=await getDocs(collection(db,'lotteries'));const lots=snap.docs.map(d=>({id:d.id,...d.data()})).filter(x=>x.status==='active');$('lotteryList').innerHTML=lots.length?lots.map(x=>`<article class="lottery-card"><div><span class="status open">OPEN</span><h3>${esc(x.name)}</h3><p>${esc(x.description||'')} </p></div><div class="lottery-card-bottom"><span class="price">${Number(x.price||0)} Birr / ticket</span><a class="btn btn-primary" href="buy.html?lot=${encodeURIComponent(x.id)}">Buy Ticket →</a></div></article>`).join(''):'<div class="loading-card">No active lotteries right now.</div>';}catch(e){$('lotteryList').innerHTML=`<div class="error">${esc(e.message)}</div>`}}
+load();
+</script>
+</body></html>
