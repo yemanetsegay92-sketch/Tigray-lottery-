@@ -30,8 +30,31 @@ async function connectTelegram(){
     });
     const j=await r.json();
     if(!r.ok || !j.ok) throw new Error(j.error || 'Could not create Telegram connection link.');
-    window.open(j.url,'_blank','noopener');
-    $('telegramMessage').innerHTML='<div class="success">Telegram opened. Press Start in the bot, then return here and refresh.</div>';
+
+    const url=String(j.url||'');
+    const startCode=url.split('start=')[1] ? decodeURIComponent(url.split('start=')[1]) : '';
+    const command=startCode ? `/start ${startCode}` : '';
+
+    $('telegramMessage').innerHTML=`
+      <div class="telegram-connect-box">
+        <div class="success"><b>Telegram connection link is ready.</b></div>
+        <p>1. Tap <b>Open Telegram</b>.</p>
+        <p>2. In the bot, tap <b>Start</b>. If Telegram has already started the bot and does not show Start, send the command below.</p>
+        ${command?`<div class="telegram-command"><code id="telegramCommand">${esc(command)}</code><button type="button" id="copyTelegramCommand" class="secondary">Copy command</button></div>`:''}
+        <p>3. Return here and tap <b>Refresh</b>. Your status should change to Connected.</p>
+        <div class="actions">
+          <a class="btn btn-primary" href="${esc(url)}">📲 Open Telegram</a>
+        </div>
+      </div>`;
+
+    $('copyTelegramCommand')?.addEventListener('click',async()=>{
+      try{
+        await navigator.clipboard.writeText(command);
+        $('copyTelegramCommand').textContent='Copied ✓';
+      }catch{
+        $('telegramMessage').insertAdjacentHTML('beforeend','<p class="muted">Copy is blocked by this browser. Long-press the command and copy it manually.</p>');
+      }
+    });
   }catch(e){
     $('telegramMessage').innerHTML=`<div class="error">${esc(e.message)}</div>`;
   }
@@ -44,7 +67,7 @@ function refreshTelegramStatus(){
     : '<span class="muted">Not connected</span>';
 }
 
-$('logoutBtn').addEventListener('click',async()=>{await signOut(auth);location.href='login.html'});$('refreshBtn').addEventListener('click',renderAll);$('lotterySelect').addEventListener('change',async e=>{lot=lots.find(x=>x.id===e.target.value)||lot;await renderAll()});$('editBtn').addEventListener('click',editLottery);$('connectTelegram').addEventListener('click',connectTelegram);
+$('logoutBtn').addEventListener('click',async()=>{await signOut(auth);location.href='login.html'});$('refreshBtn').addEventListener('click',renderAll);$('refreshTelegramStatus')?.addEventListener('click',async()=>{const p=await getDoc(doc(db,'users',me.uid));if(p.exists()){profile=p.data();refreshTelegramStatus();}});$('lotterySelect').addEventListener('change',async e=>{lot=lots.find(x=>x.id===e.target.value)||lot;await renderAll()});$('editBtn').addEventListener('click',editLottery);$('connectTelegram').addEventListener('click',connectTelegram);
 onAuthStateChanged(auth,async u=>{if(!u){location.href='login.html';return}me=u;try{const p=await getDoc(doc(db,'users',u.uid));if(!p.exists()||p.data().role!=='lotteryAdmin'){location.href='login.html';return}profile=p.data();refreshTelegramStatus();const ids=profile.lotteryIds||[];if(!ids.length)throw new Error('No lottery assigned to this account.');const snaps=await Promise.all(ids.map(id=>getDoc(doc(db,'lotteries',id))));lots=snaps.filter(s=>s.exists()).map(s=>({id:s.id,...s.data()}));if(!lots.length)throw new Error('None of your assigned lotteries are available.');$('lotterySelect').innerHTML=lots.map(x=>`<option value="${esc(x.id)}">${esc(x.name)}</option>`).join('');lot=lots[0];await renderAll()}catch(e){console.error(e);$('message').innerHTML=`<div class="error">${esc(e.message)}</div>`}});
 async function renderAll(){if(!lot)return;$('lotteryName').textContent='· '+lot.name;$('lotteryInfo').innerHTML=`<span class="meta-pill"><b>${esc(lot.name)}</b></span><span class="meta-pill">Status: ${esc(lot.status)}</span><span class="meta-pill">Price: ${Number(lot.price||0)} Birr</span><span class="meta-pill">Sequence: ${esc(lot.min)} – ${esc(lot.max)}</span>`;const rs=await getDocs(query(collection(db,'ticketRequests'),where('lotteryId','==',lot.id)));const all=rs.docs.map(d=>({id:d.id,...d.data()}));const pending=all.filter(x=>x.status==='pending'),approved=all.filter(x=>x.status==='approved'),rejected=all.filter(x=>x.status==='rejected');lastSummary=approved;$('statPending').textContent=pending.length;$('statApproved').textContent=approved.length;$('statRejected').textContent=rejected.length;$('statTickets').textContent=approved.reduce((s,x)=>s+Number(x.quantity||0),0);renderPending(pending);renderSummary(approved)}
 function renderPending(items){$('pendingCount').textContent=`${items.length} pending`;$('requests').innerHTML=items.map(x=>`<div class="request-card"><div class="card-head"><div><b>${esc(x.name)}</b> · ${esc(x.phone)}</div><span class="badge pending">PENDING</span></div><p>${Number(x.quantity||1)} ticket(s) · <b>${Number(x.total||0)} Birr</b>${x.reference?` · Ref ${esc(x.reference)}`:''}</p>${x.screenshotData?`<div class="screenshot-wrap"><a href="${esc(x.screenshotData)}" target="_blank" rel="noopener"><img src="${esc(x.screenshotData)}" alt="Payment screenshot"></a></div>`:''}<div class="actions"><button data-approve="${esc(x.id)}">✓ Approve & Assign</button><button class="danger" data-reject="${esc(x.id)}">✕ Reject</button></div></div>`).join('')||'<div class="success">No pending requests.</div>';document.querySelectorAll('[data-approve]').forEach(b=>b.addEventListener('click',()=>approve(b.dataset.approve)));document.querySelectorAll('[data-reject]').forEach(b=>b.addEventListener('click',()=>reject(b.dataset.reject)))}
