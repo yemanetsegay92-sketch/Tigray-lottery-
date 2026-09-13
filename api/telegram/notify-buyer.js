@@ -12,7 +12,7 @@ module.exports = async (req,res)=>{
     const rs=await db.collection('ticketRequests').doc(requestId).get();
     if(!rs.exists) return res.status(404).json({ok:false,error:'Request not found.'});
     const x=rs.data();
-    if(x.status!=='approved' && x.status!=='rejected') return res.status(400).json({ok:false,error:'Request is not finalized.'});
+    if(!['approved','rejected','cancelled'].includes(x.status)) return res.status(400).json({ok:false,error:'Request is not finalized.'});
     if(!x.telegramChatId) return res.status(200).json({ok:true,sent:false,reason:'Buyer has not connected Telegram.'});
     const lines=[];
     if(x.status==='approved'){
@@ -23,6 +23,13 @@ module.exports = async (req,res)=>{
       lines.push(`<b>Ticket numbers:</b> <b>${escapeHtml((x.ticketNumbers||[]).join(', '))}</b>`);
       lines.push('');
       lines.push('Thank you for participating.');
+    }else if(x.status==='cancelled'){
+      lines.push('⚠️ <b>Your previously approved ticket request was cancelled.</b>');
+      lines.push('');
+      lines.push(`<b>Lottery:</b> ${escapeHtml(x.lotteryName||x.lotteryId)}`);
+      lines.push(`<b>Reason:</b> ${escapeHtml(x.cancellationReason||'Approved in error.')}`);
+      lines.push('');
+      lines.push('Please review your ticket status or contact the lottery administrator.');
     }else{
       lines.push('❌ <b>Your ticket request was rejected.</b>');
       lines.push('');
