@@ -35,6 +35,38 @@ async function telegram(method, body) {
   return data.result;
 }
 
+function adminBotToken() {
+  const token = process.env.TELEGRAM_ADMIN_BOT_TOKEN;
+  if (!token) throw new Error('TELEGRAM_ADMIN_BOT_TOKEN is not configured.');
+  return token;
+}
+
+function adminBotUsername() {
+  const username = String(process.env.TELEGRAM_ADMIN_BOT_USERNAME || '').replace(/^@/, '');
+  if (!username) throw new Error('TELEGRAM_ADMIN_BOT_USERNAME is not configured.');
+  return username;
+}
+
+async function adminTelegram(method, body) {
+  const response = await fetch(`https://api.telegram.org/bot${adminBotToken()}/${method}`, {
+    method: 'POST',
+    headers: {'content-type':'application/json'},
+    body: JSON.stringify(body)
+  });
+  const data = await response.json();
+  if (!response.ok || !data.ok) throw new Error(data.description || `Telegram admin ${method} failed.`);
+  return data.result;
+}
+
+function adminBotLink(startParam='') {
+  const q = startParam ? `?start=${encodeURIComponent(startParam)}` : '';
+  return `https://t.me/${adminBotUsername()}${q}`;
+}
+
+function adminTelegramWebhookUrl() {
+  return 'https://www.tigraylottery.com/api/telegram/admin-webhook';
+}
+
 function telegramMiniAppUrl() {
   return process.env.TELEGRAM_MINI_APP_URL || 'https://tigraylottery.com/telegram.html';
 }
@@ -77,5 +109,6 @@ function htmlLink(label, url) {
 }
 
 module.exports = {
-  adminDb, telegram, botLink, botUsername, telegramMiniAppUrl, escapeHtml, validateTelegramInitData, FieldValue, Timestamp, htmlLink
+  adminDb, telegram, botLink, botUsername, telegramMiniAppUrl, escapeHtml, validateTelegramInitData, FieldValue, Timestamp, htmlLink,
+  adminBotToken, adminBotUsername, adminTelegram, adminBotLink, adminTelegramWebhookUrl
 };

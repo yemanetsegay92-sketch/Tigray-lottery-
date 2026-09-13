@@ -3,7 +3,7 @@ module.exports = async (req,res)=>{
   if(req.method!=='GET') return res.status(405).send('Method not allowed');
   if(String(req.query?.key||'') !== String(process.env.TELEGRAM_SETUP_SECRET||'')) return res.status(403).send('Forbidden');
   try{
-    const webhookUrl='https://www.tigraylottery.com/api/telegram/webhook';
+    const webhookUrl='https://tigraylottery.com/api/telegram/webhook';
     const webhookSecret=String(process.env.TELEGRAM_WEBHOOK_SECRET||'');
     const a=await telegram('setWebhook',{url:webhookUrl,drop_pending_updates:true,...(webhookSecret?{secret_token:webhookSecret}:{})});
     const info=await telegram('getWebhookInfo',{});

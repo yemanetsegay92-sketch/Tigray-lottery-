@@ -1,4 +1,4 @@
-const { adminDb, telegram, telegramMiniAppUrl, escapeHtml } = require('./_lib');
+const { adminDb, adminTelegram, escapeHtml } = require('./_lib');
 module.exports = async (req,res)=>{
   if(req.method!=='POST') return res.status(405).json({ok:false,error:'Method not allowed'});
   try{
@@ -22,7 +22,7 @@ module.exports = async (req,res)=>{
       `Please open the admin dashboard to verify and approve or reject this request.`;
     for(const a of recipients){
       try{
-        await telegram('sendMessage',{chat_id:a.telegramChatId,text,parse_mode:'HTML',disable_web_page_preview:true,reply_markup:{inline_keyboard:[[{text:'🔐 Open Admin Dashboard',url:'https://tigraylottery.com/admin/login.html'}]]}});
+        await adminTelegram('sendMessage',{chat_id:a.telegramChatId,text,parse_mode:'HTML',disable_web_page_preview:true,reply_markup:{inline_keyboard:[[{text:'🔐 Open Admin Dashboard',url:'https://tigraylottery.com/admin/login.html'}]]}});
         sent++;
       }catch(e){console.error('admin notification',a.telegramChatId,e.message)}
     }

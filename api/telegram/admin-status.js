@@ -11,7 +11,8 @@ module.exports = async (req,res)=>{
     const p=await db.collection('users').doc(uid).get();
     if(!p.exists || p.data().role!=='lotteryAdmin') return res.status(403).json({ok:false,error:'Only a Lottery Admin can use this endpoint.'});
     const d=p.data();
-    return res.status(200).json({ok:true,connected:!!d.telegramChatId,username:d.telegramUsername||'',firstName:d.telegramFirstName||''});
+    const connected=!!d.telegramChatId && (d.telegramBot==='admin' || !d.telegramBot);
+    return res.status(200).json({ok:true,connected,username:d.telegramUsername||'',firstName:d.telegramFirstName||'',bot:d.telegramBot||'admin'});
   }catch(e){
     console.error(e);
     return res.status(500).json({ok:false,error:e.message});
