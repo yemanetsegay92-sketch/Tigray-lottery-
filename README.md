@@ -1,14 +1,16 @@
-# Tigray Lottery V7.4
+# Tigray Lottery V8
 
-Fixes Telegram webhook reliability:
-- Robust JSON body parsing on Vercel.
-- Robust secret-header handling.
-- `/start`, `/start@bot`, `/start admin_...`, `/link ...`, and `/connect ...` parsing.
-- Webhook errors are surfaced in Vercel logs instead of silently swallowed.
-- Setup endpoint reports sanitized Telegram webhook diagnostics.
-- Existing buyer notifications, admin notifications, and Mini App remain.
+Professional prototype for Tigray Lottery.
 
-Keep Telegram and Firebase credentials only in Vercel environment variables.
+## V8 improvements
+- Mistakenly approved requests can be cancelled before the lottery is drawn. Assigned ticket documents are released, but cancelled numbers are permanently retired and are not reused.
+- General Admin can set a new temporary password for an existing Lottery Admin who forgets their password. Passwords are never stored in Firestore.
+- Live draw panel: ten movable balls (0-9), one digit revealed per tap, with review and explicit save of the final draw result.
+- Existing V7.5 Telegram customer/admin integration remains in place.
+- Existing multi-lottery admin assignment and reports remain in place.
 
+## Deployment
+Upload/deploy the entire project. Keep all Telegram and Firebase secrets in Vercel Environment Variables; never commit secrets to GitHub.
 
-V7.5 uses a separate Telegram Admin Bot. Add these Production environment variables in Vercel: TELEGRAM_ADMIN_BOT_TOKEN, TELEGRAM_ADMIN_BOT_USERNAME (use tigraylotteryadmin_bot), TELEGRAM_ADMIN_WEBHOOK_SECRET, TELEGRAM_ADMIN_SETUP_SECRET. The existing customer-bot variables remain unchanged. Run /api/telegram/setup-admin?key=... once after deployment.
+## Firestore
+The current Firestore rules can continue to protect the browser-based data operations. V8 cancellation and password-reset actions use trusted Vercel API functions with the Firebase Admin SDK, so no ticket-delete permission is needed in client rules.
