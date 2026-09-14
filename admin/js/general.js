@@ -16,6 +16,8 @@ $('drawDigitBtn')?.addEventListener('click',drawDigit);
 $('resetDrawBtn')?.addEventListener('click',resetDraw);
 $('saveDrawBtn')?.addEventListener('click',saveDraw);
 $('closeSummary')?.addEventListener('click',()=>{$('summaryPanel').style.display='none';});
+$('contactForm')?.addEventListener('submit',saveContactSettings);
+$('whatsappNumber')?.addEventListener('input',updateContactPreview);
 
 onAuthStateChanged(auth,async u=>{
   if(!u){location.href='login.html';return;}
@@ -24,6 +26,7 @@ onAuthStateChanged(auth,async u=>{
     if(!p.exists()||p.data().role!=='generalAdmin'){location.href='login.html';return;}
     await renderLotteries();
     await renderSummaryOverview();
+    await loadContactSettings();
     setupDraw();
   }catch(e){console.error(e);$('message').innerHTML=`<div class="error">${esc(e.message||'Could not load the General Admin dashboard.')}</div>`;}
 });
@@ -127,6 +130,41 @@ function safeFileName(s){return String(s||'lottery').replace(/[^a-z0-9_-]+/gi,'_
 async function editLottery(id){const x=lots.find(l=>l.id===id);if(!x)return;const name=prompt('Lottery name',x.name);if(name===null)return;const price=Number(prompt('Ticket price (Birr)',x.price));if(!price||price<=0)return alert('Invalid price.');const status=prompt('Status: active, upcoming, closed, drawn',x.status)||x.status;try{await updateDoc(doc(db,'lotteries',id),{name:name.trim(),price,status});await addDoc(collection(db,'auditLogs'),{action:'editLottery',lotteryId:id,adminId:auth.currentUser.uid,createdAt:serverTimestamp()});await renderLotteries();await renderSummaryOverview();setupDraw();}catch(e){alert(e.message)}}
 async function removeLottery(id){if(!confirm('Delete this lottery? This action should only be used when the lottery is no longer needed.'))return;try{await deleteDoc(doc(db,'lotteries',id));await addDoc(collection(db,'auditLogs'),{action:'deleteLottery',lotteryId:id,adminId:auth.currentUser.uid,createdAt:serverTimestamp()});await renderLotteries();await renderSummaryOverview();setupDraw();}catch(e){alert(e.message)}}
 
+async function loadContactSettings(){
+  try{
+    const snap=await getDoc(doc(db,'settings','site'));
+    const number=snap.exists()?(snap.data().whatsappNumber||''):'';
+    $('whatsappNumber').value=number;
+    updateContactPreview();
+  }catch(e){
+    $('contactMessage').innerHTML=`<div class="error">${esc(e.message||'Could not load contact settings.')}</div>`;
+  }
+}
+
+function updateContactPreview(){
+  const raw=$('whatsappNumber')?.value||'';
+  const digits=raw.replace(/[^0-9]/g,'');
+  $('whatsappPreview').value=digits?`https://wa.me/${digits}`:'Not configured';
+}
+
+async function saveContactSettings(e){
+  e.preventDefault();
+  const raw=$('whatsappNumber').value.trim();
+  const digits=raw.replace(/[^0-9]/g,'');
+  if(digits.length < 9 || digits.length > 15){
+    $('contactMessage').innerHTML='<div class="error">Enter a valid WhatsApp number, including country code.</div>';
+    return;
+  }
+  try{
+    await setDoc(doc(db,'settings','site'),{whatsappNumber:digits,updatedAt:serverTimestamp(),updatedBy:auth.currentUser.uid},{merge:true});
+    await addDoc(collection(db,'auditLogs'),{action:'updateCustomerContact',whatsappNumberLast4:digits.slice(-4),adminId:auth.currentUser.uid,createdAt:serverTimestamp()});
+    updateContactPreview();
+    $('contactMessage').innerHTML='<div class="success">WhatsApp contact updated on the public home page.</div>';
+  }catch(e){
+    $('contactMessage').innerHTML=`<div class="error">${esc(e.message||'Could not save contact settings.')}</div>`;
+  }
+}
+
 async function resetLotteryAdminPassword(e){
   e.preventDefault();const btn=e.target.querySelector('button[type="submit"]');btn.disabled=true;
   try{
@@ -148,7 +186,7 @@ function setupDraw(){
 function renderBalls(){
   const host=$('drawBottle');if(!host)return;
   host.querySelectorAll('.draw-ball').forEach(el=>el.remove());
-  for(let d=0;d<=9;d++){const el=document.createElement('div');el.className='draw-ball';el.dataset.digit=d;el.textContent=d;host.appendChild(el);positionBall(el,true);}
+  for(let d=0;d<=9;d++){const el=document.createElement('div');el.className='draw-ball';el.dataset.digit=d;el.textContent='';el.style.setProperty('--ball-hue',String((d*37+12)%360));host.appendChild(el);positionBall(el,true);}
 }
 function positionBall(el,initial=false){
   const left=12+Math.random()*72,top=18+Math.random()*65;el.style.left=`${left}%`;el.style.top=`${top}%`;if(initial)el.style.transition='none';setTimeout(()=>el.style.transition='',20);}
@@ -168,10 +206,10 @@ async function drawDigit(){
   if(drawDigits.length>=maxLen)return;
   drawBusy=true;updateDrawUI(lottery);shuffleBalls();
   await new Promise(r=>setTimeout(r,650));
-  const digit=Math.floor(Math.random()*10);const ball=document.querySelector(`.draw-ball[data-digit="${digit}"]`);if(ball){document.querySelectorAll('.draw-ball').forEach(b=>b.classList.remove('opened'));ball.classList.add('opened');}
+  const digit=Math.floor(Math.random()*10);const ball=document.querySelector(`.draw-ball[data-digit="${digit}"]`);if(ball){document.querySelectorAll('.draw-ball').forEach(b=>{b.classList.remove('opened');b.textContent='';});ball.classList.add('opened');ball.textContent=String(digit);}
   drawDigits.push(digit);$('drawResult').textContent=drawDigits.map(String).join('');
   await new Promise(r=>setTimeout(r,450));
-  if(ball)ball.classList.remove('opened');
+  if(ball){ball.classList.remove('opened');ball.textContent='';}
   drawBusy=false;updateDrawUI(lottery);
   if(drawDigits.length===maxLen)$('drawMessage').innerHTML='<div class="success">Number complete. Review it, then save the draw result.</div>';
 }
