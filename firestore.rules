@@ -42,6 +42,16 @@ service cloud.firestore {
       allow update, delete: if false;
     }
 
+    // =====================================================
+    // PUBLIC SITE SETTINGS
+    // =====================================================
+
+    match /settings/{settingId} {
+      allow read: if settingId == 'site';
+      allow create, update, delete: if isGeneral();
+    }
+
+
     match /auditLogs/{logId} {
       allow create: if signed() && (isGeneral() || isLotteryAdmin());
       allow read: if isGeneral() || (isLotteryAdmin() && resource.data.lotteryId in profile().lotteryIds);

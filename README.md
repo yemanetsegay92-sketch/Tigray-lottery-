@@ -14,3 +14,10 @@ Upload/deploy the entire project. Keep all Telegram and Firebase secrets in Verc
 
 ## Firestore
 The current Firestore rules can continue to protect the browser-based data operations. V8 cancellation and password-reset actions use trusted Vercel API functions with the Firebase Admin SDK, so no ticket-delete permission is needed in client rules.
+
+## Final V8 additions
+- Public home page has a WhatsApp Contact Us section controlled by General Admin.
+- General Admin can save the public WhatsApp contact in `settings/site`.
+- Public footer credits YOAS Digital Solution.
+- Live draw uses opaque, colored 3D-style balls. Digits stay hidden until a ball is drawn/revealed.
+- Cancel-approval endpoint uses Firebase Admin `DocumentSnapshot.exists` correctly.
