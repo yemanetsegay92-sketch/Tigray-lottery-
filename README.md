@@ -1,23 +1,23 @@
-# Tigray Lottery V8
+# Tigray Lottery V9
 
-Professional prototype for Tigray Lottery.
+V9 builds on the tested V8 release.
 
-## V8 improvements
-- Mistakenly approved requests can be cancelled before the lottery is drawn. Assigned ticket documents are released, but cancelled numbers are permanently retired and are not reused.
-- General Admin can set a new temporary password for an existing Lottery Admin who forgets their password. Passwords are never stored in Firestore.
-- Live draw panel: ten movable balls (0-9), one digit revealed per tap, with review and explicit save of the final draw result.
-- Existing V7.5 Telegram customer/admin integration remains in place.
-- Existing multi-lottery admin assignment and reports remain in place.
+## Public
+- Main: https://tigraylottery.com
+- Alternate: https://www.tigraylottery.com
+- Customer side defaults to ትግርኛ and remembers language choice.
+- Each lottery card has Buy Ticket, Check Ticket, and Winner Awards.
 
-## Deployment
-Upload/deploy the entire project. Keep all Telegram and Firebase secrets in Vercel Environment Variables; never commit secrets to GitHub.
+## Admin links
+- General Admin: /admin/general-login.html
+- Lottery Admin: /admin/lottery-login.html
+- The role is still verified by Firebase; separate URLs are only an entry point/convenience.
 
-## Firestore
-The current Firestore rules can continue to protect the browser-based data operations. V8 cancellation and password-reset actions use trusted Vercel API functions with the Firebase Admin SDK, so no ticket-delete permission is needed in client rules.
+## V9 scaling change
+Customer ticket submissions now go through /api/customer/create-request and use the Firebase Admin SDK on the server. This keeps customer browsers from opening direct Firestore write channels for each submission and gives us a single validated write path.
 
-## Final V8 additions
-- Public home page has a WhatsApp Contact Us section controlled by General Admin.
-- General Admin can save the public WhatsApp contact in `settings/site`.
-- Public footer credits YOAS Digital Solution.
-- Live draw uses opaque, colored 3D-style balls. Digits stay hidden until a ball is drawn/revealed.
-- Cancel-approval endpoint uses Firebase Admin `DocumentSnapshot.exists` correctly.
+## Winner awards
+General Admin can enter one award per line when creating a lottery and can edit awards later. Customer-facing Winner Awards opens a modal from each lottery card.
+
+## Important
+Keep Firebase service-account JSON and Telegram bot tokens only in Vercel Environment Variables. Do not commit them to GitHub.
