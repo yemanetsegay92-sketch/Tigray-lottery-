@@ -64,7 +64,7 @@ async function sendWelcome(chatId) {
     text: '🎟️ Welcome to Tigray Lottery\n\nBuy tickets and check your lottery status directly from Telegram.',
     reply_markup: {
       inline_keyboard: [
-        [{ text: '🎟 Buy / View Lotteries', web_app: { url: telegramMiniAppUrl() } }],
+        [{ text: '🎟 ቲኬት ይግዙ', web_app: { url: telegramMiniAppUrl() } }],
         [{ text: '🌐 Open Website', url: 'https://tigraylottery.com' }]
       ]
     }
@@ -149,7 +149,7 @@ module.exports = async function webhook(req, res) {
           telegramConnectedAt: FieldValue.serverTimestamp()
         }, { merge: true });
         await sendText(chatId, '✅ Telegram notifications connected. We will notify you when your ticket request is approved or rejected.', {
-          inline_keyboard: [[{ text: '🎟 Open Tigray Lottery', web_app: { url: telegramMiniAppUrl() } }]]
+          inline_keyboard: [[{ text: '🎟 ቲኬት ይግዙ', web_app: { url: telegramMiniAppUrl() } }]]
         });
         return res.status(200).json({ ok: true, type: 'buyer_start', found: true });
       }
@@ -181,7 +181,7 @@ module.exports = async function webhook(req, res) {
 
     if (command === '/help') {
       await sendText(chatId, 'Use the button below to open the Tigray Lottery Mini App.', {
-        inline_keyboard: [[{ text: '🎟 Open Lottery', web_app: { url: telegramMiniAppUrl() } }]]
+        inline_keyboard: [[{ text: '🎟 ቲኬት ይግዙ', web_app: { url: telegramMiniAppUrl() } }]]
       });
       return res.status(200).json({ ok: true, type: 'help' });
     }
