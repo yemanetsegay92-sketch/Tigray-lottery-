@@ -1,14 +1,8 @@
 import { db } from '../firebase.js';
 import { getDoc, doc } from 'https://www.gstatic.com/firebasejs/12.2.1/firebase-firestore.js';
 import { phoneHash, normalizePhone } from './phoneHash.js';
-const $=id=>document.getElementById(id);const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));const lotId=new URLSearchParams(location.search).get('lot');let lot=null,compressedScreenshot=null;
+const $=id=>document.getElementById(id);const esc=s=>String(s??'').replace(/[&<>\"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;',"'":'&#39;'}[c]));const lotId=new URLSearchParams(location.search).get('lot');let lot=null,compressedScreenshot=null;
 const tg=window.Telegram?.WebApp||null; if(tg){try{tg.ready();tg.expand()}catch{}}
-async function verifiedTelegramUser(){
-  if(!tg?.initData) return null;
-  const r=await fetch('/api/telegram/validate-webapp',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({initData:tg.initData})});
-  const j=await r.json(); if(!r.ok||!j.ok) throw new Error(j.error||'Telegram session could not be verified.');
-  return j.user;
-}
 async function getBuyerTelegramLink(requestId){
   try{const r=await fetch('/api/telegram/buyer-link',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({requestId})});const j=await r.json();return j.ok?j.url:'';}catch{return '';}
 }
@@ -17,7 +11,6 @@ async function notifyTelegramAdmins(requestId){
 }
 const T={en:{navCheck:'Check Ticket',backHome:'← Back to lotteries',yourDetails:'Your details',detailsNote:'Use the same phone number you will use to check your ticket.',fullName:'Full name',phoneNumber:'Phone number',tickets:'Tickets',ticketsNote:'Choose how many tickets you want.',paymentProof:'Payment proof',proofNote:'Provide at least one of the following.',referenceNumber:'Transaction / reference number',paymentScreenshot:'Payment screenshot',uploadHint:'Choose an image',or:'OR',proofRule:'A reference number or screenshot is required. You may provide both.',ticketPrice:'Ticket price',numberOfTickets:'Number of tickets',total:'Total',submitRequest:'Submit ticket request',manualNote:'Payment is verified manually. Ticket numbers are assigned after approval.',ticketPending:'Your ticket numbers are assigned after approval.',requestReceived:'Request received',pending:'Your request is waiting for payment verification.',keepPhone:'Keep your phone number. You can use it later to check your status.',checkStatus:'Check status',screenshotAdded:'Screenshot attached',chooseImage:'Choose an image',requiredProof:'Please provide a reference number, a screenshot, or both.',lotUnavailable:'Lottery unavailable',goBack:'Go back'},ti:{navCheck:'መረጋገጺ ቲኬት',backHome:'← ናብ ሎተሪታት',yourDetails:'ዝርዝር ሓበሬታኻ',detailsNote:'ንምርግጋጽ ቲኬትካ እቲ ዝተጠቐምካሉ ቁጽሪ ስልኪ ተጠቐም።',fullName:'ምሉእ ስም',phoneNumber:'ቁጽሪ ስልኪ',tickets:'ቲኬት',ticketsNote:'ክንደይ ቲኬት ከም ትደልዮ ምረጽ።',paymentProof:'መረጋገጺ ክፍሊት',proofNote:'ካብዞም እዞም ብውሑዱ ሓደ ኣቕርብ።',referenceNumber:'ቁጽሪ መረጋገጺ ግብሪ',paymentScreenshot:'ስክሪንሾት ክፍሊት',uploadHint:'ስክሪንሾት ምረጽ',or:'ወይ',proofRule:'ቁጽሪ መረጋገጺ ወይ ስክሪንሾት የድሊ። ክልቲኡ እውን ከተቕርብ ትኽእል።',ticketPrice:'ዋጋ ሓደ ቲኬት',numberOfTickets:'ብዝሒ ቲኬት',total:'ጠቕላላ',submitRequest:'ሕቶ ቲኬት ልኣኽ',manualNote:'ክፍሊት ብኢድ ይረጋገጽ። ቁጽሪ ቲኬት ድሕሪ ምጽዳቕ ይረኽብ።',ticketPending:'ቁጽሪ ቲኬትካ ድሕሪ ምጽዳቕ ይምደብ።',requestReceived:'ሕቶ ተቐቢልና',pending:'ሕቶኻ ንምርግጋጽ ክፍሊት ይጽበ ኣሎ።',keepPhone:'ቁጽሪ ስልኪኻ ሓዞ። ንኩነታትካ ድሕሪ ግዜ ብእኡ ክትምርምር ትኽእል።',checkStatus:'ኩነታት ኣረጋግጽ',screenshotAdded:'ስክሪንሾት ተወሲኹ',chooseImage:'ስክሪንሾት ምረጽ',requiredProof:'ቁጽሪ መረጋገጺ ወይ ስክሪንሾት ወይ ክልቲኡ ኣቕርብ።',lotUnavailable:'ሎተሪ ኣይርከብን',goBack:'ተመለስ'}};
 const lang=localStorage.getItem('tl_lang')||'ti',t=T[lang];function applyText(){document.documentElement.lang=lang==='ti'?'ti':'en';document.querySelectorAll('[data-i18n]').forEach(el=>{if(t[el.dataset.i18n])el.textContent=t[el.dataset.i18n]});const b=$('langToggle');if(b)b.textContent=lang==='en'?'ትግርኛ':'English'}$('langToggle')?.addEventListener('click',e=>{e.preventDefault();localStorage.setItem('tl_lang',lang==='en'?'ti':'en');location.reload()});applyText();
-function fmt(n){if(!Number.isFinite(n)||n<=0)return '0 B';const u=['B','KB','MB'];let x=n,i=0;while(x>=1024&&i<2){x/=1024;i++}return `${x.toFixed(i?1:0)} ${u[i]}`}
 function blob(canvas,q){return new Promise((res,rej)=>canvas.toBlob(b=>b?res(b):rej(new Error('Could not prepare image.')),'image/jpeg',q))}
 async function compressImage(file){const bitmap=await createImageBitmap(file);let w=bitmap.width,h=bitmap.height,scale=Math.min(1,1280/Math.max(w,h));w=Math.max(1,Math.round(w*scale));h=Math.max(1,Math.round(h*scale));const c=document.createElement('canvas');c.width=w;c.height=h;c.getContext('2d',{alpha:false}).drawImage(bitmap,0,0,w,h);bitmap.close();let q=.70,b=await blob(c,q);while(b.size>300*1024&&q>.42){q-=.08;b=await blob(c,q)}if(b.size>340*1024){const s=Math.min(w,h),scale2=720/s,c2=document.createElement('canvas');c2.width=Math.max(1,Math.round(w*scale2));c2.height=Math.max(1,Math.round(h*scale2));c2.getContext('2d',{alpha:false}).drawImage(c,0,0,c2.width,c2.height);b=await blob(c2,.52);w=c2.width;h=c2.height}if(b.size>380*1024)throw new Error('Please choose a smaller image.');const data=await new Promise((resolve,reject)=>{const r=new FileReader();r.onload=()=>resolve(r.result);r.onerror=()=>reject(new Error('Could not read image.'));r.readAsDataURL(b)});return {data,size:b.size,originalSize:file.size}}
 $('screenshot')?.addEventListener('change',async e=>{compressedScreenshot=null;const f=e.target.files?.[0];if(!f){$('screenshotInfo').textContent=t.chooseImage;return}try{compressedScreenshot=await compressImage(f);$('screenshotInfo').textContent=`✓ ${t.screenshotAdded}`;}catch(err){e.target.value='';$('screenshotInfo').textContent=err.message||'Could not use this image.'}});
@@ -31,15 +24,8 @@ $('buyForm').addEventListener('submit',async e=>{
   const reference=$('reference').value.trim();
   const quantity=qty();
   const hasShot=!!$('screenshot').files?.length;
-  let telegramUser=null;
-  let telegramInitData='';
-  try{
-    telegramInitData=String(tg?.initData||'');
-    telegramUser=await verifiedTelegramUser();
-  }catch(err){
-    $('message').innerHTML=`<div class="error">${esc(err.message)}</div>`;
-    return;
-  }
+  const telegramInitData=String(tg?.initData||'');
+  const telegramUser=tg?.initDataUnsafe?.user||null;
   if(!name||!phone){
     $('message').innerHTML='<div class="error">Please complete your name and phone number.</div>';
     return;
