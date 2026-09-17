@@ -68,7 +68,14 @@ function adminTelegramWebhookUrl() {
 }
 
 function telegramMiniAppUrl() {
-  return process.env.TELEGRAM_MINI_APP_URL || 'https://tigraylottery.com/telegram.html';
+  const base = process.env.TELEGRAM_MINI_APP_URL || 'https://tigraylottery.com/telegram.html';
+  try {
+    const url = new URL(base);
+    url.searchParams.set('v', '10');
+    return url.toString();
+  } catch {
+    return `${base}${base.includes('?') ? '&' : '?'}v=10`;
+  }
 }
 
 function botLink(startParam='') {
@@ -77,7 +84,7 @@ function botLink(startParam='') {
 }
 
 function escapeHtml(value) {
-  return String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  return String(value ?? '').replace(/[&<>\"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;',"'":'&#39;'}[c]));
 }
 
 function normalizeTelegramInitData(initData) {
