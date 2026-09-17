@@ -15,8 +15,8 @@
 import { db } from './firebase.js';
 import { collection, getDocs } from 'https://www.gstatic.com/firebasejs/12.2.1/firebase-firestore.js';
 const tg=window.Telegram?.WebApp; if(tg){try{tg.ready();tg.expand()}catch{}}
-const $=id=>document.getElementById(id); const esc=s=>String(s??'').replace(/[&<>\\\"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','\\\"':'&quot;',\"'\":'&#39;'}[c]));
-async function load(){try{const snap=await getDocs(collection(db,'lotteries'));const lots=snap.docs.map(d=>({id:d.id,...d.data()})).filter(x=>x.status==='active');$('lotteryList').innerHTML=lots.length?lots.map(x=>`<article class="lottery-card"><div><span class="status open">OPEN</span><h3>${esc(x.name)}</h3><p>${esc(x.description||'')} </p></div><div class="lottery-card-bottom"><span class="price">${Number(x.price||0)} Birr / ticket</span><a class="btn btn-primary" href="buy.html?lot=${encodeURIComponent(x.id)}">Buy Ticket →</a></div></article>`).join(''):'<div class="loading-card">No active lotteries right now.</div>';}catch(e){$('lotteryList').innerHTML=`<div class="error">${esc(e.message)}</div>`}}
+const $=id=>document.getElementById(id); const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+async function load(){try{const snap=await getDocs(collection(db,'lotteries'));const lots=snap.docs.map(d=>({id:d.id,...d.data()})).filter(x=>x.status==='active');$('lotteryList').innerHTML=lots.length?lots.map(x=>`<article class="lottery-card"><div><span class="status open">OPEN</span><h3>${esc(x.name)}</h3><p>${esc(x.description||'')}</p></div><div class="lottery-card-bottom"><span class="price">${Number(x.price||0)} Birr / ticket</span><a class="btn btn-primary" href="buy.html?lot=${encodeURIComponent(x.id)}">Buy Ticket →</a></div></article>`).join(''):'<div class="loading-card">No active lotteries right now.</div>';}catch(e){$('lotteryList').innerHTML=`<div class="error">${esc(e.message)}</div>`}}
 load();
 </script>
 </body></html>
