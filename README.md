@@ -21,3 +21,6 @@ General Admin can enter one award per line when creating a lottery and can edit 
 
 ## Important
 Keep Firebase service-account JSON and Telegram bot tokens only in Vercel Environment Variables. Do not commit them to GitHub.
+
+## Test deployment
+Preview deployments for the `v9` branch are used to verify V9 changes before merging them into `main`.
