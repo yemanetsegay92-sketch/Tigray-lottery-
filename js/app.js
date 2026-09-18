@@ -28,7 +28,23 @@ function openAwards(lot){
   modal.hidden=false;document.body.classList.add('modal-open');
 }
 function closeAwards(){const m=document.getElementById('awardModal');if(m){m.hidden=true;document.body.classList.remove('modal-open')}}
-document.addEventListener('click',e=>{const btn=e.target.closest('[data-awards]');if(btn){e.preventDefault();const id=btn.dataset.awards;const lot=window.__lots?.find(x=>x.id===id);if(lot)openAwards(lot);return;}if(e.target.closest('[data-close-award]'))closeAwards();});
+function handleAwardsEvent(e){
+  const target=e.target && e.target.nodeType===1?e.target:null;
+  const btn=target?.closest?.('[data-awards]');
+  if(btn){
+    e.preventDefault();
+    e.stopPropagation();
+    const id=btn.getAttribute('data-awards');
+    const lot=window.__lots?.find(x=>String(x.id)===String(id));
+    if(lot) openAwards(lot);
+    return;
+  }
+  const close=target?.closest?.('[data-close-award]');
+  if(close){e.preventDefault();e.stopPropagation();closeAwards();}
+}
+document.addEventListener('click',handleAwardsEvent,true);
+document.addEventListener('pointerup',handleAwardsEvent,true);
+document.addEventListener('touchend',handleAwardsEvent,true);
 document.addEventListener('keydown',e=>{if(e.key==='Escape')closeAwards()});
 async function loadSiteSettings(){try{const snap=await getDoc(doc(db,'settings','site'));if(snap.exists())setWhatsAppContact(snap.data().whatsappNumber||'')}catch(e){console.warn('Could not load contact settings:',e.message)}}
 async function home(){try{const snap=await getDocs(collection(db,'lotteries'));const lots=snap.docs.map(d=>({id:d.id,...d.data()})).filter(x=>x.status!=='hidden');window.__lots=lots;lots.sort((a,b)=>(a.status==='active'?0:1)-(b.status==='active'?0:1));list.innerHTML=lots.length?lots.map(x=>{const active=x.status==='active';return `<article class="card lottery-card"><div class="card-top"><span class="status-badge status-${esc(x.status)}">${statusText(x.status)}</span><span class="price">${Number(x.price||0)} Birr</span></div><h2>${esc(x.name)}</h2><p class="muted">${esc(x.description||'Ticket numbers are assigned after approval.')}</p><div class="info-line"><span class="info-pill">${esc(x.min)} – ${esc(x.max)}</span></div><div class="card-actions three-actions">${active?`<a class="btn btn-primary" href="buy.html?lot=${encodeURIComponent(x.id)}">${getLang()==='ti'?'ቲኬት ዓድግ':'Buy Ticket'} →</a>`:`<button class="btn" disabled>${statusText(x.status)}</button>`}<a class="btn btn-outline" href="check.html?lot=${encodeURIComponent(x.id)}">${getLang()==='ti'?'ቲኬት መርምር':'Check Ticket'}</a><button class="btn btn-gold-outline" type="button" data-awards="${esc(x.id)}">${getLang()==='ti'?'ሽልማታት':'Winner Awards'}</button></div></article>`}).join(''):'<div class="loading-card">No lotteries are available yet.</div>'}catch(e){console.error(e);list.innerHTML='<div class="error">Unable to load lotteries. Please try again.</div>'}}
