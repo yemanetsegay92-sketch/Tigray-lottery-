@@ -68,7 +68,7 @@ function adminTelegramWebhookUrl() {
 }
 
 function telegramMiniAppUrl() {
-  return 'https://www.tigraylottery.com/telegram-home.html';
+  return 'https://www.tigraylottery.com/telegram-start.html';
 }
 
 function botLink(startParam='') {
