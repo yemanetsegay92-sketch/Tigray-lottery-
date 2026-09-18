@@ -24,3 +24,6 @@ Keep Firebase service-account JSON and Telegram bot tokens only in Vercel Enviro
 
 ## Test deployment
 Preview deployments for the `v9` branch are used to verify V9 changes before merging them into `main`.
+
+
+<!-- Vercel deployment trigger checkpoint -->
