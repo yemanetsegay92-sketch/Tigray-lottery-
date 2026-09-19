@@ -1,7 +1,62 @@
 import { db } from '../firebase.js';
 import { collection, getDocs } from 'https://www.gstatic.com/firebasejs/12.2.1/firebase-firestore.js';
 import { phoneHash, normalizePhone } from './phoneHash.js';
+
 const $=id=>document.getElementById(id),esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-const lang=localStorage.getItem('tl_lang')||'en';const t=lang==='ti'?{navHome:'ቀዳማይ ገጽ',checkTitle:'ቲኬትካ ኣረጋግጽ',checkText:'ምስ ሕቶ ቲኬትካ ዝተጠቐምካሉ ተመሳሳሊ ቁጽሪ ስልኪ ኣእቱ።',phoneNumber:'ቁጽሪ ስልኪ',checkStatus:'ኩነታት ኣረጋግጽ',noResults:'ንዚ ቁጽሪ ስልኪ ሕቶ ቲኬት ኣይተረኽበን።',found:'ተረኺቡ',requested:'ዝተሓተተ ቲኬት',total:'ጠቕላላ',tickets:'ቲኬትካ',pending:'ንምርግጋጽ ክፍሊት ይጽበ ኣሎ።',rejected:'እዚ ሕቶ ክፍሊት ተነጺጉ እዩ። ጌጋ እንተመሲሉካ ተራኸብ ምሳና።'}:{navHome:'Home',checkTitle:'Check your ticket',checkText:'Enter the same phone number used with your ticket request.',phoneNumber:'Phone number',checkStatus:'Check status',noResults:'No ticket requests found for this phone number.',found:'Found',requested:'Requested tickets',total:'Total',tickets:'Your ticket numbers',pending:'Waiting for payment verification.',rejected:'This payment request was rejected. Contact support if you think this is a mistake.'};
-document.documentElement.lang=lang==='ti'?'ti':'en';document.querySelectorAll('[data-i18n]').forEach(el=>{if(t[el.dataset.i18n])el.textContent=t[el.dataset.i18n]});$('langToggle')?.addEventListener('click',e=>{e.preventDefault();localStorage.setItem('tl_lang',lang==='en'?'ti':'en');location.reload()});function date(ts){try{return ts?.toDate?ts.toDate().toLocaleString():''}catch{return ''}}
-$('checkForm').addEventListener('submit',async e=>{e.preventDefault();const phone=await normalizePhone($('phone').value);if(!phone)return;$('message').innerHTML='<div class="message">Checking…</div>';$('results').innerHTML='';try{const h=await phoneHash(phone),snap=await getDocs(collection(db,'publicStatus',h,'requests'));if(snap.empty){$('message').innerHTML=`<div class="error">${t.noResults}</div>`;return}const rows=snap.docs.map(d=>({id:d.id,...d.data()})).sort((a,b)=>(b.createdAt?.seconds||0)-(a.createdAt?.seconds||0));$('message').innerHTML=`<div class="success">${t.found} ${rows.length} ${rows.length===1?'request':'requests'}.</div>`;$('results').innerHTML=rows.map(x=>`<div class="card status-card"><div class="section-heading"><div><div class="eyebrow dark">${x.status==='approved'?'APPROVED':x.status==='rejected'?'REJECTED':'PENDING'}</div><h2>${esc(x.lotteryName||x.lotteryId)}</h2></div><span class="status-badge status-${esc(x.status)}">${esc(x.status||'pending')}</span></div><div class="info-line"><span class="info-pill">${t.requested}: ${Number(x.quantity||1)}</span><span class="info-pill">${t.total}: ${Number(x.total||0)} Birr</span></div>${x.status==='approved'?`<p><b>${t.tickets}</b></p><div>${(x.ticketNumbers||[]).map(n=>`<span class="ticket-chip">${esc(String(n).padStart(6,'0'))}</span>`).join('')}</div>`:''}${x.status==='pending'?`<p class="muted">${t.pending}</p>`:''}${x.status==='rejected'?`<p class="muted">${esc(x.rejectionReason||t.rejected)}</p>`:''}<p class="request-date">${date(x.createdAt)}</p></div>`).join('')}catch(err){console.error(err);$('message').innerHTML='<div class="error">Could not check status. Please try again.</div>'}});
+const lang=localStorage.getItem('tl_lang')||'ti';
+const lotteryId=new URLSearchParams(location.search).get('lot')||'';
+const t=lang==='ti'
+  ? {navHome:'ቀዳማይ ገጽ',checkTitle:'ቲኬትካ ኣረጋግጽ',checkText:'ንዚ ሎተሪ ዝጠቐምካሉ ተመሳሳሊ ቁጽሪ ስልኪ ኣእቱ።',phoneNumber:'ቁጽሪ ስልኪ',checkStatus:'ኩነታት ኣረጋግጽ',noLottery:'በይዛኹም መጀመርታ ካብ ናይቲ ሎተሪ መርምር ዝብል ቁልፊ ጠውቑ።',noResults:'ንዚ ሎተሪን ቁጽሪ ስልክን ዝምልከት ሕቶ ቲኬት ኣይተረኽበን።',found:'ተረኺቡ',requested:'ዝተሓተተ ቲኬት',total:'ጠቕላላ',tickets:'ቲኬትካ',pending:'ንምርግጋጽ ክፍሊት ይጽበ ኣሎ።',rejected:'እዚ ሕቶ ክፍሊት ተነጺጉ እዩ። ጌጋ እንተመሲሉካ ተራኸብ ምሳና።'}
+  : {navHome:'Home',checkTitle:'Check your ticket',checkText:'Enter the same phone number used with this lottery ticket request.',phoneNumber:'Phone number',checkStatus:'Check status',noLottery:'Please open Check Ticket from the lottery you want to check.',noResults:'No ticket requests found for this lottery and phone number.',found:'Found',requested:'Requested tickets',total:'Total',tickets:'Your ticket numbers',pending:'Waiting for payment verification.',rejected:'This payment request was rejected. Contact support if you think this is a mistake.'};
+
+document.documentElement.lang=lang==='ti'?'ti':'en';
+document.querySelectorAll('[data-i18n]').forEach(el=>{if(t[el.dataset.i18n])el.textContent=t[el.dataset.i18n]});
+$('langToggle')?.addEventListener('click',e=>{e.preventDefault();localStorage.setItem('tl_lang',lang==='en'?'ti':'en');location.reload()});
+if(!lotteryId){
+  $('message').innerHTML=`<div class="error">${t.noLottery}</div>`;
+  $('checkForm')?.querySelector('button')?.setAttribute('disabled','true');
+}
+function date(ts){try{return ts?.toDate?ts.toDate().toLocaleString():''}catch{return ''}}
+
+$('checkForm').addEventListener('submit',async e=>{
+  e.preventDefault();
+  if(!lotteryId)return;
+  const phone=await normalizePhone($('phone').value);
+  if(!phone)return;
+  $('message').innerHTML='<div class="message">Checking…</div>';
+  $('results').innerHTML='';
+  try{
+    const h=await phoneHash(phone);
+    const snap=await getDocs(collection(db,'publicStatus',h,'requests'));
+    const rows=snap.docs
+      .map(d=>({id:d.id,...d.data()}))
+      .filter(x=>String(x.lotteryId||'')===String(lotteryId))
+      .sort((a,b)=>(b.createdAt?.seconds||0)-(a.createdAt?.seconds||0));
+    if(!rows.length){
+      $('message').innerHTML=`<div class="error">${t.noResults}</div>`;
+      return;
+    }
+    $('message').innerHTML=`<div class="success">${t.found} ${rows.length} ${rows.length===1?'request':'requests'}.</div>`;
+    $('results').innerHTML=rows.map(x=>`
+      <div class="card status-card">
+        <div class="section-heading">
+          <div>
+            <div class="eyebrow dark">${x.status==='approved'?'APPROVED':x.status==='rejected'?'REJECTED':'PENDING'}</div>
+            <h2>${esc(x.lotteryName||lotteryId)}</h2>
+          </div>
+          <span class="status-badge status-${esc(x.status)}">${esc(x.status||'pending')}</span>
+        </div>
+        <div class="info-line">
+          <span class="info-pill">${t.requested}: ${Number(x.quantity||1)}</span>
+          <span class="info-pill">${t.total}: ${Number(x.total||0)} Birr</span>
+        </div>
+        ${x.status==='approved'?`<p><b>${t.tickets}</b></p><div>${(x.ticketNumbers||[]).map(n=>`<span class="ticket-chip">${esc(String(n).padStart(6,'0'))}</span>`).join('')}</div>`:''}
+        ${x.status==='pending'?`<p class="muted">${t.pending}</p>`:''}
+        ${x.status==='rejected'?`<p class="muted">${esc(x.rejectionReason||t.rejected)}</p>`:''}
+        <p class="request-date">${date(x.createdAt)}</p>
+      </div>`).join('');
+  }catch(err){
+    console.error(err);
+    $('message').innerHTML='<div class="error">Could not check status. Please try again.</div>';
+  }
+});
