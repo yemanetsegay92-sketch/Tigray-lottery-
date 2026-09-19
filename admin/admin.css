@@ -32,3 +32,8 @@ body.modal-open{overflow:hidden}
   .screenshot-view{max-height:75vh;padding:10px}
   .screenshot-tools .btn,.screenshot-tools button{flex:1 1 100px}
 }
+
+
+/* Payment account editor */
+.payment-account-edit-row{display:grid;grid-template-columns:1fr 1.2fr auto;gap:12px;align-items:end;padding:12px 0;border-bottom:1px solid var(--line)}.payment-account-edit-row:first-child{padding-top:0}.payment-account-edit-row label{margin:0}.payment-account-edit-row input{margin-top:7px}.payment-account-edit-row .small-btn{margin-bottom:0;white-space:nowrap}.payment-account-edit-row:last-child{border-bottom:0}
+@media(max-width:700px){.payment-account-edit-row{grid-template-columns:1fr}.payment-account-edit-row .small-btn{width:100%}}
