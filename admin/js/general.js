@@ -133,12 +133,65 @@ async function removeLottery(id){if(!confirm('Delete this lottery? This action s
 async function loadContactSettings(){
   try{
     const snap=await getDoc(doc(db,'settings','site'));
-    const number=snap.exists()?(snap.data().whatsappNumber||''):'';
+    const data=snap.exists()?snap.data():{};
+    const number=data.whatsappNumber||'';
     $('whatsappNumber').value=number;
+    paymentAccounts=normalizePaymentAccounts(data.paymentAccounts);
+    renderPaymentAccountsEditor();
     updateContactPreview();
   }catch(e){
     $('contactMessage').innerHTML=`<div class="error">${esc(e.message||'Could not load contact settings.')}</div>`;
+    paymentAccounts=DEFAULT_PAYMENT_ACCOUNTS.map(x=>({...x}));
+    renderPaymentAccountsEditor();
   }
+}
+
+
+function normalizePaymentAccounts(raw){
+  if(!Array.isArray(raw))return DEFAULT_PAYMENT_ACCOUNTS.map(x=>({...x}));
+  const clean=raw.map(x=>({bank:String(x?.bank||'').trim(),number:String(x?.number||'').trim()})).filter(x=>x.bank&&x.number);
+  return clean.length?clean:DEFAULT_PAYMENT_ACCOUNTS.map(x=>({...x}));
+}
+
+function renderPaymentAccountsEditor(){
+  const host=$('paymentAccountsEditor');
+  if(!host)return;
+  host.innerHTML=paymentAccounts.map((a,i)=>`<div class="payment-account-edit-row"><label>Bank name<input type="text" data-payment-bank="${i}" value="${esc(a.bank)}" placeholder="CBE"></label><label>Account number<input type="text" data-payment-number="${i}" value="${esc(a.number)}" inputmode="numeric" placeholder="1000000000000"></label><button type="button" class="danger small-btn" data-remove-payment-account="${i}">Remove</button></div>`).join('');
+  host.querySelectorAll('[data-remove-payment-account]').forEach(b=>b.addEventListener('click',()=>removePaymentAccount(Number(b.dataset.removePaymentAccount))));
+}
+
+function readPaymentAccountsFromEditor(){
+  const rows=[...document.querySelectorAll('[data-payment-bank]')].map((input,i)=>({bank:String(input.value||'').trim(),number:String(document.querySelector(`[data-payment-number="${i}"]`)?.value||'').trim()}));
+  return rows.filter(x=>x.bank||x.number);
+}
+
+function addPaymentAccount(){
+  paymentAccounts.push({bank:'',number:''});
+  renderPaymentAccountsEditor();
+  const inputs=document.querySelectorAll('[data-payment-bank]');inputs[inputs.length-1]?.focus();
+}
+
+function removePaymentAccount(index){
+  paymentAccounts.splice(index,1);
+  if(!paymentAccounts.length)paymentAccounts.push({bank:'',number:''});
+  renderPaymentAccountsEditor();
+}
+
+async function savePaymentAccounts(){
+  const btn=$('savePaymentAccounts');
+  const rows=readPaymentAccountsFromEditor();
+  if(!rows.length){$('paymentAccountMessage').innerHTML='<div class="error">Add at least one bank account.</div>';return;}
+  if(rows.some(x=>!x.bank||!x.number||x.number.length<4)){$('paymentAccountMessage').innerHTML='<div class="error">Complete each bank name and account number.</div>';return;}
+  btn.disabled=true;
+  try{
+    await setDoc(doc(db,'settings','site'),{paymentAccounts:rows,updatedAt:serverTimestamp(),updatedBy:auth.currentUser.uid},{merge:true});
+    paymentAccounts=rows;
+    renderPaymentAccountsEditor();
+    await addDoc(collection(db,'auditLogs'),{action:'updatePaymentAccounts',paymentAccountBanks:rows.map(x=>x.bank),adminId:auth.currentUser.uid,createdAt:serverTimestamp()});
+    $('paymentAccountMessage').innerHTML='<div class="success">Payment accounts updated on the public lottery cards.</div>';
+  }catch(e){
+    $('paymentAccountMessage').innerHTML=`<div class="error">${esc(e.message||'Could not save payment accounts.')}</div>`;
+  }finally{btn.disabled=false;}
 }
 
 function updateContactPreview(){
