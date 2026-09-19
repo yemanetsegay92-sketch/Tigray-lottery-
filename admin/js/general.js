@@ -7,6 +7,8 @@ const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&
 let lots=[];
 let drawDigits=[];
 let drawBusy=false;
+const DEFAULT_PAYMENT_ACCOUNTS=[{bank:'CBE',number:'1000000000000'}];
+let paymentAccounts=DEFAULT_PAYMENT_ACCOUNTS.map(x=>({...x}));
 
 $('logoutBtn').addEventListener('click',async()=>{await signOut(auth);location.href='login.html';});
 $('generatePassword')?.addEventListener('click',()=>{$('resetPassword').value=generateTempPassword();$('resetPassword').focus();});
@@ -18,6 +20,8 @@ $('saveDrawBtn')?.addEventListener('click',saveDraw);
 $('closeSummary')?.addEventListener('click',()=>{$('summaryPanel').style.display='none';});
 $('contactForm')?.addEventListener('submit',saveContactSettings);
 $('whatsappNumber')?.addEventListener('input',updateContactPreview);
+$('addPaymentAccount')?.addEventListener('click',addPaymentAccount);
+$('savePaymentAccounts')?.addEventListener('click',savePaymentAccounts);
 
 onAuthStateChanged(auth,async u=>{
   if(!u){location.href='login.html';return;}
