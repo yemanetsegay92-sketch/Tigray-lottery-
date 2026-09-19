@@ -5,7 +5,7 @@ import { phoneHash } from '../../js/phoneHash.js';
 
 const $ = id => document.getElementById(id);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-let me = null, profile = null, lots = [], lot = null;
+let me = null, profile = null, lots = [], lot = null; let editingAwards = [];
 
 async function notifyBuyer(requestId){
   try{
@@ -91,6 +91,8 @@ $('refreshTelegramStatus')?.addEventListener('click',refreshTelegram);
 $('connectTelegram').addEventListener('click',connectTelegram);
 $('lotterySelect').addEventListener('change',async e=>{lot=lots.find(x=>x.id===e.target.value)||lot;await renderAll()});
 $('editBtn').addEventListener('click',editLottery);
+$('addAward')?.addEventListener('click',addAward);
+$('saveAwards')?.addEventListener('click',saveAwards);
 
 onAuthStateChanged(auth,async u=>{
   if(!u){location.href='login.html';return}
@@ -124,7 +126,7 @@ async function renderAll(){
   $('statPending').textContent=pending.length;$('statApproved').textContent=approved.length;$('statRejected').textContent=rejected.length;
   if($('statCancelled')) $('statCancelled').textContent=cancelled.length;
   $('statTickets').textContent=approved.reduce((s,x)=>s+Number(x.quantity||0),0);
-  renderPending(pending);renderSummary(approved);
+  renderPending(pending);renderSummary(approved);renderAwardsEditor();
 }
 
 function renderPending(items){
@@ -146,6 +148,48 @@ function renderSummary(items){
 function downloadCsv(name,rows){const h=['Date','Name','Phone','Reference','Qty','Total','Ticket Numbers'];const csv='\ufeff'+[h,...rows.map(x=>[x.date,x.name,x.phone,x.reference,x.quantity,x.total,x.ticketNumbers])].map(r=>r.map(v=>`"${String(v??'').replace(/"/g,'""')}"`).join(',')).join('\n');const blob=new Blob([csv],{type:'text/csv;charset=utf-8'}),a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000)}
 function safeFileName(s){return String(s||'lottery').replace(/[^a-z0-9_-]+/gi,'_').slice(0,60)}
 
+function renderAwardsEditor(){
+  const host=$('awardsEditor');
+  if(!host)return;
+  const source=Array.isArray(lot?.awards)&&lot.awards.length?lot.awards:['First Prize'];
+  editingAwards=source.map(x=>String(x||''));
+  host.innerHTML=editingAwards.map((award,i)=>'<div class="award-edit-row"><input class="award-input" type="text" value="'+esc(award)+'" placeholder="Award '+(i+1)+'"><button type="button" class="danger small-btn" data-remove-award="'+i+'">Remove</button></div>').join('');
+  host.querySelectorAll('[data-remove-award]').forEach(btn=>btn.addEventListener('click',()=>removeAward(Number(btn.dataset.removeAward))));
+}
+
+function currentAwards(){
+  return Array.from(document.querySelectorAll('#awardsEditor .award-input')).map(input=>String(input.value||'').trim());
+}
+
+function removeAward(index){
+  const values=currentAwards();
+  values.splice(index,1);
+  editingAwards=values.length?values:['First Prize'];
+  renderAwardsEditor();
+}
+
+function addAward(){
+  const values=currentAwards();
+  editingAwards=[...values,''];
+  const host=$('awardsEditor');
+  host.innerHTML=editingAwards.map((award,i)=>'<div class="award-edit-row"><input class="award-input" type="text" value="'+esc(award)+'" placeholder="Award '+(i+1)+'"><button type="button" class="danger small-btn" data-remove-award="'+i+'">Remove</button></div>').join('');
+  host.querySelectorAll('[data-remove-award]').forEach(btn=>btn.addEventListener('click',()=>removeAward(Number(btn.dataset.removeAward))));
+  host.querySelector('.award-input:last-of-type')?.focus();
+}
+
+async function saveAwards(){
+  const values=currentAwards().filter(Boolean);
+  if(!values.length){$('awardsMessage').innerHTML='<div class="error">At least one award is required.</div>';return;}
+  try{
+    await updateDoc(doc(db,'lotteries',lot.id),{awards:values});
+    lot={...lot,awards:values};
+    lots=lots.map(x=>x.id===lot.id?lot:x);
+    editingAwards=values;
+    renderAwardsEditor();
+    await addDoc(collection(db,'auditLogs'),{action:'updateLotteryAwards',lotteryId:lot.id,adminId:me.uid,awards:values,createdAt:serverTimestamp()});
+    $('awardsMessage').innerHTML='<div class="success">Winner awards saved.</div>';
+  }catch(e){$('awardsMessage').innerHTML='<div class="error">'+esc(e.message||'Could not save awards.')+'</div>';}
+}
 async function editLottery(){const name=prompt('Lottery name',lot.name);if(name===null)return;const price=Number(prompt('Ticket price (Birr)',lot.price));if(!price||price<=0)return alert('Invalid price.');const status=prompt('Status: active, upcoming, closed, drawn',lot.status)||lot.status;try{await updateDoc(doc(db,'lotteries',lot.id),{name:name.trim(),price,status});lot={...lot,name:name.trim(),price,status};$('lotterySelect').selectedOptions[0].textContent=lot.name;await renderAll();await addDoc(collection(db,'auditLogs'),{action:'editLottery',lotteryId:lot.id,adminId:me.uid,createdAt:serverTimestamp()});$('message').innerHTML='<div class="success">Lottery updated.</div>'}catch(e){alert(e.message)}}
 
 async function reject(id){
