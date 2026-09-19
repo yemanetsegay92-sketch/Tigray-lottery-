@@ -11,3 +11,24 @@
 /* Winner awards editor */
 .award-edit-row{display:flex;gap:10px;align-items:center;margin:10px 0}.award-edit-row .award-input{flex:1;margin:0}.award-edit-row .small-btn{white-space:nowrap}
 @media(max-width:700px){.award-edit-row{align-items:stretch;flex-direction:column}.award-edit-row .small-btn{width:100%}}
+
+/* Payment screenshot viewer */
+.screenshot-preview{display:block;border:1px solid var(--line);background:#fff;border-radius:12px;padding:8px;cursor:zoom-in;max-width:100%}
+.screenshot-preview img{display:block;max-width:280px;max-height:280px;width:auto;height:auto;border-radius:8px}
+.screenshot-preview span{display:block;margin-top:6px;color:var(--muted);font-size:.8rem;font-weight:750}
+.screenshot-modal[hidden]{display:none!important}
+.screenshot-modal{position:fixed;inset:0;z-index:200;display:flex;align-items:center;justify-content:center;padding:16px}
+.screenshot-modal-backdrop{position:absolute;inset:0;background:rgba(5,18,31,.78);backdrop-filter:blur(3px)}
+.screenshot-modal-card{position:relative;z-index:1;width:min(1000px,100%);max-height:94vh;background:#fff;border-radius:18px;box-shadow:0 24px 80px rgba(0,0,0,.3);padding:14px;display:flex;flex-direction:column;gap:12px}
+.screenshot-modal-head{display:flex;justify-content:space-between;align-items:center;gap:12px}
+.screenshot-view{min-height:260px;max-height:72vh;overflow:auto;background:#eef2f6;border:1px solid var(--line);border-radius:12px;display:flex;align-items:center;justify-content:center;padding:18px}
+.screenshot-view img{max-width:none;width:auto;height:auto;transform-origin:center center;transition:transform .15s ease}
+.screenshot-tools{display:flex;justify-content:center;gap:8px;flex-wrap:wrap}
+.screenshot-tools .btn,.screenshot-tools button{min-width:105px}
+body.modal-open{overflow:hidden}
+@media(max-width:700px){
+  .screenshot-modal{padding:8px}
+  .screenshot-modal-card{max-height:98vh;padding:10px;border-radius:14px}
+  .screenshot-view{max-height:75vh;padding:10px}
+  .screenshot-tools .btn,.screenshot-tools button{flex:1 1 100px}
+}
