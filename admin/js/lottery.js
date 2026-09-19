@@ -129,11 +129,64 @@ async function renderAll(){
   renderPending(pending);renderSummary(approved);renderAwardsEditor();
 }
 
+function normalizeScreenshot(src){
+  const raw=String(src||'').trim();
+  if(!raw)return '';
+  if(raw.startsWith('data:image/'))return raw;
+  if(raw.startsWith('http://')||raw.startsWith('https://'))return raw;
+  if(raw.startsWith('blob:'))return raw;
+  const mime=raw.startsWith('/9j/')?'image/jpeg':'image/png';
+  return `data:${mime};base64,${raw}`;
+}
+
+function ensureScreenshotModal(){
+  if($('screenshotModal'))return;
+  const modal=document.createElement('div');
+  modal.id='screenshotModal';
+  modal.className='screenshot-modal';
+  modal.hidden=true;
+  modal.innerHTML='<div class="screenshot-modal-backdrop" data-close-screenshot></div><div class="screenshot-modal-card" role="dialog" aria-modal="true" aria-labelledby="screenshotTitle"><div class="screenshot-modal-head"><b id="screenshotTitle">Payment screenshot</b><button type="button" class="danger small-btn" data-close-screenshot>Close</button></div><div class="screenshot-view"><img id="screenshotViewer" alt="Payment screenshot"></div><div class="screenshot-tools"><button type="button" class="secondary" id="zoomOut">− Zoom</button><button type="button" class="secondary" id="zoomReset">100%</button><button type="button" class="secondary" id="zoomIn">+ Zoom</button><a class="btn" id="downloadScreenshot" download="payment-screenshot.png">⬇ Download</a></div></div>';
+  document.body.appendChild(modal);
+  $('zoomOut').addEventListener('click',()=>changeScreenshotZoom(-0.2));
+  $('zoomIn').addEventListener('click',()=>changeScreenshotZoom(0.2));
+  $('zoomReset').addEventListener('click',()=>setScreenshotZoom(1));
+  modal.addEventListener('click',e=>{if(e.target.closest('[data-close-screenshot]'))closeScreenshotModal();});
+  document.addEventListener('keydown',e=>{if(e.key==='Escape')closeScreenshotModal();});
+}
+
+let screenshotZoom=1;
+function setScreenshotZoom(value){
+  screenshotZoom=Math.max(0.5,Math.min(3,value));
+  const img=$('screenshotViewer');
+  if(img)img.style.transform=`scale(${screenshotZoom})`;
+}
+function changeScreenshotZoom(delta){setScreenshotZoom(screenshotZoom+delta)}
+function openScreenshotModal(id){
+  ensureScreenshotModal();
+  const src=normalizeScreenshot(window.__screenshotData?.[id]);
+  if(!src)return;
+  $('screenshotViewer').src=src;
+  $('screenshotViewer').style.transform='scale(1)';
+  screenshotZoom=1;
+  $('downloadScreenshot').href=src;
+  $('downloadScreenshot').download=`payment-screenshot-${id}.png`;
+  $('screenshotModal').hidden=false;
+  document.body.classList.add('modal-open');
+}
+function closeScreenshotModal(){
+  const modal=$('screenshotModal');
+  if(modal){modal.hidden=true;document.body.classList.remove('modal-open');}
+}
+
 function renderPending(items){
+  ensureScreenshotModal();
+  window.__screenshotData=Object.create(null);
+  items.forEach(x=>{if(x.screenshotData)window.__screenshotData[x.id]=x.screenshotData;});
   $('pendingCount').textContent=`${items.length} pending`;
-  $('requests').innerHTML=items.map(x=>`<div class="request-card"><div class="card-head"><div><b>${esc(x.name)}</b> · ${esc(x.phone)}</div><span class="badge pending">PENDING</span></div><p>${Number(x.quantity||1)} ticket(s) · <b>${Number(x.total||0)} Birr</b>${x.reference?` · Ref ${esc(x.reference)}`:''}</p>${x.screenshotData?`<div class="screenshot-wrap"><a href="${esc(x.screenshotData)}" target="_blank" rel="noopener"><img src="${esc(x.screenshotData)}" alt="Payment screenshot"></a></div>`:''}<div class="actions"><button data-approve="${esc(x.id)}">✓ Approve & Assign</button><button class="danger" data-reject="${esc(x.id)}">✕ Reject</button></div></div>`).join('')||'<div class="success">No pending requests.</div>';
+  $('requests').innerHTML=items.map(x=>`<div class="request-card"><div class="card-head"><div><b>${esc(x.name)}</b> · ${esc(x.phone)}</div><span class="badge pending">PENDING</span></div><p>${Number(x.quantity||1)} ticket(s) · <b>${Number(x.total||0)} Birr</b>${x.reference?` · Ref ${esc(x.reference)}`:''}</p>${x.screenshotData?`<div class="screenshot-wrap"><button type="button" class="screenshot-preview" data-view-screenshot="${esc(x.id)}"><img src="${esc(normalizeScreenshot(x.screenshotData))}" alt="Payment screenshot"><span>Tap to view full size</span></button></div>`:''}<div class="actions"><button data-approve="${esc(x.id)}">✓ Approve & Assign</button><button class="danger" data-reject="${esc(x.id)}">✕ Reject</button></div></div>`).join('')||'<div class="success">No pending requests.</div>';
   document.querySelectorAll('[data-approve]').forEach(b=>b.addEventListener('click',()=>approve(b.dataset.approve)));
   document.querySelectorAll('[data-reject]').forEach(b=>b.addEventListener('click',()=>reject(b.dataset.reject)));
+  document.querySelectorAll('[data-view-screenshot]').forEach(b=>b.addEventListener('click',()=>openScreenshotModal(b.dataset.viewScreenshot)));
 }
 
 function rows(data){return data.map(x=>({id:x.id,date:x.createdAt?.toDate?x.createdAt.toDate().toLocaleString():'',name:x.name||'',phone:x.phone||'',reference:x.reference||'',quantity:Number(x.quantity||0),total:Number(x.total||0),status:x.status||'',ticketNumbers:(x.ticketNumbers||[]).map(n=>String(n).padStart(6,'0')).join(' ')}))}
