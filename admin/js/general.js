@@ -36,7 +36,7 @@ $('createForm').addEventListener('submit',async e=>{
   try{
     const min=Number($('min').value),max=Number($('max').value),price=Number($('price').value);
     if(!Number.isFinite(min)||!Number.isFinite(max)||min>max||price<=0)throw new Error('Check price and number range.');
-    const newLottery=await addDoc(collection(db,'lotteries'),{name:$('name').value.trim(),price,min,max,status:$('status').value,description:$('description').value.trim(),createdAt:serverTimestamp(),adminIds:[],nextTicketNumber:min});
+    const newLottery=await addDoc(collection(db,'lotteries'),{name:$('name').value.trim(),price,min,max,status:$('status').value,description:$('description').value.trim(),createdAt:serverTimestamp(),adminIds:[],nextTicketNumber:min,awards:['First Prize']});
     await addDoc(collection(db,'auditLogs'),{action:'createLottery',lotteryId:newLottery.id,adminId:auth.currentUser.uid,createdAt:serverTimestamp()});
     e.target.reset();$('message').innerHTML='<div class="success">Lottery created.</div>';await renderLotteries();await renderSummaryOverview();setupDraw();
   }catch(err){console.error(err);$('message').innerHTML=`<div class="error">${esc(err.message)}</div>`;}
