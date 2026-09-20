@@ -37,3 +37,8 @@ body.modal-open{overflow:hidden}
 /* Payment account editor */
 .payment-account-edit-row{display:grid;grid-template-columns:1fr 1.2fr auto;gap:12px;align-items:end;padding:12px 0;border-bottom:1px solid var(--line)}.payment-account-edit-row:first-child{padding-top:0}.payment-account-edit-row label{margin:0}.payment-account-edit-row input{margin-top:7px}.payment-account-edit-row .small-btn{margin-bottom:0;white-space:nowrap}.payment-account-edit-row:last-child{border-bottom:0}
 @media(max-width:700px){.payment-account-edit-row{grid-template-columns:1fr}.payment-account-edit-row .small-btn{width:100%}}
+
+
+.span2{grid-column:1/-1}.create-payment-section{padding:12px 14px;border:1px solid var(--line);border-radius:14px;background:#fbfcfe}.subsection-title{font-weight:950;color:var(--navy);margin-bottom:3px}.small-note{font-size:.84rem;margin:0 0 10px}.create-payment-row{grid-template-columns:1fr 1.1fr 1.1fr auto}.payment-account-edit-row input{margin-top:7px}
+@media(max-width:800px){.create-payment-row{grid-template-columns:1fr 1fr}.create-payment-row .small-btn{grid-column:1/-1}}
+@media(max-width:600px){.create-payment-row{grid-template-columns:1fr}.create-payment-row .small-btn{grid-column:auto;width:100%}}
