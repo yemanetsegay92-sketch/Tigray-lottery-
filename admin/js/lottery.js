@@ -5,7 +5,7 @@ import { phoneHash } from '../../js/phoneHash.js';
 
 const $ = id => document.getElementById(id);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-let me = null, profile = null, lots = [], lot = null; let editingAwards = [];
+let me = null, profile = null, lots = [], lot = null; let editingAwards = []; let editingPaymentAccounts = [];
 
 async function notifyBuyer(requestId){
   try{
@@ -93,6 +93,8 @@ $('lotterySelect').addEventListener('change',async e=>{lot=lots.find(x=>x.id===e
 $('editBtn').addEventListener('click',editLottery);
 $('addAward')?.addEventListener('click',addAward);
 $('saveAwards')?.addEventListener('click',saveAwards);
+$('addPaymentAccount')?.addEventListener('click',addPaymentAccount);
+$('savePaymentAccounts')?.addEventListener('click',savePaymentAccounts);
 
 onAuthStateChanged(auth,async u=>{
   if(!u){location.href='login.html';return}
@@ -126,7 +128,7 @@ async function renderAll(){
   $('statPending').textContent=pending.length;$('statApproved').textContent=approved.length;$('statRejected').textContent=rejected.length;
   if($('statCancelled')) $('statCancelled').textContent=cancelled.length;
   $('statTickets').textContent=approved.reduce((s,x)=>s+Number(x.quantity||0),0);
-  renderPending(pending);renderSummary(approved);renderAwardsEditor();
+  renderPending(pending);renderSummary(approved);renderAwardsEditor();renderPaymentAccountsEditor();
 }
 
 function normalizeScreenshot(src){
@@ -243,6 +245,63 @@ async function saveAwards(){
     $('awardsMessage').innerHTML='<div class="success">Winner awards saved.</div>';
   }catch(e){$('awardsMessage').innerHTML='<div class="error">'+esc(e.message||'Could not save awards.')+'</div>';}
 }
+function normalizePaymentAccounts(raw){
+  const fallback=[{bank:'CBE',number:'1000000000000',holderName:''}];
+  if(!Array.isArray(raw))return fallback;
+  const clean=raw.map(x=>({bank:String(x?.bank||'').trim(),number:String(x?.number||'').trim(),holderName:String(x?.holderName||'').trim()})).filter(x=>x.bank&&x.number);
+  return clean.length?clean:fallback;
+}
+
+function renderPaymentAccountsEditor(){
+  const host=$('paymentAccountsEditor');
+  if(!host)return;
+  editingPaymentAccounts=normalizePaymentAccounts(lot?.paymentAccounts);
+  host.innerHTML=editingPaymentAccounts.map((a,i)=>`<div class="payment-account-edit-row"><label>Bank name<input type="text" data-payment-bank="${i}" value="${esc(a.bank)}" placeholder="CBE"></label><label>Account number<input type="text" data-payment-number="${i}" value="${esc(a.number)}" inputmode="numeric" placeholder="1000000000000"></label><label>Account holder<input type="text" data-payment-holder="${i}" value="${esc(a.holderName||'')}" placeholder="Account holder name"></label><button type="button" class="danger small-btn" data-remove-payment="${i}">Remove</button></div>`).join('');
+  host.querySelectorAll('[data-remove-payment]').forEach(b=>b.addEventListener('click',()=>removePaymentAccount(Number(b.dataset.removePayment))));
+}
+
+function currentPaymentAccounts(){
+  return [...document.querySelectorAll('[data-payment-bank]')].map((input,i)=>({
+    bank:String(input.value||'').trim(),
+    number:String(document.querySelector(`[data-payment-number="${i}"]`)?.value||'').trim(),
+    holderName:String(document.querySelector(`[data-payment-holder="${i}"]`)?.value||'').trim()
+  })).filter(x=>x.bank||x.number||x.holderName);
+}
+
+function addPaymentAccount(){
+  const values=currentPaymentAccounts();
+  editingPaymentAccounts=[...values,{bank:'',number:'',holderName:''}];
+  renderPaymentAccountsEditor();
+  const inputs=document.querySelectorAll('[data-payment-bank]');
+  inputs[inputs.length-1]?.focus();
+}
+
+function removePaymentAccount(index){
+  const values=currentPaymentAccounts();
+  values.splice(index,1);
+  editingPaymentAccounts=values.length?values:[{bank:'',number:'',holderName:''}];
+  renderPaymentAccountsEditor();
+}
+
+async function savePaymentAccounts(){
+  const btn=$('savePaymentAccounts');
+  const values=currentPaymentAccounts();
+  if(!values.length){$('paymentAccountsMessage').innerHTML='<div class="error">Add at least one payment account.</div>';return;}
+  if(values.some(x=>!x.bank||!x.number||x.number.length<4)){$('paymentAccountsMessage').innerHTML='<div class="error">Complete each bank name and account number.</div>';return;}
+  btn.disabled=true;
+  try{
+    await updateDoc(doc(db,'lotteries',lot.id),{paymentAccounts:values});
+    lot={...lot,paymentAccounts:values};
+    lots=lots.map(x=>x.id===lot.id?lot:x);
+    editingPaymentAccounts=values;
+    renderPaymentAccountsEditor();
+    await addDoc(collection(db,'auditLogs'),{action:'updateLotteryPaymentAccounts',lotteryId:lot.id,adminId:me.uid,paymentAccountBanks:values.map(x=>x.bank),createdAt:serverTimestamp()});
+    $('paymentAccountsMessage').innerHTML='<div class="success">Payment accounts saved for this lottery.</div>';
+  }catch(e){
+    $('paymentAccountsMessage').innerHTML=`<div class="error">${esc(e.message||'Could not save payment accounts.')}</div>`;
+  }finally{btn.disabled=false;}
+}
+
 async function editLottery(){const name=prompt('Lottery name',lot.name);if(name===null)return;const price=Number(prompt('Ticket price (Birr)',lot.price));if(!price||price<=0)return alert('Invalid price.');const status=prompt('Status: active, upcoming, closed, drawn',lot.status)||lot.status;try{await updateDoc(doc(db,'lotteries',lot.id),{name:name.trim(),price,status});lot={...lot,name:name.trim(),price,status};$('lotterySelect').selectedOptions[0].textContent=lot.name;await renderAll();await addDoc(collection(db,'auditLogs'),{action:'editLottery',lotteryId:lot.id,adminId:me.uid,createdAt:serverTimestamp()});$('message').innerHTML='<div class="success">Lottery updated.</div>'}catch(e){alert(e.message)}}
 
 async function reject(id){
