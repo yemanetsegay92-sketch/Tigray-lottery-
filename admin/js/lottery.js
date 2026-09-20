@@ -1,6 +1,6 @@
 import { db, auth } from '../../firebase.js';
 import { onAuthStateChanged, signOut } from 'https://www.gstatic.com/firebasejs/12.2.1/firebase-auth.js';
-import { collection, getDocs, doc, getDoc, updateDoc, addDoc, query, where, limit, runTransaction, serverTimestamp } from 'https://www.gstatic.com/firebasejs/12.2.1/firebase-firestore.js';
+import { collection, getDocs, doc, getDoc, updateDoc, addDoc, query, where, limit, serverTimestamp } from 'https://www.gstatic.com/firebasejs/12.2.1/firebase-firestore.js';
 import { phoneHash } from '../../js/phoneHash.js';
 
 const $ = id => document.getElementById(id);
@@ -354,47 +354,69 @@ async function cancelApproval(id){
 
 async function approve(id){
   if(!confirm('Approve this payment and assign the next available ticket number(s)?'))return;
+  const button=document.querySelector(`[data-approve="${CSS.escape(id)}"]`);
+  if(button) button.disabled=true;
+
   try{
-    let initialData=null,publicHash='',assignedNumbers=[];
-    await runTransaction(db,async tx=>{
-      const reqRef=doc(db,'ticketRequests',id),lotRef=doc(db,'lotteries',lot.id);
-      const reqSnap=await tx.get(reqRef),lotSnap=await tx.get(lotRef);
-      if(!reqSnap.exists()||!lotSnap.exists())throw new Error('Request or lottery not found.');
-      const x=reqSnap.data(),l=lotSnap.data();
-      if(x.status!=='pending')throw new Error('This request has already been reviewed.');
-      if(x.lotteryId!==lot.id)throw new Error('Not authorized for this lottery.');
-      initialData=x;
-      publicHash=await phoneHash(x.phone||'');
-      const count=Math.max(1,Math.min(100,Number(x.quantity||1))),min=Number(l.min),max=Number(l.max);
-      let next=Number.isFinite(Number(l.nextTicketNumber))?Number(l.nextTicketNumber):min;
-      if(next<min||next>max)next=min;
-      const scanLimit=Math.min(max-next+1,count+20);
-      const refs=[];
-      for(let n=next;n<next+scanLimit;n++)refs.push({n,ref:doc(db,'tickets',`${lot.id}_${n}`)});
-      const snaps=[];
-      for(const item of refs)snaps.push({n:item.n,ref:item.ref,snap:await tx.get(item.ref)});
-      const picks=snaps.filter(v=>!v.snap.exists()).slice(0,count).map(v=>v.n);
-      if(picks.length<count)throw new Error('Not enough free ticket numbers are immediately available. Please approve again.');
-      assignedNumbers=picks;
-      let publicRef=null,publicSnap=null;
-      if(publicHash){publicRef=doc(db,'publicStatus',publicHash,'requests',id);publicSnap=await tx.get(publicRef);}
-      for(const n of picks){
-        const item=snaps.find(v=>v.n===n);
-        tx.set(item.ref,{lotteryId:lot.id,number:n,requestId:id,assignedAt:serverTimestamp(),assignedBy:me.uid});
-      }
-      const nextAfter=Math.max(...picks)+1;
-      tx.update(reqRef,{status:'approved',ticketNumbers:picks,reviewedBy:me.uid,reviewedAt:serverTimestamp(),lotteryName:lot.name,phoneHash:publicHash||''});
-      tx.update(lotRef,{nextTicketNumber:nextAfter});
-      if(publicSnap?.exists())tx.update(publicRef,{status:'approved',ticketNumbers:picks,reviewedAt:serverTimestamp(),lotteryName:lot.name});
+    const token=await auth.currentUser.getIdToken();
+    const r=await fetch('/api/admin/approve-request',{
+      method:'POST',
+      headers:{
+        'content-type':'application/json',
+        'authorization':`Bearer ${token}`
+      },
+      body:JSON.stringify({requestId:id,lotteryId:lot.id})
     });
 
-    displayedApproved=[{id,...initialData,status:'approved',ticketNumbers:assignedNumbers,reviewedBy:me.uid,reviewedAt:new Date(),lotteryName:lot.name,phoneHash:publicHash||''},...displayedApproved].slice(0,100);
+    const j=await r.json();
+    if(!r.ok || !j.ok){
+      throw new Error(j.error||'Could not approve this request.');
+    }
+
+    const result=j.request||{};
+    const assignedNumbers=Array.isArray(result.ticketNumbers)?result.ticketNumbers:[];
+    const publicHash=String(result.phoneHash||'');
+
+    const initialData={
+      name:String(result.name||''),
+      phone:String(result.phone||''),
+      reference:String(result.reference||''),
+      quantity:Number(result.quantity||assignedNumbers.length||1),
+      total:Number(result.total||0),
+      lotteryId:result.lotteryId||lot.id,
+      lotteryName:result.lotteryName||lot.name,
+      phoneHash:publicHash,
+      createdAt:new Date()
+    };
+
+    displayedApproved=[
+      {id,...initialData,status:'approved',ticketNumbers:assignedNumbers,reviewedBy:me.uid,reviewedAt:new Date()},
+      ...displayedApproved
+    ].slice(0,100);
+
     pendingTotal=Math.max(0,pendingTotal-1);
-    lot={...lot,nextTicketNumber:Math.max(...assignedNumbers)+1};
-    const button=document.querySelector(`[data-approve="${CSS.escape(id)}"]`);
+    lot={
+      ...lot,
+      nextTicketNumber:
+        assignedNumbers.length
+          ? Math.max(...assignedNumbers)+1
+          : lot.nextTicketNumber
+    };
+
     button?.closest('.request-card')?.remove();
+    $('statPending').textContent=pendingHasMore?'50+':pendingTotal;
+    $('statApproved').textContent=approvedHasMore?'100+':displayedApproved.length;
+
+    const displayedTicketTotal=displayedApproved.reduce((s,x)=>s+Number(x.quantity||0),0);
+    $('statTickets').textContent=approvedHasMore?`${displayedTicketTotal}+`:`${displayedTicketTotal}`;
+
     renderSummary(displayedApproved,approvedHasMore);
     $('message').innerHTML='<div class="success">Payment approved and ticket number(s) assigned.</div>';
     await notifyBuyer(id);
-  }catch(e){console.error(e);$('message').innerHTML=`<div class="error">${esc(e.message)}</div>`}
+  }catch(e){
+    console.error(e);
+    $('message').innerHTML=`<div class="error">${esc(e.message)}</div>`;
+  }finally{
+    if(button) button.disabled=false;
+  }
 }
