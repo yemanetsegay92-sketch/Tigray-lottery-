@@ -344,7 +344,7 @@ async function cancelApproval(id){
   if(reason===null)return;
   try{
     const token=await auth.currentUser.getIdToken();
-    const r=await fetch('/api/admin/cancel-approval',{method:'POST',headers:{'content-type':'application/json','authorization':`Bearer ${token}`},body:JSON.stringify({requestId:id,reason:reason.trim()||'Approved in error.'})});
+    const r=await fetch('/api/admin/approvals',{method:'POST',headers:{'content-type':'application/json','authorization':`Bearer ${token}`},body:JSON.stringify({action:'cancel',requestId:id,reason:reason.trim()||'Approved in error.'})});
     const j=await r.json();
     if(!r.ok||!j.ok)throw new Error(j.error||'Could not cancel this approval.');
     $('message').innerHTML='<div class="success">Approval cancelled. The assigned ticket numbers have been released and will not be reused.</div>';
@@ -359,13 +359,13 @@ async function approve(id){
 
   try{
     const token=await auth.currentUser.getIdToken();
-    const r=await fetch('/api/admin/approve-request',{
+    const r=await fetch('/api/admin/approvals',{
       method:'POST',
       headers:{
         'content-type':'application/json',
         'authorization':`Bearer ${token}`
       },
-      body:JSON.stringify({requestId:id,lotteryId:lot.id})
+      body:JSON.stringify({action:'approve',requestId:id,lotteryId:lot.id})
     });
 
     const j=await r.json();
