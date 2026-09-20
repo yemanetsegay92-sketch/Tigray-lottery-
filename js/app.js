@@ -12,12 +12,46 @@ function getLang(){return localStorage.getItem(LANG)||'ti'}
 function applyLang(){const lang=getLang(),t=translations[lang];document.documentElement.lang=lang==='ti'?'ti':'en';document.querySelectorAll('[data-i18n]').forEach(el=>{const k=el.dataset.i18n;if(t[k])el.textContent=t[k]});const b=document.getElementById('langToggle');if(b)b.textContent=lang==='en'?'ትግርኛ':'English'}
 window.addEventListener('storage',applyLang);document.getElementById('langToggle')?.addEventListener('click',e=>{e.preventDefault();localStorage.setItem(LANG,getLang()==='en'?'ti':'en');location.reload()});
 function statusText(status){const ti=getLang()==='ti';return status==='active'?(ti?'ክፉት':'OPEN'):status==='upcoming'?(ti?'ቀረባ ግዜ':'COMING SOON'):status==='drawn'?(ti?'ድሮ ተወሲዱ':'DRAW COMPLETED'):(ti?'ተዓጽዩ':'CLOSED')}
-const DEFAULT_PAYMENT_ACCOUNTS=[{bank:'CBE',number:'1000000000000'}];
-let paymentAccounts=DEFAULT_PAYMENT_ACCOUNTS.map(x=>({...x}));
-function normalizePaymentAccounts(raw){if(!Array.isArray(raw))return DEFAULT_PAYMENT_ACCOUNTS.map(x=>({...x}));const clean=raw.map(x=>({bank:String(x?.bank||'').trim(),number:String(x?.number||'').trim()})).filter(x=>x.bank&&x.number);return clean.length?clean:DEFAULT_PAYMENT_ACCOUNTS.map(x=>({...x}));}
-function paymentAccountsHtml(){const ti=getLang()==='ti';if(!paymentAccounts.length)return '';return `<div class="payment-accounts"><div class="payment-title">${ti?'ክፍሊት ናብ':'Payment account'}</div>${paymentAccounts.map(a=>`<div class="payment-account"><span class="bank-name">${esc(a.bank)}</span><code>${esc(a.number)}</code><button type="button" class="copy-account" data-copy-account="${esc(a.number)}">${ti?'ኮፒ':'Copy'}</button></div>`).join('')}</div>`;}
-async function copyAccountNumber(number,button){try{await navigator.clipboard.writeText(number);const old=button.textContent;button.textContent=getLang()==='ti'?'ኮፒ ✓':'Copied ✓';setTimeout(()=>button.textContent=old,1500);}catch{try{const ta=document.createElement('textarea');ta.value=number;ta.style.position='fixed';ta.style.opacity='0';document.body.appendChild(ta);ta.select();document.execCommand('copy');ta.remove();const old=button.textContent;button.textContent=getLang()==='ti'?'ኮፒ ✓':'Copied ✓';setTimeout(()=>button.textContent=old,1500);}catch{alert(getLang()==='ti'?'ቁጽሪ ሕሳብ ኮፒ ኣይተገብረን።':'Could not copy the account number.');}}}
-document.addEventListener('click',e=>{const b=e.target?.closest?.('[data-copy-account]');if(!b)return;e.preventDefault();e.stopPropagation();copyAccountNumber(b.getAttribute('data-copy-account')||'',b)},true);
+const DEFAULT_PAYMENT_ACCOUNTS=[{bank:'CBE',number:'1000000000000',holderName:''}];
+function normalizePaymentAccounts(raw){
+  if(!Array.isArray(raw))return DEFAULT_PAYMENT_ACCOUNTS.map(x=>({...x}));
+  const clean=raw.map(x=>({bank:String(x?.bank||'').trim(),number:String(x?.number||'').trim(),holderName:String(x?.holderName||'').trim()})).filter(x=>x.bank&&x.number);
+  return clean.length?clean:DEFAULT_PAYMENT_ACCOUNTS.map(x=>({...x}));
+}
+function accountRowHtml(account,ti){
+  return `<div class="payment-account"><div class="payment-account-main"><span class="bank-name">${esc(account.bank)}</span><code>${esc(account.number)}</code>${account.holderName?`<span class="account-holder">${ti?'ስም በዓል ሕሳብ':'Account holder'}: ${esc(account.holderName)}</span>`:''}</div><button type="button" class="copy-account" data-copy-account="${esc(account.number)}">${ti?'ኮፒ':'Copy'}</button></div>`;
+}
+function paymentAccountsHtml(lot){
+  const ti=getLang()==='ti';
+  const accounts=normalizePaymentAccounts(lot?.paymentAccounts);
+  const primary=accounts[0];
+  const others=accounts.slice(1);
+  if(!primary)return '';
+  return `<div class="payment-accounts"><div class="payment-title">${ti?'ክፍሊት ናብ':'Payment to'}</div>${accountRowHtml(primary,ti)}${others.length?`<button type="button" class="payment-toggle" data-toggle-payment="${esc(lot.id)}" aria-expanded="false"><span class="payment-toggle-arrow">⌄</span><span>${ti?'ካልኦት ሕሳባት':'Other accounts'}</span></button><div class="payment-others" data-payment-others="${esc(lot.id)}" hidden>${others.map(a=>accountRowHtml(a,ti)).join('')}</div>`:''}</div>`;
+}
+async function copyAccountNumber(number,button){
+  try{
+    await navigator.clipboard.writeText(number);
+  }catch{
+    try{
+      const ta=document.createElement('textarea');ta.value=number;ta.style.position='fixed';ta.style.opacity='0';document.body.appendChild(ta);ta.select();document.execCommand('copy');ta.remove();
+    }catch{alert(getLang()==='ti'?'ቁጽሪ ሕሳብ ኮፒ ኣይተገብረን።':'Could not copy the account number.');return;}
+  }
+  const old=button.textContent;button.textContent=getLang()==='ti'?'ኮፒ ✓':'Copied ✓';setTimeout(()=>button.textContent=old,1500);
+}
+document.addEventListener('click',e=>{
+  const copy=e.target?.closest?.('[data-copy-account]');
+  if(copy){e.preventDefault();e.stopPropagation();copyAccountNumber(copy.getAttribute('data-copy-account')||'',copy);return;}
+  const toggle=e.target?.closest?.('[data-toggle-payment]');
+  if(toggle){
+    e.preventDefault();e.stopPropagation();
+    const id=toggle.getAttribute('data-toggle-payment')||'';
+    const box=document.querySelector(`[data-payment-others="${CSS.escape(id)}"]`);
+    if(!box)return;
+    const open=!box.hidden;box.hidden=open;toggle.setAttribute('aria-expanded',open?'false':'true');
+    const arrow=toggle.querySelector('.payment-toggle-arrow');if(arrow)arrow.textContent=open?'⌄':'⌃';
+  }
+},true);
 function setWhatsAppContact(number){const el=document.getElementById('whatsappContact');if(!el)return;const digits=String(number||'').replace(/[^0-9]/g,'');if(!digits){el.hidden=true;return;}el.href=`https://wa.me/${digits}`;el.hidden=false;}
 function awardsList(lot){
   if(Array.isArray(lot.awards) && lot.awards.length) return lot.awards.filter(x=>String(x||'').trim()).map(x=>String(x).trim());
@@ -52,8 +86,8 @@ document.addEventListener('click',handleAwardsEvent,true);
 document.addEventListener('pointerup',handleAwardsEvent,true);
 document.addEventListener('touchend',handleAwardsEvent,true);
 document.addEventListener('keydown',e=>{if(e.key==='Escape')closeAwards()});
-async function loadSiteSettings(){try{const snap=await getDoc(doc(db,'settings','site'));if(snap.exists()){const data=snap.data();setWhatsAppContact(data.whatsappNumber||'');paymentAccounts=normalizePaymentAccounts(data.paymentAccounts||[]);}else{paymentAccounts=DEFAULT_PAYMENT_ACCOUNTS.map(x=>({...x}));}}catch(e){console.warn('Could not load site settings:',e.message);paymentAccounts=DEFAULT_PAYMENT_ACCOUNTS.map(x=>({...x}));}}
-async function home(){try{const snap=await getDocs(collection(db,'lotteries'));const lots=snap.docs.map(d=>({id:d.id,...d.data()})).filter(x=>x.status!=='hidden');window.__lots=lots;lots.sort((a,b)=>(a.status==='active'?0:1)-(b.status==='active'?0:1));list.innerHTML=lots.length?lots.map(x=>{const active=x.status==='active';return `<article class="card lottery-card"><div class="card-top"><span class="status-badge status-${esc(x.status)}">${statusText(x.status)}</span><span class="price">${Number(x.price||0)} Birr</span></div><h2>${esc(x.name)}</h2><p class="muted">${esc(x.description||'Ticket numbers are assigned after approval.')}</p>${paymentAccountsHtml()}<div class="card-actions three-actions">${active?`<a class="btn btn-primary" href="buy.html?lot=${encodeURIComponent(x.id)}">${getLang()==='ti'?'ቲኬት ዓድግ':'Buy Ticket'} →</a>`:`<button class="btn" disabled>${statusText(x.status)}</button>`}<a class="btn btn-outline" href="check.html?lot=${encodeURIComponent(x.id)}">${getLang()==='ti'?'ቲኬት መርምር':'Check Ticket'}</a><button class="btn btn-gold-outline" type="button" data-awards="${esc(x.id)}">${getLang()==='ti'?'ሽልማታት':'Winner Awards'}</button></div></article>`}).join(''):'<div class="loading-card">No lotteries are available yet.</div>'}catch(e){console.error(e);list.innerHTML='<div class="error">Unable to load lotteries. Please try again.</div>'}}
+async function loadSiteSettings(){try{const snap=await getDoc(doc(db,'settings','site'));if(snap.exists())setWhatsAppContact(snap.data().whatsappNumber||'');}catch(e){console.warn('Could not load contact settings:',e.message)}}
+async function home(){try{const snap=await getDocs(collection(db,'lotteries'));const lots=snap.docs.map(d=>({id:d.id,...d.data()})).filter(x=>x.status!=='hidden');window.__lots=lots;lots.sort((a,b)=>(a.status==='active'?0:1)-(b.status==='active'?0:1));list.innerHTML=lots.length?lots.map(x=>{const active=x.status==='active';return `<article class="card lottery-card"><div class="card-top"><span class="status-badge status-${esc(x.status)}">${statusText(x.status)}</span><span class="price">${Number(x.price||0)} Birr</span></div><h2>${esc(x.name)}</h2><p class="muted">${esc(x.description||'Ticket numbers are assigned after approval.')}</p>${paymentAccountsHtml(x)}<div class="card-actions three-actions">${active?`<a class="btn btn-primary" href="buy.html?lot=${encodeURIComponent(x.id)}">${getLang()==='ti'?'ቲኬት ዓድግ':'Buy Ticket'} →</a>`:`<button class="btn" disabled>${statusText(x.status)}</button>`}<a class="btn btn-outline" href="check.html?lot=${encodeURIComponent(x.id)}">${getLang()==='ti'?'ቲኬት መርምር':'Check Ticket'}</a><button class="btn btn-gold-outline" type="button" data-awards="${esc(x.id)}">${getLang()==='ti'?'ሽልማታት':'Winner Awards'}</button></div></article>`}).join(''):'<div class="loading-card">No lotteries are available yet.</div>'}catch(e){console.error(e);list.innerHTML='<div class="error">Unable to load lotteries. Please try again.</div>'}}
 applyLang();
 Promise.all([loadSiteSettings(),home()]).then(()=>{
   document.querySelectorAll('[data-awards]').forEach(btn=>{
