@@ -1,11 +1,11 @@
 import { db, auth } from '../../firebase.js';
 import { onAuthStateChanged, signOut } from 'https://www.gstatic.com/firebasejs/12.2.1/firebase-auth.js';
-import { collection, getDocs, doc, getDoc, updateDoc, addDoc, query, where, runTransaction, serverTimestamp } from 'https://www.gstatic.com/firebasejs/12.2.1/firebase-firestore.js';
+import { collection, getDocs, doc, getDoc, updateDoc, addDoc, query, where, limit, getCountFromServer, runTransaction, serverTimestamp } from 'https://www.gstatic.com/firebasejs/12.2.1/firebase-firestore.js';
 import { phoneHash } from '../../js/phoneHash.js';
 
 const $ = id => document.getElementById(id);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-let me = null, profile = null, lots = [], lot = null; let editingAwards = []; let editingPaymentAccounts = [];
+let me = null, profile = null, lots = [], lot = null; let editingAwards = []; let editingPaymentAccounts = []; let displayedApproved = []; let pendingTotal = 0;
 
 async function notifyBuyer(requestId){
   try{
@@ -119,18 +119,35 @@ async function renderAll(){
   if(!lot)return;
   $('lotteryName').textContent='· '+lot.name;
   $('lotteryInfo').innerHTML=`<span class="meta-pill"><b>${esc(lot.name)}</b></span><span class="meta-pill">Status: ${esc(lot.status)}</span><span class="meta-pill">Price: ${Number(lot.price||0)} Birr</span><span class="meta-pill">Sequence: ${esc(lot.min)} – ${esc(lot.max)}</span>`;
-  const rs=await getDocs(query(collection(db,'ticketRequests'),where('lotteryId','==',lot.id)));
-  const all=rs.docs.map(d=>({id:d.id,...d.data()}));
-  const pending=all.filter(x=>x.status==='pending');
-  const approved=all.filter(x=>x.status==='approved');
-  const rejected=all.filter(x=>x.status==='rejected');
-  const cancelled=all.filter(x=>x.status==='cancelled');
-  $('statPending').textContent=pending.length;$('statApproved').textContent=approved.length;$('statRejected').textContent=rejected.length;
-  if($('statCancelled')) $('statCancelled').textContent=cancelled.length;
-  $('statTickets').textContent=approved.reduce((s,x)=>s+Number(x.quantity||0),0);
-  renderPending(pending);renderSummary(approved);renderAwardsEditor();renderPaymentAccountsEditor();
-}
 
+  const base = query(collection(db,'ticketRequests'),where('lotteryId','==',lot.id));
+  const [pendingCountSnap,approvedCountSnap,rejectedCountSnap,cancelledCountSnap,pendingSnap,approvedSnap] = await Promise.all([
+    getCountFromServer(query(base,where('status','==','pending'))),
+    getCountFromServer(query(base,where('status','==','approved'))),
+    getCountFromServer(query(base,where('status','==','rejected'))),
+    getCountFromServer(query(base,where('status','==','cancelled'))),
+    getDocs(query(base,where('status','==','pending'),limit(50))),
+    getDocs(query(base,where('status','==','approved'),limit(100)))
+  ]);
+
+  pendingTotal = pendingCountSnap.data().count;
+  displayedApproved = approvedSnap.docs.map(d=>({id:d.id,...d.data()}));
+  const pending=pendingSnap.docs.map(d=>({id:d.id,...d.data()}));
+  const approvedTotal=approvedCountSnap.data().count;
+  const rejectedTotal=rejectedCountSnap.data().count;
+  const cancelledTotal=cancelledCountSnap.data().count;
+
+  $('statPending').textContent=pendingTotal;
+  $('statApproved').textContent=approvedTotal;
+  $('statRejected').textContent=rejectedTotal;
+  if($('statCancelled')) $('statCancelled').textContent=cancelledTotal;
+  $('statTickets').textContent=displayedApproved.reduce((s,x)=>s+Number(x.quantity||0),0);
+
+  renderPending(pending,pendingTotal);
+  renderSummary(displayedApproved,approvedTotal);
+  renderAwardsEditor();
+  renderPaymentAccountsEditor();
+}
 function normalizeScreenshot(src){
   const raw=String(src||'').trim();
   if(!raw)return '';
@@ -180,11 +197,11 @@ function closeScreenshotModal(){
   if(modal){modal.hidden=true;document.body.classList.remove('modal-open');}
 }
 
-function renderPending(items){
+function renderPending(items,totalCount=pendingTotal){
   ensureScreenshotModal();
   window.__screenshotData=Object.create(null);
   items.forEach(x=>{if(x.screenshotData)window.__screenshotData[x.id]=x.screenshotData;});
-  $('pendingCount').textContent=`${items.length} pending`;
+  $('pendingCount').textContent=totalCount>items.length?`${items.length} shown · ${totalCount} pending`:`${items.length} pending`;
   $('requests').innerHTML=items.map(x=>`<div class="request-card"><div class="card-head"><div><b>${esc(x.name)}</b> · ${esc(x.phone)}</div><span class="badge pending">PENDING</span></div><p>${Number(x.quantity||1)} ticket(s) · <b>${Number(x.total||0)} Birr</b>${x.reference?` · Ref ${esc(x.reference)}`:''}</p>${x.screenshotData?`<div class="screenshot-wrap"><button type="button" class="screenshot-preview" data-view-screenshot="${esc(x.id)}"><img src="${esc(normalizeScreenshot(x.screenshotData))}" alt="Payment screenshot"><span>Tap to view full size</span></button></div>`:''}<div class="actions"><button data-approve="${esc(x.id)}">✓ Approve & Assign</button><button class="danger" data-reject="${esc(x.id)}">✕ Reject</button></div></div>`).join('')||'<div class="success">No pending requests.</div>';
   document.querySelectorAll('[data-approve]').forEach(b=>b.addEventListener('click',()=>approve(b.dataset.approve)));
   document.querySelectorAll('[data-reject]').forEach(b=>b.addEventListener('click',()=>reject(b.dataset.reject)));
@@ -192,9 +209,9 @@ function renderPending(items){
 }
 
 function rows(data){return data.map(x=>({id:x.id,date:x.createdAt?.toDate?x.createdAt.toDate().toLocaleString():'',name:x.name||'',phone:x.phone||'',reference:x.reference||'',quantity:Number(x.quantity||0),total:Number(x.total||0),status:x.status||'',ticketNumbers:(x.ticketNumbers||[]).map(n=>String(n).padStart(6,'0')).join(' ')}))}
-function renderSummary(items){
+function renderSummary(items,totalCount=items.length){
   const r=rows(items);
-  $('summaryCount').textContent=`${r.length} approved request(s)`;
+  $('summaryCount').textContent=totalCount>r.length?`${r.length} shown · ${totalCount} approved request(s)`:`${r.length} approved request(s)`;
   $('summaryTable').innerHTML=r.length?`<table><thead><tr><th>Date</th><th>Name</th><th>Phone</th><th>Reference</th><th>Qty</th><th>Total</th><th>Ticket Numbers</th><th>Action</th></tr></thead><tbody>${r.map(x=>`<tr><td>${esc(x.date)}</td><td>${esc(x.name)}</td><td>${esc(x.phone)}</td><td>${esc(x.reference)}</td><td>${x.quantity}</td><td>${x.total}</td><td>${esc(x.ticketNumbers)}</td><td><button class="danger small-btn" data-cancel="${esc(x.id)}">Cancel</button></td></tr>`).join('')}</tbody></table>`:'<p class="muted">No approved requests yet.</p>';
   $('downloadCsv').onclick=()=>downloadCsv(`${safeFileName(lot.name)}-approved.csv`,r);
   $('copyExcel').onclick=async()=>{const tsv=[['Date','Name','Phone','Reference','Qty','Total','Ticket Numbers'],...r.map(x=>[x.date,x.name,x.phone,x.reference,x.quantity,x.total,x.ticketNumbers])].map(row=>row.map(v=>String(v).replace(/\t/g,' ').replace(/\n/g,' ')).join('\t')).join('\n');try{await navigator.clipboard.writeText(tsv);$('summaryMessage').innerHTML='<div class="success">Copied. Paste directly into Excel or Google Sheets.</div>'}catch{$('summaryMessage').innerHTML='<div class="error">Copy is blocked. Use Download CSV instead.</div>'}};
@@ -314,7 +331,14 @@ async function reject(id){
     const h=await phoneHash(x.phone||'');
     if(h){const pub=doc(db,'publicStatus',h,'requests',id);const ps=await getDoc(pub);if(ps.exists())await updateDoc(pub,{status:'rejected',rejectionReason:cleaned,reviewedAt:serverTimestamp()});}
     await addDoc(collection(db,'auditLogs'),{action:'rejectRequest',lotteryId:lot.id,requestId:id,adminId:me.uid,rejectionReason:cleaned,createdAt:serverTimestamp()});
-    await renderAll();await notifyBuyer(id);
+    pendingTotal=Math.max(0,pendingTotal-1);
+    const button=document.querySelector(`[data-reject="${CSS.escape(id)}"]`);
+    button?.closest('.request-card')?.remove();
+    $('statPending').textContent=pendingTotal;
+    $('statRejected').textContent=Number($('statRejected').textContent||0)+1;
+    $('pendingCount').textContent=pendingTotal>0?`${Math.min(50,pendingTotal)} shown · ${pendingTotal} pending`:'0 pending';
+    $('message').innerHTML='<div class="success">Payment request rejected.</div>';
+    await notifyBuyer(id);
   }catch(e){$('message').innerHTML=`<div class="error">${esc(e.message)}</div>`}
 }
 
@@ -337,6 +361,7 @@ async function approve(id){
   try{
     const initial=await getDoc(doc(db,'ticketRequests',id));if(!initial.exists())throw new Error('Request not found.');
     const initialData=initial.data();const publicHash=await phoneHash(initialData.phone||'');
+    let assignedNumbers=[];
     await runTransaction(db,async tx=>{
       const reqRef=doc(db,'ticketRequests',id),lotRef=doc(db,'lotteries',lot.id);
       const reqSnap=await tx.get(reqRef),lotSnap=await tx.get(lotRef);
@@ -349,6 +374,7 @@ async function approve(id){
       const scanLimit=Math.min(max-next+1,Math.max(count+20,count*4));const refs=[];for(let n=next;n<next+scanLimit;n++)refs.push({n,ref:doc(db,'tickets',`${lot.id}_${n}`)});
       const snaps=[];for(const item of refs)snaps.push({n:item.n,ref:item.ref,snap:await tx.get(item.ref)});
       const picks=snaps.filter(v=>!v.snap.exists()).slice(0,count).map(v=>v.n);if(picks.length<count)throw new Error('Not enough free ticket numbers are immediately available. Please approve again.');
+      assignedNumbers=picks;
       let publicRef=null,publicSnap=null;if(publicHash){publicRef=doc(db,'publicStatus',publicHash,'requests',id);publicSnap=await tx.get(publicRef);}
       for(const n of picks){const item=snaps.find(v=>v.n===n);tx.set(item.ref,{lotteryId:lot.id,number:n,requestId:id,assignedAt:serverTimestamp(),assignedBy:me.uid});}
       const nextAfter=Math.max(...picks)+1;
@@ -356,6 +382,22 @@ async function approve(id){
       tx.update(lotRef,{nextTicketNumber:nextAfter});
       if(publicSnap?.exists())tx.update(publicRef,{status:'approved',ticketNumbers:picks,reviewedAt:serverTimestamp(),lotteryName:lot.name});
     });
-    $('message').innerHTML='<div class="success">Payment approved and ticket number(s) assigned.</div>';await renderAll();await notifyBuyer(id);
+
+    const approvedItem={id,...initialData,status:'approved',ticketNumbers:assignedNumbers,reviewedBy:me.uid,reviewedAt:new Date(),lotteryName:lot.name,phoneHash:publicHash||''};
+    displayedApproved=[approvedItem,...displayedApproved].slice(0,100);
+    pendingTotal=Math.max(0,pendingTotal-1);
+    const count=assignedNumbers.length;
+    lot={...lot,nextTicketNumber:Math.max(...assignedNumbers)+1};
+    lots=lots.map(x=>x.id===lot.id?lot:x);
+
+    const button=document.querySelector(`[data-approve="${CSS.escape(id)}"]`);
+    button?.closest('.request-card')?.remove();
+    $('statPending').textContent=pendingTotal;
+    $('statApproved').textContent=Number($('statApproved').textContent||0)+1;
+    $('statTickets').textContent=Number($('statTickets').textContent||0)+count;
+    $('pendingCount').textContent=pendingTotal>0?`${Math.min(50,pendingTotal)} shown · ${pendingTotal} pending`:'0 pending';
+    renderSummary(displayedApproved,Number($('statApproved').textContent||displayedApproved.length));
+    $('message').innerHTML='<div class="success">Payment approved and ticket number(s) assigned.</div>';
+    await notifyBuyer(id);
   }catch(e){console.error(e);$('message').innerHTML=`<div class="error">${esc(e.message)}</div>`}
 }
