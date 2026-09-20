@@ -1,6 +1,6 @@
 import { db, auth, createSecondaryAuth } from '../../firebase.js';
 import { onAuthStateChanged, signOut, createUserWithEmailAndPassword, updateProfile, signOut as authSignOut } from 'https://www.gstatic.com/firebasejs/12.2.1/firebase-auth.js';
-import { collection, getDocs, doc, getDoc, addDoc, updateDoc, deleteDoc, setDoc, serverTimestamp, query, where, arrayUnion } from 'https://www.gstatic.com/firebasejs/12.2.1/firebase-firestore.js';
+import { collection, getDocs, doc, getDoc, addDoc, updateDoc, deleteDoc, setDoc, serverTimestamp, query, where, limit, arrayUnion } from 'https://www.gstatic.com/firebasejs/12.2.1/firebase-firestore.js';
 
 const $=id=>document.getElementById(id);
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -116,24 +116,47 @@ async function renderLotteries(){
 async function renderSummaryOverview(){
   const host=$('overview');host.innerHTML='<p class="muted">Loading summary…</p>';
   try{
-    const rows=[];let totalTickets=0,totalRevenue=0;
+    const rows=[];
     for(const lot of lots){
-      const qs=await getDocs(query(collection(db,'ticketRequests'),where('lotteryId','==',lot.id))),docs=qs.docs;
-      const approved=docs.filter(d=>d.data().status==='approved'),pending=docs.filter(d=>d.data().status==='pending'),rejected=docs.filter(d=>d.data().status==='rejected'),cancelled=docs.filter(d=>d.data().status==='cancelled');
-      const revenue=approved.reduce((s,d)=>s+Number(d.data().total||0),0);totalTickets+=approved.reduce((s,d)=>s+Number(d.data().quantity||0),0);totalRevenue+=revenue;
-      rows.push(`<div class="row"><b>${esc(lot.name)}</b><br><span class="muted">Approved: ${approved.length} · Pending: ${pending.length} · Rejected: ${rejected.length} · Cancelled: ${cancelled.length} · Approved value: ${revenue} Birr</span></div>`);
+      const [approvedSnap,pendingSnap]=await Promise.all([
+        getDocs(query(collection(db,'ticketRequests'),where('lotteryId','==',lot.id),where('status','==','approved'),limit(101))),
+        getDocs(query(collection(db,'ticketRequests'),where('lotteryId','==',lot.id),where('status','==','pending'),limit(51)))
+      ]);
+      const approvedShown=Math.min(100,approvedSnap.docs.length);
+      const pendingShown=Math.min(50,pendingSnap.docs.length);
+      const approvedHasMore=approvedSnap.docs.length>100;
+      const pendingHasMore=pendingSnap.docs.length>50;
+      rows.push(`<div class="row"><b>${esc(lot.name)}</b><br><span class="muted">Approved shown: ${approvedShown}${approvedHasMore?'+':''} · Pending shown: ${pendingShown}${pendingHasMore?'+':''}<br>Next ticket: ${esc(lot.nextTicketNumber??lot.min)}</span></div>`);
     }
-    $('statTickets').textContent=totalTickets;$('statRevenue').textContent=`${totalRevenue} Birr`;host.innerHTML=rows.join('')||'<p class="muted">No lotteries yet.</p>';
+    $('statTickets').textContent='—';$('statRevenue').textContent='—';
+    host.innerHTML=rows.join('')||'<p class="muted">No lotteries yet.</p>';
   }catch(e){host.innerHTML=`<div class="error">${esc(e.message||'Could not load summary.')}</div>`;}
 }
 
 async function openLotterySummary(id){
-  const lot=lots.find(x=>x.id===id);if(!lot)return;$('summaryTitle').textContent=`Summary · ${lot.name}`;$('summaryPanel').style.display='block';$('summaryTable').innerHTML='<p class="muted">Loading…</p>';
-  try{const qs=await getDocs(query(collection(db,'ticketRequests'),where('lotteryId','==',id)));renderSummaryTable(qs.docs.map(d=>({id:d.id,...d.data()})),lot);$('summaryPanel').scrollIntoView({behavior:'smooth'});}catch(e){$('summaryTable').innerHTML=`<div class="error">${esc(e.message||'Could not load summary.')}</div>`;}
+  const lot=lots.find(x=>x.id===id);if(!lot)return;
+  $('summaryTitle').textContent=`Summary · ${lot.name}`;
+  $('summaryPanel').style.display='block';
+  $('summaryTable').innerHTML='<p class="muted">Loading up to 100 approved requests…</p>';
+  try{
+    const qs=await getDocs(query(
+      collection(db,'ticketRequests'),
+      where('lotteryId','==',id),
+      where('status','==','approved'),
+      limit(101)
+    ));
+    const items=qs.docs.slice(0,100).map(d=>({id:d.id,...d.data()}));
+    const hasMore=qs.docs.length>100;
+    renderSummaryTable(items,lot,hasMore);
+    $('summaryPanel').scrollIntoView({behavior:'smooth'});
+  }catch(e){
+    $('summaryTable').innerHTML=`<div class="error">${esc(e.message||'Could not load summary.')}</div>`;
+  }
 }
+
 function makeRows(data){return data.map(x=>({date:x.createdAt?.toDate?x.createdAt.toDate().toLocaleString():'',name:x.name||'',phone:x.phone||'',reference:x.reference||'',quantity:Number(x.quantity||0),total:Number(x.total||0),status:x.status||'',ticketNumbers:(x.ticketNumbers||[]).join(' ')}))}
 function tableHtml(rows){return `<table><thead><tr><th>Date</th><th>Name</th><th>Phone</th><th>Reference</th><th>Qty</th><th>Total</th><th>Status</th><th>Ticket Numbers</th></tr></thead><tbody>${rows.map(r=>`<tr><td>${esc(r.date)}</td><td>${esc(r.name)}</td><td>${esc(r.phone)}</td><td>${esc(r.reference)}</td><td>${r.quantity}</td><td>${r.total}</td><td>${esc(r.status)}</td><td>${esc(r.ticketNumbers)}</td></tr>`).join('')}</tbody></table>`}
-function renderSummaryTable(items,lot){const approved=makeRows(items.filter(x=>x.status==='approved'));$('summaryCount').textContent=`${approved.length} approved request(s)`;$('summaryTable').innerHTML=approved.length?tableHtml(approved):'<p class="muted">No approved requests yet.</p>';$('downloadCsv').onclick=()=>downloadCsv(`${safeFileName(lot.name)}-approved.csv`,approved);$('copyExcel').onclick=async()=>{const tsv=[['Date','Name','Phone','Reference','Qty','Total','Status','Ticket Numbers'],...approved.map(r=>[r.date,r.name,r.phone,r.reference,r.quantity,r.total,r.status,r.ticketNumbers])].map(r=>r.map(cell=>String(cell).replace(/\t/g,' ').replace(/\n/g,' ')).join('\t')).join('\n');try{await navigator.clipboard.writeText(tsv);$('summaryMessage').innerHTML='<div class="success">Copied. Paste directly into Excel or Google Sheets.</div>'}catch{$('summaryMessage').innerHTML='<div class="error">Copy is blocked by this browser. Use Download CSV instead.</div>'}}}
+function renderSummaryTable(items,lot,hasMore=false){const approved=makeRows(items.filter(x=>x.status==='approved'));$('summaryCount').textContent=hasMore?`${approved.length} shown · more approved requests`:`${approved.length} approved request(s)`;$('summaryTable').innerHTML=approved.length?tableHtml(approved):'<p class="muted">No approved requests yet.</p>';$('downloadCsv').onclick=()=>downloadCsv(`${safeFileName(lot.name)}-approved.csv`,approved);$('copyExcel').onclick=async()=>{const tsv=[['Date','Name','Phone','Reference','Qty','Total','Status','Ticket Numbers'],...approved.map(r=>[r.date,r.name,r.phone,r.reference,r.quantity,r.total,r.status,r.ticketNumbers])].map(r=>r.map(cell=>String(cell).replace(/\t/g,' ').replace(/\n/g,' ')).join('\t')).join('\n');try{await navigator.clipboard.writeText(tsv);$('summaryMessage').innerHTML='<div class="success">Copied. Paste directly into Excel or Google Sheets.</div>'}catch{$('summaryMessage').innerHTML='<div class="error">Copy is blocked by this browser. Use Download CSV instead.</div>'}}}
 function downloadCsv(name,rows){const header=['Date','Name','Phone','Reference','Qty','Total','Status','Ticket Numbers'];const csv='\ufeff'+[header,...rows.map(r=>[r.date,r.name,r.phone,r.reference,r.quantity,r.total,r.status,r.ticketNumbers])].map(r=>r.map(v=>`"${String(v??'').replace(/"/g,'""')}"`).join(',')).join('\n');const blob=new Blob([csv],{type:'text/csv;charset=utf-8;'}),a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000)}
 function safeFileName(s){return String(s||'lottery').replace(/[^a-z0-9_-]+/gi,'_').slice(0,60)}
 
