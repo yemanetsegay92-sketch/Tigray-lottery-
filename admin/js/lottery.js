@@ -1,6 +1,6 @@
 import { db, auth } from '../../firebase.js';
 import { onAuthStateChanged, signOut } from 'https://www.gstatic.com/firebasejs/12.2.1/firebase-auth.js';
-import { collection, getDocs, doc, getDoc, updateDoc, addDoc, query, where, limit, getCountFromServer, runTransaction, serverTimestamp } from 'https://www.gstatic.com/firebasejs/12.2.1/firebase-firestore.js';
+import { collection, getDocs, doc, getDoc, updateDoc, addDoc, query, where, limit, getCountFromServer, getAggregateFromServer, sum, count, runTransaction, serverTimestamp } from 'https://www.gstatic.com/firebasejs/12.2.1/firebase-firestore.js';
 import { phoneHash } from '../../js/phoneHash.js';
 
 const $ = id => document.getElementById(id);
@@ -121,9 +121,9 @@ async function renderAll(){
   $('lotteryInfo').innerHTML=`<span class="meta-pill"><b>${esc(lot.name)}</b></span><span class="meta-pill">Status: ${esc(lot.status)}</span><span class="meta-pill">Price: ${Number(lot.price||0)} Birr</span><span class="meta-pill">Sequence: ${esc(lot.min)} – ${esc(lot.max)}</span>`;
 
   const base = query(collection(db,'ticketRequests'),where('lotteryId','==',lot.id));
-  const [pendingCountSnap,approvedCountSnap,rejectedCountSnap,cancelledCountSnap,pendingSnap,approvedSnap] = await Promise.all([
+  const [pendingCountSnap,approvedAggregateSnap,rejectedCountSnap,cancelledCountSnap,pendingSnap,approvedSnap] = await Promise.all([
     getCountFromServer(query(base,where('status','==','pending'))),
-    getCountFromServer(query(base,where('status','==','approved'))),
+    getAggregateFromServer(query(base,where('status','==','approved')),{approvedCount:count(),ticketTotal:sum('quantity')}),
     getCountFromServer(query(base,where('status','==','rejected'))),
     getCountFromServer(query(base,where('status','==','cancelled'))),
     getDocs(query(base,where('status','==','pending'),limit(50))),
@@ -133,7 +133,9 @@ async function renderAll(){
   pendingTotal = pendingCountSnap.data().count;
   displayedApproved = approvedSnap.docs.map(d=>({id:d.id,...d.data()}));
   const pending=pendingSnap.docs.map(d=>({id:d.id,...d.data()}));
-  const approvedTotal=approvedCountSnap.data().count;
+  const approvedAggregate=approvedAggregateSnap.data();
+  const approvedTotal=approvedAggregate.approvedCount;
+  const approvedTicketTotal=Number(approvedAggregate.ticketTotal||0);
   const rejectedTotal=rejectedCountSnap.data().count;
   const cancelledTotal=cancelledCountSnap.data().count;
 
@@ -141,7 +143,7 @@ async function renderAll(){
   $('statApproved').textContent=approvedTotal;
   $('statRejected').textContent=rejectedTotal;
   if($('statCancelled')) $('statCancelled').textContent=cancelledTotal;
-  $('statTickets').textContent=displayedApproved.reduce((s,x)=>s+Number(x.quantity||0),0);
+  $('statTickets').textContent=approvedTicketTotal;
 
   renderPending(pending,pendingTotal);
   renderSummary(displayedApproved,approvedTotal);
