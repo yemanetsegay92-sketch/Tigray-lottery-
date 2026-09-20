@@ -7,8 +7,8 @@ const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&
 let lots=[];
 let drawDigits=[];
 let drawBusy=false;
-const DEFAULT_PAYMENT_ACCOUNTS=[{bank:'CBE',number:'1000000000000'}];
-let paymentAccounts=DEFAULT_PAYMENT_ACCOUNTS.map(x=>({...x}));
+const DEFAULT_PAYMENT_ACCOUNTS=[{bank:'CBE',number:'1000000000000',holderName:''}];
+let createPaymentAccounts=DEFAULT_PAYMENT_ACCOUNTS.map(x=>({...x}));
 
 $('logoutBtn').addEventListener('click',async()=>{await signOut(auth);location.href='login.html';});
 $('generatePassword')?.addEventListener('click',()=>{$('resetPassword').value=generateTempPassword();$('resetPassword').focus();});
@@ -20,8 +20,7 @@ $('saveDrawBtn')?.addEventListener('click',saveDraw);
 $('closeSummary')?.addEventListener('click',()=>{$('summaryPanel').style.display='none';});
 $('contactForm')?.addEventListener('submit',saveContactSettings);
 $('whatsappNumber')?.addEventListener('input',updateContactPreview);
-$('addPaymentAccount')?.addEventListener('click',addPaymentAccount);
-$('savePaymentAccounts')?.addEventListener('click',savePaymentAccounts);
+$('addCreatePaymentAccount')?.addEventListener('click',addCreatePaymentAccount);
 
 onAuthStateChanged(auth,async u=>{
   if(!u){location.href='login.html';return;}
@@ -31,6 +30,7 @@ onAuthStateChanged(auth,async u=>{
     await renderLotteries();
     await renderSummaryOverview();
     await loadContactSettings();
+    renderCreatePaymentAccountsEditor();
     setupDraw();
   }catch(e){console.error(e);$('message').innerHTML=`<div class="error">${esc(e.message||'Could not load the General Admin dashboard.')}</div>`;}
 });
@@ -40,9 +40,15 @@ $('createForm').addEventListener('submit',async e=>{
   try{
     const min=Number($('min').value),max=Number($('max').value),price=Number($('price').value);
     if(!Number.isFinite(min)||!Number.isFinite(max)||min>max||price<=0)throw new Error('Check price and number range.');
-    const newLottery=await addDoc(collection(db,'lotteries'),{name:$('name').value.trim(),price,min,max,status:$('status').value,description:$('description').value.trim(),createdAt:serverTimestamp(),adminIds:[],nextTicketNumber:min,awards:['First Prize']});
-    await addDoc(collection(db,'auditLogs'),{action:'createLottery',lotteryId:newLottery.id,adminId:auth.currentUser.uid,createdAt:serverTimestamp()});
-    e.target.reset();$('message').innerHTML='<div class="success">Lottery created.</div>';await renderLotteries();await renderSummaryOverview();setupDraw();
+    const paymentAccounts=readCreatePaymentAccounts();
+    if(!paymentAccounts.length)throw new Error('Add at least one payment account.');
+    if(paymentAccounts.some(x=>!x.bank||!x.number||x.number.length<4))throw new Error('Complete each payment account.');
+    const newLottery=await addDoc(collection(db,'lotteries'),{name:$('name').value.trim(),price,min,max,status:$('status').value,description:$('description').value.trim(),createdAt:serverTimestamp(),adminIds:[],nextTicketNumber:min,awards:['First Prize'],paymentAccounts});
+    await addDoc(collection(db,'auditLogs'),{action:'createLottery',lotteryId:newLottery.id,adminId:auth.currentUser.uid,createdAt:serverTimestamp(),paymentAccountBanks:paymentAccounts.map(x=>x.bank)});
+    e.target.reset();
+    createPaymentAccounts=DEFAULT_PAYMENT_ACCOUNTS.map(x=>({...x}));
+    renderCreatePaymentAccountsEditor();
+    $('message').innerHTML='<div class="success">Lottery created.</div>';await renderLotteries();await renderSummaryOverview();setupDraw();
   }catch(err){console.error(err);$('message').innerHTML=`<div class="error">${esc(err.message)}</div>`;}
 });
 
@@ -138,64 +144,36 @@ async function loadContactSettings(){
   try{
     const snap=await getDoc(doc(db,'settings','site'));
     const data=snap.exists()?snap.data():{};
-    const number=data.whatsappNumber||'';
-    $('whatsappNumber').value=number;
-    paymentAccounts=normalizePaymentAccounts(data.paymentAccounts);
-    renderPaymentAccountsEditor();
+    $('whatsappNumber').value=data.whatsappNumber||'';
     updateContactPreview();
   }catch(e){
     $('contactMessage').innerHTML=`<div class="error">${esc(e.message||'Could not load contact settings.')}</div>`;
-    paymentAccounts=DEFAULT_PAYMENT_ACCOUNTS.map(x=>({...x}));
-    renderPaymentAccountsEditor();
   }
 }
 
-
-function normalizePaymentAccounts(raw){
-  if(!Array.isArray(raw))return DEFAULT_PAYMENT_ACCOUNTS.map(x=>({...x}));
-  const clean=raw.map(x=>({bank:String(x?.bank||'').trim(),number:String(x?.number||'').trim()})).filter(x=>x.bank&&x.number);
-  return clean.length?clean:DEFAULT_PAYMENT_ACCOUNTS.map(x=>({...x}));
-}
-
-function renderPaymentAccountsEditor(){
-  const host=$('paymentAccountsEditor');
+function renderCreatePaymentAccountsEditor(){
+  const host=$('createPaymentAccountsEditor');
   if(!host)return;
-  host.innerHTML=paymentAccounts.map((a,i)=>`<div class="payment-account-edit-row"><label>Bank name<input type="text" data-payment-bank="${i}" value="${esc(a.bank)}" placeholder="CBE"></label><label>Account number<input type="text" data-payment-number="${i}" value="${esc(a.number)}" inputmode="numeric" placeholder="1000000000000"></label><button type="button" class="danger small-btn" data-remove-payment-account="${i}">Remove</button></div>`).join('');
-  host.querySelectorAll('[data-remove-payment-account]').forEach(b=>b.addEventListener('click',()=>removePaymentAccount(Number(b.dataset.removePaymentAccount))));
+  host.innerHTML=createPaymentAccounts.map((a,i)=>`<div class="payment-account-edit-row create-payment-row"><label>Bank name<input type="text" data-create-payment-bank="${i}" value="${esc(a.bank)}" placeholder="CBE"></label><label>Account number<input type="text" data-create-payment-number="${i}" value="${esc(a.number)}" inputmode="numeric" placeholder="1000000000000"></label><label>Account holder<input type="text" data-create-payment-holder="${i}" value="${esc(a.holderName||'')}" placeholder="Account holder name"></label><button type="button" class="danger small-btn" data-remove-create-payment="${i}">Remove</button></div>`).join('');
+  host.querySelectorAll('[data-remove-create-payment]').forEach(b=>b.addEventListener('click',()=>removeCreatePaymentAccount(Number(b.dataset.removeCreatePayment))));
 }
 
-function readPaymentAccountsFromEditor(){
-  const rows=[...document.querySelectorAll('[data-payment-bank]')].map((input,i)=>({bank:String(input.value||'').trim(),number:String(document.querySelector(`[data-payment-number="${i}"]`)?.value||'').trim()}));
-  return rows.filter(x=>x.bank||x.number);
+function readCreatePaymentAccounts(){
+  const banks=[...document.querySelectorAll('[data-create-payment-bank]')];
+  return banks.map((input,i)=>({bank:String(input.value||'').trim(),number:String(document.querySelector(`[data-create-payment-number="${i}"]`)?.value||'').trim(),holderName:String(document.querySelector(`[data-create-payment-holder="${i}"]`)?.value||'').trim()})).filter(x=>x.bank||x.number||x.holderName);
 }
 
-function addPaymentAccount(){
-  paymentAccounts.push({bank:'',number:''});
-  renderPaymentAccountsEditor();
-  const inputs=document.querySelectorAll('[data-payment-bank]');inputs[inputs.length-1]?.focus();
+function addCreatePaymentAccount(){
+  createPaymentAccounts.push({bank:'',number:'',holderName:''});
+  renderCreatePaymentAccountsEditor();
+  const inputs=document.querySelectorAll('[data-create-payment-bank]');
+  inputs[inputs.length-1]?.focus();
 }
 
-function removePaymentAccount(index){
-  paymentAccounts.splice(index,1);
-  if(!paymentAccounts.length)paymentAccounts.push({bank:'',number:''});
-  renderPaymentAccountsEditor();
-}
-
-async function savePaymentAccounts(){
-  const btn=$('savePaymentAccounts');
-  const rows=readPaymentAccountsFromEditor();
-  if(!rows.length){$('paymentAccountMessage').innerHTML='<div class="error">Add at least one bank account.</div>';return;}
-  if(rows.some(x=>!x.bank||!x.number||x.number.length<4)){$('paymentAccountMessage').innerHTML='<div class="error">Complete each bank name and account number.</div>';return;}
-  btn.disabled=true;
-  try{
-    await setDoc(doc(db,'settings','site'),{paymentAccounts:rows,updatedAt:serverTimestamp(),updatedBy:auth.currentUser.uid},{merge:true});
-    paymentAccounts=rows;
-    renderPaymentAccountsEditor();
-    await addDoc(collection(db,'auditLogs'),{action:'updatePaymentAccounts',paymentAccountBanks:rows.map(x=>x.bank),adminId:auth.currentUser.uid,createdAt:serverTimestamp()});
-    $('paymentAccountMessage').innerHTML='<div class="success">Payment accounts updated on the public lottery cards.</div>';
-  }catch(e){
-    $('paymentAccountMessage').innerHTML=`<div class="error">${esc(e.message||'Could not save payment accounts.')}</div>`;
-  }finally{btn.disabled=false;}
+function removeCreatePaymentAccount(index){
+  createPaymentAccounts.splice(index,1);
+  if(!createPaymentAccounts.length)createPaymentAccounts.push({bank:'',number:'',holderName:''});
+  renderCreatePaymentAccountsEditor();
 }
 
 function updateContactPreview(){
