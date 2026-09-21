@@ -14,16 +14,8 @@ service cloud.firestore {
     }
 
     match /ticketRequests/{requestId} {
-      allow create: if request.resource.data.status == 'pending'
-        && request.resource.data.quantity is int
-        && request.resource.data.quantity >= 1
-        && request.resource.data.quantity <= 100
-        && request.resource.data.name is string
-        && request.resource.data.name.size() > 0
-        && request.resource.data.phone is string
-        && request.resource.data.phone.size() > 0
-        && ((request.resource.data.reference is string && request.resource.data.reference.size() > 0)
-            || (request.resource.data.screenshotData is string && request.resource.data.screenshotData.size() > 0));
+      // Customer ticket requests are created only by the Vercel API.
+      allow create: if false;
       allow read: if isGeneral() || (isLotteryAdmin() && resource.data.lotteryId in profile().lotteryIds);
       allow update: if isGeneral() || (isLotteryAdmin() && resource.data.lotteryId in profile().lotteryIds);
       allow delete: if false;
@@ -31,14 +23,17 @@ service cloud.firestore {
 
     match /publicStatus/{phoneHash}/requests/{requestId} {
       allow read: if true;
-      allow create: if request.resource.data.status == 'pending';
+      // Public status documents are created only by the Vercel API.
+      allow create: if false;
       allow update: if isGeneral() || (isLotteryAdmin() && resource.data.lotteryId in profile().lotteryIds);
       allow delete: if false;
     }
 
     match /tickets/{ticketId} {
-      allow read: if isGeneral() || isLotteryAdmin();
-      allow create: if isGeneral() || isLotteryAdmin();
+      // Ticket documents are created only by the Vercel API.
+      allow create: if false;
+      allow read: if isGeneral()
+        || (isLotteryAdmin() && resource.data.lotteryId in profile().lotteryIds);
       allow update, delete: if false;
     }
 

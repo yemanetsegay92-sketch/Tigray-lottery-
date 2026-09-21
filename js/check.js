@@ -1,5 +1,5 @@
 import { db } from '../firebase.js';
-import { collection, getDocs } from 'https://www.gstatic.com/firebasejs/12.2.1/firebase-firestore.js';
+import { collection, getDocs, query, where } from 'https://www.gstatic.com/firebasejs/12.2.1/firebase-firestore.js';
 import { phoneHash, normalizePhone } from './phoneHash.js';
 
 const $=id=>document.getElementById(id),esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -27,10 +27,13 @@ $('checkForm').addEventListener('submit',async e=>{
   $('results').innerHTML='';
   try{
     const h=await phoneHash(phone);
-    const snap=await getDocs(collection(db,'publicStatus',h,'requests'));
+    // Ask Firestore for this lottery only. This avoids downloading every request for the phone.
+    const snap=await getDocs(query(
+      collection(db,'publicStatus',h,'requests'),
+      where('lotteryId','==',lotteryId)
+    ));
     const rows=snap.docs
       .map(d=>({id:d.id,...d.data()}))
-      .filter(x=>String(x.lotteryId||'')===String(lotteryId))
       .sort((a,b)=>(b.createdAt?.seconds||0)-(a.createdAt?.seconds||0));
     if(!rows.length){
       $('message').innerHTML=`<div class="error">${t.noResults}</div>`;
