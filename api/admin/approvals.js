@@ -355,6 +355,17 @@ module.exports = async (req, res) => {
     }
 
     if (
+      error?.code === 8 ||
+      message.includes('RESOURCE_EXHAUSTED') ||
+      message.includes('Quota exceeded')
+    ) {
+      return res.status(429).json({
+        ok: false,
+        error: 'Firestore is temporarily out of quota or capacity. Please try the approval again after the Firestore quota window resets.'
+      });
+    }
+
+    if (
       message.includes('Already exists') ||
       error?.code === 6 ||
       error?.code === 'already-exists'

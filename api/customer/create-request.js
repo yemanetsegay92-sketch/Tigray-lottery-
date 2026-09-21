@@ -19,7 +19,9 @@ module.exports=async(req,res)=>{
     const name=String(body.name||'').trim();
     const phone=normalizePhone(body.phone);
     const reference=String(body.reference||'').trim();
-    const quantity=Math.max(1,Math.min(100,Number(body.quantity||1)));
+    const quantityNumber=Number(body.quantity||1);
+    if(!Number.isInteger(quantityNumber)||quantityNumber<1||quantityNumber>5) return res.status(400).json({ok:false,error:'You can request a maximum of 5 tickets per purchase.'});
+    const quantity=quantityNumber;
     const screenshotData=String(body.screenshotData||'');
     const screenshotBytes=Number(body.screenshotBytes||0);
     const screenshotOriginalBytes=Number(body.screenshotOriginalBytes||0);
