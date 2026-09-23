@@ -1,5 +1,5 @@
 const crypto = require('crypto');
-const { adminDb, telegram, escapeHtml, telegramMiniAppUrl, FieldValue } = require('../telegram/_lib');
+const { adminDb, adminBucket, telegram, escapeHtml, telegramMiniAppUrl, FieldValue } = require('../telegram/_lib');
 const { getAuth } = require('firebase-admin/auth');
 
 function readBearer(req) {
@@ -50,6 +50,51 @@ function assertLotteryAccess(profile, lotteryId) {
   if (!ids.includes(lotteryId)) {
     throw new Error('You are not assigned to this lottery.');
   }
+}
+
+async function serveScreenshot(req, res, db, profile, requestId) {
+  if (!requestId) {
+    return res.status(400).json({ ok: false, error: 'requestId is required.' });
+  }
+
+  const requestSnap = await db.collection('ticketRequests').doc(requestId).get();
+  if (!requestSnap.exists) {
+    return res.status(404).json({ ok: false, error: 'Request not found.' });
+  }
+
+  const request = requestSnap.data() || {};
+  const lotteryId = String(request.lotteryId || '').trim();
+  if (!lotteryId) {
+    return res.status(404).json({ ok: false, error: 'This request has no lottery ID.' });
+  }
+
+  assertLotteryAccess(profile, lotteryId);
+
+  const path = String(request.screenshotPath || '').trim();
+  if (!path) {
+    return res.status(404).json({ ok: false, error: 'This request has no stored screenshot.' });
+  }
+
+  const file = adminBucket().file(path);
+  const [exists] = await file.exists();
+  if (!exists) {
+    return res.status(404).json({ ok: false, error: 'Screenshot file was not found.' });
+  }
+
+  const [buffer] = await file.download();
+  const mime = String(request.screenshotMime || 'image/jpeg');
+  const ext = mime === 'image/png' ? 'png' : mime === 'image/webp' ? 'webp' : 'jpg';
+
+  res.setHeader('Content-Type', mime);
+  res.setHeader('Content-Length', String(buffer.length));
+  res.setHeader('Cache-Control', 'private, no-store, max-age=0');
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader(
+    'Content-Disposition',
+    `inline; filename="payment-screenshot-${requestId}.${ext}"`
+  );
+
+  return res.status(200).send(buffer);
 }
 
 async function approveRequest(db, caller, profile, requestId, requestedLotteryId) {
@@ -289,11 +334,25 @@ async function cancelApproval(db, caller, profile, requestId, reason) {
 }
 
 module.exports = async (req, res) => {
-  if (req.method !== 'POST') {
-    return res.status(405).json({ ok: false, error: 'Method not allowed.' });
-  }
-
   try {
+    const db = adminDb();
+    const { caller, profile } = await authenticateAdmin(req, db);
+
+    if (req.method === 'GET') {
+      const action = String(req.query?.action || '').trim().toLowerCase();
+      const requestId = String(req.query?.requestId || '').trim();
+
+      if (action !== 'screenshot') {
+        return res.status(400).json({ ok: false, error: 'Unsupported GET action.' });
+      }
+
+      return await serveScreenshot(req, res, db, profile, requestId);
+    }
+
+    if (req.method !== 'POST') {
+      return res.status(405).json({ ok: false, error: 'Method not allowed.' });
+    }
+
     const body = readBody(req);
     const action = String(body.action || '').trim().toLowerCase();
     const requestId = String(body.requestId || '').trim();
@@ -306,9 +365,6 @@ module.exports = async (req, res) => {
     if (!['approve', 'cancel'].includes(action)) {
       return res.status(400).json({ ok: false, error: 'action must be approve or cancel.' });
     }
-
-    const db = adminDb();
-    const { caller, profile } = await authenticateAdmin(req, db);
 
     if (action === 'approve') {
       const result = await approveRequest(
