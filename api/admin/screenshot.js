@@ -20,8 +20,8 @@ module.exports=async(req,res)=>{
     const token=readBearer(req);
     if(!token) return res.status(401).json({ok:false,error:'Missing Firebase ID token.'});
 
-    const caller=await getAuth().verifyIdToken(token);
     const db=adminDb();
+    const caller=await getAuth().verifyIdToken(token);
     const profileSnap=await db.collection('users').doc(caller.uid).get();
 
     if(!profileSnap.exists) return res.status(403).json({ok:false,error:'Admin profile not found.'});
