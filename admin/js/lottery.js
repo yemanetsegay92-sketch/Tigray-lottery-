@@ -170,35 +170,101 @@ function ensureScreenshotModal(){
 }
 
 let screenshotZoom=1;
+let screenshotObjectUrl='';
+
 function setScreenshotZoom(value){
   screenshotZoom=Math.max(0.5,Math.min(3,value));
   const img=$('screenshotViewer');
   if(img)img.style.transform=`scale(${screenshotZoom})`;
 }
+
 function changeScreenshotZoom(delta){setScreenshotZoom(screenshotZoom+delta)}
-function openScreenshotModal(id){
+
+async function openScreenshotModal(id){
   ensureScreenshotModal();
-  const src=normalizeScreenshot(window.__screenshotData?.[id]);
+
+  let src=normalizeScreenshot(window.__screenshotData?.[id]);
+
+  if(!src && window.__screenshotPath?.[id]){
+    try{
+      const token=await auth.currentUser.getIdToken();
+      const r=await fetch(`/api/admin/screenshot?requestId=${encodeURIComponent(id)}`,{
+        headers:{authorization:`Bearer ${token}`}
+      });
+
+      if(!r.ok){
+        let message='Could not load payment screenshot.';
+        try{
+          const j=await r.json();
+          if(j?.error) message=j.error;
+        }catch{}
+        throw new Error(message);
+      }
+
+      const blob=await r.blob();
+
+      if(screenshotObjectUrl){
+        URL.revokeObjectURL(screenshotObjectUrl);
+        screenshotObjectUrl='';
+      }
+
+      screenshotObjectUrl=URL.createObjectURL(blob);
+      src=screenshotObjectUrl;
+    }catch(e){
+      console.error(e);
+      $('message').innerHTML=`<div class="error">${esc(e.message||'Could not load payment screenshot.')}</div>`;
+      return;
+    }
+  }
+
   if(!src)return;
+
   $('screenshotViewer').src=src;
   $('screenshotViewer').style.transform='scale(1)';
   screenshotZoom=1;
   $('downloadScreenshot').href=src;
-  $('downloadScreenshot').download=`payment-screenshot-${id}.png`;
+  $('downloadScreenshot').download=`payment-screenshot-${id}.jpg`;
   $('screenshotModal').hidden=false;
   document.body.classList.add('modal-open');
 }
+
 function closeScreenshotModal(){
   const modal=$('screenshotModal');
-  if(modal){modal.hidden=true;document.body.classList.remove('modal-open');}
+  if(modal){
+    modal.hidden=true;
+    document.body.classList.remove('modal-open');
+  }
+
+  const viewer=$('screenshotViewer');
+  if(viewer) viewer.removeAttribute('src');
+
+  if(screenshotObjectUrl){
+    URL.revokeObjectURL(screenshotObjectUrl);
+    screenshotObjectUrl='';
+  }
 }
 
 function renderPending(items,hasMore=false){
   ensureScreenshotModal();
   window.__screenshotData=Object.create(null);
-  items.forEach(x=>{if(x.screenshotData)window.__screenshotData[x.id]=x.screenshotData;});
+  window.__screenshotPath=Object.create(null);
+
+  items.forEach(x=>{
+    if(x.screenshotData) window.__screenshotData[x.id]=x.screenshotData;
+    if(x.screenshotPath) window.__screenshotPath[x.id]=x.screenshotPath;
+  });
+
   $('pendingCount').textContent=hasMore?`${items.length} shown · more pending requests`:`${items.length} pending`;
-  $('requests').innerHTML=items.map(x=>`<div class="request-card"><div class="card-head"><div><b>${esc(x.name)}</b> · ${esc(x.phone)}</div><span class="badge pending">PENDING</span></div><p>${Number(x.quantity||1)} ticket(s) · <b>${Number(x.total||0)} Birr</b>${x.reference?` · Ref ${esc(x.reference)}`:''}</p>${x.screenshotData?`<div class="screenshot-wrap"><button type="button" class="screenshot-preview" data-view-screenshot="${esc(x.id)}"><img src="${esc(normalizeScreenshot(x.screenshotData))}" alt="Payment screenshot"><span>Tap to view full size</span></button></div>`:''}<div class="actions"><button data-approve="${esc(x.id)}">✓ Approve & Assign</button><button class="danger" data-reject="${esc(x.id)}">✕ Reject</button></div></div>`).join('')||'<div class="success">No pending requests.</div>';
+
+  $('requests').innerHTML=items.map(x=>{
+    const hasScreenshot=!!(x.screenshotData||x.screenshotPath);
+    const proofButton=hasScreenshot
+      ? `<div class="screenshot-wrap"><button type="button" class="secondary" data-view-screenshot="${esc(x.id)}">🧾 View payment screenshot</button></div>`
+      : '';
+
+    return `<div class="request-card"><div class="card-head"><div><b>${esc(x.name)}</b> · ${esc(x.phone)}</div><span class="badge pending">PENDING</span></div><p>${Number(x.quantity||1)} ticket(s) · <b>${Number(x.total||0)} Birr</b>${x.reference?` · Ref ${esc(x.reference)}`:''}</p>${proofButton}<div class="actions"><button data-approve="${esc(x.id)}">✓ Approve & Assign</button><button class="danger" data-reject="${esc(x.id)}">✕ Reject</button></div></div>`;
+  }).join('')||'<div class="success">No pending requests.</div>';
+
   document.querySelectorAll('[data-approve]').forEach(b=>b.addEventListener('click',()=>approve(b.dataset.approve)));
   document.querySelectorAll('[data-reject]').forEach(b=>b.addEventListener('click',()=>reject(b.dataset.reject)));
   document.querySelectorAll('[data-view-screenshot]').forEach(b=>b.addEventListener('click',()=>openScreenshotModal(b.dataset.viewScreenshot)));
