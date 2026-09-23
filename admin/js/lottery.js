@@ -188,7 +188,7 @@ async function openScreenshotModal(id){
   if(!src && window.__screenshotPath?.[id]){
     try{
       const token=await auth.currentUser.getIdToken();
-      const r=await fetch(`/api/admin/screenshot?requestId=${encodeURIComponent(id)}`,{
+      const r=await fetch(`/api/admin/approvals?action=screenshot&requestId=${encodeURIComponent(id)}`,{
         headers:{authorization:`Bearer ${token}`}
       });
 
