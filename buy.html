@@ -19,11 +19,10 @@
       <div class="quantity-control"><button type="button" id="qtyMinus" class="qty-btn" aria-label="Decrease">−</button><input id="quantity" type="number" min="1" max="5" value="1" inputmode="numeric" aria-label="Quantity"><button type="button" id="qtyPlus" class="qty-btn" aria-label="Increase">+</button></div>
       <div id="total" class="total-box">Total: —</div>
 
-      <div class="form-step"><span>03</span><div><h2 data-i18n="paymentProof">Payment proof</h2><p class="form-note" data-i18n="proofNote">Provide at least one of the following.</p></div></div>
-      <label><span data-i18n="referenceNumber">Transaction / reference number</span><input id="reference" autocomplete="off"></label>
-      <div class="or-divider"><span data-i18n="or">OR</span></div>
-      <label class="upload-box"><span data-i18n="paymentScreenshot">Payment screenshot</span><input id="screenshot" type="file" accept="image/*"><span id="screenshotInfo" class="upload-hint" data-i18n="uploadHint">Choose an image</span></label>
-      <p class="form-note proof-rule" data-i18n="proofRule">A reference number or screenshot is required. You may provide both.</p>
+      <div class="form-step"><span>03</span><div><h2 data-i18n="paymentProof">Payment proof</h2><p class="form-note" data-i18n="proofNote">Enter the transaction number. You may also attach a screenshot as backup.</p></div></div>
+      <label><span data-i18n="referenceNumber">Transaction / reference number</span><input id="reference" required autocomplete="off"></label>
+            <label class="upload-box"><span data-i18n="paymentScreenshot">Payment screenshot</span><input id="screenshot" type="file" accept="image/*"><span id="screenshotInfo" class="upload-hint" data-i18n="uploadHint">Choose an image</span></label>
+      <p class="form-note proof-rule" data-i18n="proofRule">Transaction / reference number is required. Screenshot is optional backup proof.</p>
 
       <div class="review-box"><div><span data-i18n="ticketPrice">Ticket price</span><b id="reviewPrice">—</b></div><div><span data-i18n="numberOfTickets">Number of tickets</span><b id="reviewQty">1</b></div><div class="review-total"><span data-i18n="total">Total</span><b id="reviewTotal">—</b></div></div>
       <button id="submitBtn" type="submit" class="btn btn-primary full" data-i18n="submitRequest">Submit ticket request</button>
