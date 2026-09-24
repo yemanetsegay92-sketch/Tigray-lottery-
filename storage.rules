@@ -1,0 +1,11 @@
+rules_version = '2';
+
+service firebase.storage {
+  match /b/{bucket}/o {
+    // Payment screenshots are private. The browser never reads or writes
+    // Storage directly; only the trusted Vercel API uses the Admin SDK.
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}

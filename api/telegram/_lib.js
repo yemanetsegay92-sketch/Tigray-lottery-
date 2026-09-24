@@ -1,5 +1,6 @@
 const { getApps, initializeApp, cert } = require('firebase-admin/app');
 const { getFirestore, FieldValue, Timestamp } = require('firebase-admin/firestore');
+const { getStorage } = require('firebase-admin/storage');
 const crypto = require('crypto');
 
 function adminDb() {
@@ -9,9 +10,18 @@ function adminDb() {
     let serviceAccount;
     try { serviceAccount = JSON.parse(raw); }
     catch { throw new Error('FIREBASE_SERVICE_ACCOUNT_JSON is not valid JSON.'); }
-    initializeApp({ credential: cert(serviceAccount) });
+    initializeApp({
+      credential: cert(serviceAccount),
+      storageBucket: process.env.FIREBASE_STORAGE_BUCKET || 'tigiray-lottery.firebasestorage.app'
+    });
   }
   return getFirestore();
+}
+
+function adminBucket() {
+  // Ensure the Firebase Admin app is initialized before asking for Storage.
+  adminDb();
+  return getStorage().bucket();
 }
 
 function botToken() {
@@ -109,6 +119,6 @@ function htmlLink(label, url) {
 }
 
 module.exports = {
-  adminDb, telegram, botLink, botUsername, telegramMiniAppUrl, escapeHtml, validateTelegramInitData, FieldValue, Timestamp, htmlLink,
+  adminDb, adminBucket, telegram, botLink, botUsername, telegramMiniAppUrl, escapeHtml, validateTelegramInitData, FieldValue, Timestamp, htmlLink,
   adminBotToken, adminBotUsername, adminTelegram, adminBotLink, adminTelegramWebhookUrl
 };
