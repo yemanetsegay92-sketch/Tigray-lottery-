@@ -6,19 +6,12 @@ const tg=window.Telegram?.WebApp||null; if(tg){try{tg.ready();tg.expand()}catch{
 async function getBuyerTelegramLink(requestId){
   try{const r=await fetch('/api/telegram/buyer-link',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({requestId})});const j=await r.json();return j.ok?j.url:'';}catch{return '';}
 }
-async function notifyTelegramAdmins(requestId,proofUploadToken,screenshot){
+async function notifyTelegramAdmins(requestId,proofUploadToken){
   try{
     await fetch('/api/telegram/notify-admins',{
       method:'POST',
       headers:{'content-type':'application/json'},
-      body:JSON.stringify({
-        requestId,
-        proofUploadToken,
-        screenshotData:screenshot?.data||'',
-        screenshotBytes:Number(screenshot?.size||0),
-        screenshotOriginalBytes:Number(screenshot?.originalSize||0),
-        screenshotMime:screenshot?'image/jpeg':''
-      })
+      body:JSON.stringify({requestId,proofUploadToken})
     });
   }catch{}
 }
@@ -85,7 +78,7 @@ $('buyForm').addEventListener('submit',async e=>{
     const tgButton=buyerLink&&!telegramUser?`<p><a class="btn btn-primary" href="${esc(buyerLink)}" target="_blank" rel="noopener">🔔 Get Telegram notifications</a></p>`:'';
     $('buyForm').style.display='none';
     $('message').innerHTML=`<div class="success"><b>✓ ${t.requestReceived}</b><p>${t.pending}</p><p>${t.keepPhone}</p>${tgButton}<a class="btn btn-primary" href="check.html?lot=${encodeURIComponent(lot.id)}">${t.checkStatus}</a></div>`;
-    void notifyTelegramAdmins(requestId,proofUploadToken,compressedScreenshot?.mime==='application/pdf'?null:compressedScreenshot);
+    void notifyTelegramAdmins(requestId,proofUploadToken);
   }catch(err){
     console.error(err);$('message').innerHTML=`<div class="error">${esc(err.message||'Could not submit request.')}</div>`;btn.disabled=false;btn.textContent=t.submitRequest;
   }
