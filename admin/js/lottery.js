@@ -198,7 +198,7 @@ let activePrivateReceiptUrl=null;
 async function openPrivateReceipt(id,mime){
   try{
     const token=await auth.currentUser.getIdToken();
-    const response=await fetch('/api/admin/payment-proof?requestId='+encodeURIComponent(id),{
+    const response=await fetch('/api/admin/approvals?receipt=1&requestId='+encodeURIComponent(id),{
       headers:{authorization:'Bearer '+token},cache:'no-store'
     });
     if(!response.ok){
