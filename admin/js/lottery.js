@@ -191,6 +191,40 @@ function openScreenshotModal(id){
 function closeScreenshotModal(){
   const modal=$('screenshotModal');
   if(modal){modal.hidden=true;document.body.classList.remove('modal-open');}
+  if(activePrivateReceiptUrl){URL.revokeObjectURL(activePrivateReceiptUrl);activePrivateReceiptUrl=null;}
+}
+
+let activePrivateReceiptUrl=null;
+async function openPrivateReceipt(id,mime){
+  try{
+    const token=await auth.currentUser.getIdToken();
+    const response=await fetch('/api/admin/approvals?receipt=1&requestId='+encodeURIComponent(id),{
+      headers:{authorization:'Bearer '+token},cache:'no-store'
+    });
+    if(!response.ok){
+      let err={};try{err=await response.json()}catch{}
+      throw new Error(err.error||'Could not load payment receipt.');
+    }
+    const blob=await response.blob();
+    const url=URL.createObjectURL(blob);
+    if(mime==='application/pdf'){
+      const link=document.createElement('a');
+      link.href=url;link.download='payment-receipt-'+id+'.pdf';
+      document.body.appendChild(link);link.click();link.remove();
+      setTimeout(()=>URL.revokeObjectURL(url),30000);
+      return;
+    }
+    if(activePrivateReceiptUrl)URL.revokeObjectURL(activePrivateReceiptUrl);
+    activePrivateReceiptUrl=url;
+    ensureScreenshotModal();
+    $('screenshotViewer').src=url;
+    $('screenshotViewer').style.transform='scale(1)';
+    screenshotZoom=1;
+    $('downloadScreenshot').href=url;
+    $('downloadScreenshot').download='payment-receipt-'+id+'.jpg';
+    $('screenshotModal').hidden=false;
+    document.body.classList.add('modal-open');
+  }catch(error){alert(error.message||'Could not load payment receipt.')}
 }
 
 function renderPending(items,hasMore=false){
@@ -198,10 +232,11 @@ function renderPending(items,hasMore=false){
   window.__screenshotData=Object.create(null);
   items.forEach(x=>{if(x.screenshotData)window.__screenshotData[x.id]=x.screenshotData;});
   $('pendingCount').textContent=hasMore?`${items.length} shown · more pending requests`:`${items.length} pending`;
-  $('requests').innerHTML=items.map(x=>`<div class="request-card"><div class="card-head"><div><b>${esc(x.name)}</b> · ${esc(x.phone)}</div><span class="badge pending">PENDING</span></div><p>${Number(x.quantity||1)} ticket(s) · <b>${Number(x.total||0)} Birr</b>${x.reference?` · Ref ${esc(x.reference)}`:''}</p>${x.screenshotData?`<div class="screenshot-wrap"><button type="button" class="screenshot-preview" data-view-screenshot="${esc(x.id)}"><img src="${esc(normalizeScreenshot(x.screenshotData))}" alt="Payment screenshot"><span>Tap to view full size</span></button></div>`:''}<div class="actions"><button data-approve="${esc(x.id)}">✓ Approve & Assign</button><button class="danger" data-reject="${esc(x.id)}">✕ Reject</button></div></div>`).join('')||'<div class="success">No pending requests.</div>';
+  $('requests').innerHTML=items.map(x=>`<div class="request-card"><div class="card-head"><div><b>${esc(x.name)}</b> · ${esc(x.phone)}</div><span class="badge pending">PENDING</span></div><p>${Number(x.quantity||1)} ticket(s) · <b>${Number(x.total||0)} Birr</b>${x.reference?` · Ref ${esc(x.reference)}`:''}</p>${x.screenshotData?`<div class="screenshot-wrap"><button type="button" class="screenshot-preview" data-view-screenshot="${esc(x.id)}"><img src="${esc(normalizeScreenshot(x.screenshotData))}" alt="Payment screenshot"><span>Tap to view full size</span></button></div>`:''}${x.proofPath?`<div class="actions"><button type="button" class="secondary" data-private-proof="${esc(x.id)}" data-proof-mime="${esc(x.proofMime||'')}">📎 ${x.proofMime==='application/pdf'?'Download PDF receipt':'View payment screenshot'}</button></div>`:''}<div class="actions"><button data-approve="${esc(x.id)}">✓ Approve & Assign</button><button class="danger" data-reject="${esc(x.id)}">✕ Reject</button></div></div>`).join('')||'<div class="success">No pending requests.</div>';
   document.querySelectorAll('[data-approve]').forEach(b=>b.addEventListener('click',()=>approve(b.dataset.approve)));
   document.querySelectorAll('[data-reject]').forEach(b=>b.addEventListener('click',()=>reject(b.dataset.reject)));
   document.querySelectorAll('[data-view-screenshot]').forEach(b=>b.addEventListener('click',()=>openScreenshotModal(b.dataset.viewScreenshot)));
+  document.querySelectorAll('[data-private-proof]').forEach(b=>b.addEventListener('click',()=>openPrivateReceipt(b.dataset.privateProof,b.dataset.proofMime)));
 }
 
 function rows(data){return data.map(x=>({id:x.id,date:x.createdAt?.toDate?x.createdAt.toDate().toLocaleString():'',name:x.name||'',phone:x.phone||'',reference:x.reference||'',quantity:Number(x.quantity||0),total:Number(x.total||0),status:x.status||'',ticketNumbers:(x.ticketNumbers||[]).map(n=>String(n).padStart(6,'0')).join(' ')}))}

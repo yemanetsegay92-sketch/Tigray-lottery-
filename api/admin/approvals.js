@@ -1,6 +1,7 @@
 const crypto = require('crypto');
 const { adminDb, telegram, escapeHtml, telegramMiniAppUrl, FieldValue } = require('../telegram/_lib');
 const { getAuth } = require('firebase-admin/auth');
+const { getStorage } = require('firebase-admin/storage');
 
 function readBearer(req) {
   const h = String(req.headers?.authorization || '');
@@ -288,7 +289,61 @@ async function cancelApproval(db, caller, profile, requestId, reason) {
   }
 }
 
+
+const PRIVATE_RECEIPT_BUCKET = 'tigiray-lottery.firebasestorage.app';
+const MAX_RECEIPT_BYTES = 2 * 1024 * 1024;
+
+// Reuse the existing admin function to stay within Vercel Hobby's 12-function limit.
+// A Firebase ID token and lottery-level authorization are required for every download.
+async function servePaymentReceipt(req, res) {
+  res.setHeader('Cache-Control', 'private, no-store, max-age=0');
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  try {
+    const db = adminDb();
+    const { profile } = await authenticateAdmin(req, db);
+    const requestId = String(req.query?.requestId || '').trim();
+    if (!/^[a-f0-9]{40}$/.test(requestId)) {
+      return res.status(400).json({ ok: false, error: 'Invalid request ID.' });
+    }
+    const snapshot = await db.collection('ticketRequests').doc(requestId).get();
+    if (!snapshot.exists) return res.status(404).json({ ok: false, error: 'Request not found.' });
+    const request = snapshot.data() || {};
+    if (profile.role === 'lotteryAdmin') {
+      const allowedIds = Array.isArray(profile.lotteryIds) ? profile.lotteryIds : [];
+      if (!allowedIds.includes(String(request.lotteryId || ''))) {
+        return res.status(403).json({ ok: false, error: 'Not assigned to this lottery.' });
+      }
+    }
+    const path = String(request.proofPath || '');
+    const mime = String(request.proofMime || '');
+    if (!path.startsWith('payment-proofs/') ||
+      !['image/jpeg', 'image/png', 'image/webp', 'application/pdf'].includes(mime)) {
+      return res.status(404).json({ ok: false, error: 'No uploaded receipt for this request.' });
+    }
+    const [buffer] = await getStorage().bucket(PRIVATE_RECEIPT_BUCKET).file(path).download();
+    if (buffer.length > MAX_RECEIPT_BYTES) {
+      return res.status(413).json({ ok: false, error: 'Receipt too large.' });
+    }
+    const ext = mime === 'application/pdf' ? 'pdf' :
+      (mime === 'image/png' ? 'png' : (mime === 'image/webp' ? 'webp' : 'jpg'));
+    res.setHeader('Content-Type', mime);
+    res.setHeader('Content-Disposition', (mime === 'application/pdf' ? 'attachment' : 'inline') +
+      '; filename="payment-receipt-' + requestId + '.' + ext + '"');
+    return res.status(200).send(buffer);
+  } catch (error) {
+    const status = Number(error?.statusCode || 500);
+    if (status === 401 || status === 403) {
+      return res.status(status).json({ ok: false, error: 'Not authorized to view this receipt.' });
+    }
+    console.error('admin receipt', error);
+    return res.status(500).json({ ok: false, error: 'Could not retrieve receipt.' });
+  }
+}
+
 module.exports = async (req, res) => {
+  if (req.method === 'GET' && String(req.query?.receipt || '') === '1') {
+    return servePaymentReceipt(req, res);
+  }
   if (req.method !== 'POST') {
     return res.status(405).json({ ok: false, error: 'Method not allowed.' });
   }
