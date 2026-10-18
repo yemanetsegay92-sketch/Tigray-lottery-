@@ -36,7 +36,8 @@ $('screenshot')?.addEventListener('change',async e=>{
     if(isPdf){
       if(f.size>2*1024*1024)throw new Error('PDF receipt must be 2 MB or smaller.');
       const data=await readAsDataURL(f);
-      compressedScreenshot={data,size:f.size,originalSize:f.size,mime:'application/pdf'};
+      const normalizedData=data.replace(/^data:[^;,]*;base64,/i,'data:application/pdf;base64,');
+      compressedScreenshot={data:normalizedData,size:f.size,originalSize:f.size,mime:'application/pdf'};
     }else{
       if(!['image/jpeg','image/png','image/webp'].includes(f.type))throw new Error('Choose a JPG, PNG, WebP or PDF receipt.');
       compressedScreenshot={...await compressImage(f),mime:'image/jpeg'};
