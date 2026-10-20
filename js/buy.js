@@ -3,17 +3,8 @@ import { getDoc, doc } from 'https://www.gstatic.com/firebasejs/12.2.1/firebase-
 import { phoneHash, normalizePhone } from './phoneHash.js';
 const $=id=>document.getElementById(id);const esc=s=>String(s??'').replace(/[&<>\"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;',"'":'&#39;'}[c]));const lotId=new URLSearchParams(location.search).get('lot');let lot=null,compressedScreenshot=null;
 const tg=window.Telegram?.WebApp||null; if(tg){try{tg.ready();tg.expand()}catch{}}
-async function getBuyerTelegramLink(requestId){
-  try{const r=await fetch('/api/telegram/buyer-link',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({requestId})});const j=await r.json();return j.ok?j.url:'';}catch{return '';}
-}
-async function notifyTelegramAdmins(requestId,proofUploadToken){
-  try{
-    await fetch('/api/telegram/notify-admins',{
-      method:'POST',
-      headers:{'content-type':'application/json'},
-      body:JSON.stringify({requestId,proofUploadToken})
-    });
-  }catch{}
+async function getBuyerTelegramLink(requestId,buyerLinkToken){
+  try{const r=await fetch('/api/telegram/buyer-link',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({requestId,buyerLinkToken})});const j=await r.json();return j.ok?j.url:'';}catch{return '';}
 }
 const T={en:{navCheck:'Check Ticket',backHome:'← Back to lotteries',yourDetails:'Your details',detailsNote:'Use the same phone number you will use to check your ticket.',fullName:'Full name',phoneNumber:'Phone number',tickets:'Tickets',ticketsNote:'Choose 1–5 tickets.',paymentProof:'Payment proof',proofNote:'Enter a transaction number or upload a screenshot/PDF bank receipt. You can also provide both.',referenceNumber:'Transaction / reference number',paymentScreenshot:'Payment screenshot or PDF receipt',uploadHint:'Choose an image or PDF',or:'OR',proofRule:'Enter a transaction number OR attach a screenshot/PDF receipt. Both are accepted.',ticketPrice:'Ticket price',numberOfTickets:'Number of tickets',total:'Total',submitRequest:'Submit ticket request',manualNote:'Payment is verified manually. Ticket numbers are assigned after approval.',ticketPending:'Your ticket numbers are assigned after approval.',requestReceived:'Request received',pending:'Your request is waiting for payment verification.',keepPhone:'Keep your phone number. You can use it later to check your status.',checkStatus:'Check status',screenshotAdded:'Receipt attached',chooseImage:'Choose an image or PDF',requiredProof:'Enter a transaction reference OR attach a screenshot/PDF receipt.',lotUnavailable:'Lottery unavailable',goBack:'Go back'},ti:{navCheck:'መረጋገጺ ቲኬት',backHome:'← ናብ ሎተሪታት',yourDetails:'ዝርዝር ሓበሬታኻ',detailsNote:'ንምርግጋጽ ቲኬትካ እቲ ዝተጠቐምካሉ ቁጽሪ ስልኪ ተጠቐም።',fullName:'ምሉእ ስም',phoneNumber:'ቁጽሪ ስልኪ',tickets:'ቲኬት',ticketsNote:'1–5 ቲኬት ምረጽ።',paymentProof:'መረጋገጺ ክፍሊት',proofNote:'ቁጽሪ ግብይት ወይ ስክሪንሾት/PDF ናይ ባንኪ መረጋገጺ ኣቕርብ። ክልቲኦም እውን ትኽእል።',referenceNumber:'ቁጽሪ መረጋገጺ ግብሪ',paymentScreenshot:'ስክሪንሾት ወይ PDF ክፍሊት',uploadHint:'ስክሪንሾት ወይ PDF ምረጽ',or:'ወይ',proofRule:'ቁጽሪ ግብይት ወይ ስክሪንሾት/PDF ኣቕርብ። ክልቲኦም እውን ይፍቀዱ።',ticketPrice:'ዋጋ ሓደ ቲኬት',numberOfTickets:'ብዝሒ ቲኬት',total:'ጠቕላላ',submitRequest:'ሕቶ ቲኬት ልኣኽ',manualNote:'ክፍሊት ብኢድ ይረጋገጽ። ቁጽሪ ቲኬት ድሕሪ ምጽዳቕ ይረኽብ።',ticketPending:'ቁጽሪ ቲኬትካ ድሕሪ ምጽዳቕ ይምደብ።',requestReceived:'ሕቶ ተቐቢልና',pending:'ሕቶኻ ንምርግጋጽ ክፍሊት ይጽበ ኣሎ።',keepPhone:'ቁጽሪ ስልኪኻ ሓዞ። ንኩነታትካ ድሕሪ ግዜ ብእኡ ክትምርምር ትኽእል።',checkStatus:'ኩነታት ኣረጋግጽ',screenshotAdded:'መረጋገጺ ተወሲኹ',chooseImage:'ስክሪንሾት ወይ PDF ምረጽ',requiredProof:'ቁጽሪ ግብይት ወይ ስክሪንሾት/PDF ኣቕርብ።',lotUnavailable:'ሎተሪ ኣይርከብን',goBack:'ተመለስ'}};
 const lang=localStorage.getItem('tl_lang')||'ti',t=T[lang];function applyText(){document.documentElement.lang=lang==='ti'?'ti':'en';document.querySelectorAll('[data-i18n]').forEach(el=>{if(t[el.dataset.i18n])el.textContent=t[el.dataset.i18n]});const b=$('langToggle');if(b)b.textContent=lang==='en'?'ትግርኛ':'English'}$('langToggle')?.addEventListener('click',e=>{e.preventDefault();localStorage.setItem('tl_lang',lang==='en'?'ti':'en');location.reload()});applyText();
@@ -73,12 +64,11 @@ $('buyForm').addEventListener('submit',async e=>{
     const j=await r.json();
     if(!r.ok||!j.ok)throw new Error(j.error||'Could not submit request.');
     const requestId=j.requestId;
-    const proofUploadToken=String(j.proofUploadToken||'');
-    const buyerLink=await getBuyerTelegramLink(requestId);
+    const buyerLinkToken=String(j.buyerLinkToken||'');
+    const buyerLink=await getBuyerTelegramLink(requestId,buyerLinkToken);
     const tgButton=buyerLink&&!telegramUser?`<p><a class="btn btn-primary" href="${esc(buyerLink)}" target="_blank" rel="noopener">🔔 Get Telegram notifications</a></p>`:'';
     $('buyForm').style.display='none';
     $('message').innerHTML=`<div class="success"><b>✓ ${t.requestReceived}</b><p>${t.pending}</p><p>${t.keepPhone}</p>${tgButton}<a class="btn btn-primary" href="check.html?lot=${encodeURIComponent(lot.id)}">${t.checkStatus}</a></div>`;
-    void notifyTelegramAdmins(requestId,proofUploadToken);
   }catch(err){
     console.error(err);$('message').innerHTML=`<div class="error">${esc(err.message||'Could not submit request.')}</div>`;btn.disabled=false;btn.textContent=t.submitRequest;
   }

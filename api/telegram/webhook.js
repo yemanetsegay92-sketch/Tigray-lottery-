@@ -1,3 +1,4 @@
+const crypto = require('crypto');
 const { adminDb, telegram, telegramMiniAppUrl, FieldValue } = require('./_lib');
 
 function headerValue(req, name) {
@@ -99,7 +100,7 @@ module.exports = async function webhook(req, res) {
     console.log('Telegram update:', JSON.stringify({
       update_id: update?.update_id ?? null,
       keys: Object.keys(update || {}),
-      text: update?.message?.text || null,
+      text: /^\/start\s+r_[a-f0-9]{40}_[a-f0-9]{20}/.test(String(update?.message?.text || '')) ? '[buyer-link-redacted]' : (update?.message?.text || null),
       chat_id: update?.message?.chat?.id || null
     }));
 
@@ -134,24 +135,63 @@ module.exports = async function webhook(req, res) {
         return res.status(200).json({ ok: true, type: 'admin_start', connected: result.ok });
       }
 
-      if (parameter.startsWith('request_')) {
-        const requestId = parameter.slice(8);
-        const reqRef = db.collection('ticketRequests').doc(requestId);
-        const snap = await reqRef.get();
-        if (!snap.exists) {
-          await sendText(chatId, 'We could not find that ticket request. Please use the latest notification link from Tigray Lottery.');
-          return res.status(200).json({ ok: true, type: 'buyer_start', found: false });
+      // Do not link Telegram accounts using a publicly guessable request ID.
+      if (parameter.startsWith('r_')) {
+        const match = /^r_([a-f0-9]{40})_([a-f0-9]{20})$/.exec(parameter);
+        if (!match) {
+          await sendText(chatId, 'Invalid ticket notification link.');
+          return res.status(200).json({ ok: true, type: 'buyer_start', linked: false });
         }
-        await reqRef.set({
-          telegramChatId: chatId,
-          telegramUserId: String(msg.from?.id || ''),
-          telegramUsername: String(msg.from?.username || ''),
-          telegramConnectedAt: FieldValue.serverTimestamp()
-        }, { merge: true });
-        await sendText(chatId, '✅ Telegram notifications connected. We will notify you when your ticket request is approved or rejected.', {
-          inline_keyboard: [[{ text: '🎟 ቲኬት ይግዙ', web_app: { url: telegramMiniAppUrl() } }]]
+        const requestId = match[1];
+        const secretHash = crypto.createHash('sha256').update(match[2]).digest('hex');
+        const reqRef = db.collection('ticketRequests').doc(requestId);
+        const outcome = await db.runTransaction(async tx => {
+          const snap = await tx.get(reqRef);
+          if (!snap.exists) return { linked: false };
+          const x = snap.data() || {};
+          const stored = String(x.buyerLinkTokenHash || '');
+          if (stored.length !== secretHash.length ||
+              !crypto.timingSafeEqual(Buffer.from(stored), Buffer.from(secretHash))) {
+            return { linked: false };
+          }
+          if (x.telegramChatId && String(x.telegramChatId) !== chatId) return { linked: false };
+          let jobRef = null, jobSnap = null;
+          if (['approved', 'rejected', 'cancelled'].includes(x.status)) {
+            jobRef = db.collection('buyerNotificationQueue').doc(requestId + '_' + x.status);
+            jobSnap = await tx.get(jobRef);
+          }
+          tx.update(reqRef, {
+            telegramChatId: chatId,
+            telegramUserId: String(msg.from?.id || ''),
+            telegramUsername: String(msg.from?.username || ''),
+            telegramConnectedAt: FieldValue.serverTimestamp(),
+            buyerLinkTokenHash: FieldValue.delete()
+          });
+          if (jobRef) {
+            if (!jobSnap.exists) {
+              tx.create(jobRef, {
+                requestId, lotteryId: String(x.lotteryId || ''), decision: x.status,
+                state: 'pending', attempts: 0,
+                nextAttemptAt: FieldValue.serverTimestamp(),
+                createdAt: FieldValue.serverTimestamp()
+              });
+            } else if (jobSnap.data().state === 'waitingForLink') {
+              tx.update(jobRef, {
+                state: 'pending', nextAttemptAt: FieldValue.serverTimestamp()
+              });
+            }
+          }
+          return { linked: true };
         });
-        return res.status(200).json({ ok: true, type: 'buyer_start', found: true });
+        await sendText(chatId, outcome.linked
+          ? '✅ Ticket notifications connected. We will message you when your payment is approved or rejected. If it has already been reviewed, your update is on its way.'
+          : '⚠️ This notification link is invalid, expired or already used.');
+        return res.status(200).json({ ok: true, type: 'buyer_start', linked: outcome.linked });
+      }
+
+      if (parameter.startsWith('request_')) {
+        await sendText(chatId, 'For security, older notification links are no longer accepted. Please generate a new ticket request on the website if you need to connect Telegram.');
+        return res.status(200).json({ ok: true, type: 'buyer_start', linked: false, reason: 'legacy_link_disabled' });
       }
 
       await sendWelcome(chatId);

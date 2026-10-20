@@ -17,6 +17,8 @@ async function notifyBuyer(requestId){
     });
     const j = await r.json();
     if(j.ok && j.sent) $('message').innerHTML='<div class="success">Buyer Telegram notification sent.</div>';
+    else if(j.ok && j.waitingForLink) $('message').innerHTML='<div class="success">Decision saved; buyer can connect Telegram to receive the notification.</div>';
+    else if(!r.ok || !j.ok) console.warn('Buyer Telegram notification remains queued:',j.error||r.status);
   }catch(e){ console.warn('Buyer Telegram notification failed:',e.message); }
 }
 
@@ -354,23 +356,23 @@ async function editLottery(){const name=prompt('Lottery name',lot.name);if(name=
 
 async function reject(id){
   if(!confirm('Reject this payment request?'))return;
+  const reason=prompt('Reason for rejection (for the customer):\n1. Reference not found\n2. Payment amount incorrect\n3. Screenshot unclear\n4. Duplicate request\n5. Other','Reference not found');
+  if(reason===null)return;
+  const cleaned=reason.trim();
+  if(!cleaned)return alert('Please provide a rejection reason.');
   try{
-    const r=doc(db,'ticketRequests',id),s=await getDoc(r);if(!s.exists())throw new Error('Request not found.');const x=s.data();if(x.status!=='pending')throw new Error('This request has already been reviewed.');if(x.lotteryId!==lot.id)throw new Error('Not authorized for this lottery.');
-    const reason=prompt('Reason for rejection (for the customer):\n1. Reference not found\n2. Payment amount incorrect\n3. Screenshot unclear\n4. Duplicate request\n5. Other','Reference not found');if(reason===null)return;
-    const cleaned=reason.trim()||'Payment could not be verified.';
-    await updateDoc(r,{status:'rejected',rejectionReason:cleaned,reviewedBy:me.uid,reviewedAt:serverTimestamp()});
-    const h=await phoneHash(x.phone||'');
-    if(h){const pub=doc(db,'publicStatus',h,'requests',id);const ps=await getDoc(pub);if(ps.exists())await updateDoc(pub,{status:'rejected',rejectionReason:cleaned,reviewedAt:serverTimestamp()});}
-    await addDoc(collection(db,'auditLogs'),{action:'rejectRequest',lotteryId:lot.id,requestId:id,adminId:me.uid,rejectionReason:cleaned,createdAt:serverTimestamp()});
-    pendingTotal=Math.max(0,pendingTotal-1);
-    const button=document.querySelector(`[data-reject="${CSS.escape(id)}"]`);
-    button?.closest('.request-card')?.remove();
-    $('statPending').textContent=pendingTotal;
-    $('statRejected').textContent=Number($('statRejected').textContent||0)+1;
-    $('pendingCount').textContent=pendingTotal>0?`${Math.min(50,pendingTotal)} shown · ${pendingTotal} pending`:'0 pending';
-    $('message').innerHTML='<div class="success">Payment request rejected.</div>';
+    const token=await auth.currentUser.getIdToken();
+    const response=await fetch('/api/admin/approvals',{
+      method:'POST',
+      headers:{'content-type':'application/json','authorization':'Bearer '+token},
+      body:JSON.stringify({action:'reject',requestId:id,lotteryId:lot.id,reason:cleaned})
+    });
+    const result=await response.json();
+    if(!response.ok||!result.ok)throw new Error(result.error||'Could not reject request.');
+    await renderAll();
+    $('message').innerHTML='<div class="success">Payment request rejected. Buyer notification queued.</div>';
     await notifyBuyer(id);
-  }catch(e){$('message').innerHTML=`<div class="error">${esc(e.message)}</div>`}
+  }catch(error){$('message').innerHTML='<div class="error">'+esc(error.message)+'</div>';}
 }
 
 async function cancelApproval(id){
@@ -384,6 +386,7 @@ async function cancelApproval(id){
     if(!r.ok||!j.ok)throw new Error(j.error||'Could not cancel this approval.');
     $('message').innerHTML='<div class="success">Approval cancelled. The assigned ticket numbers have been released and will not be reused.</div>';
     await renderAll();
+    await notifyBuyer(id);
   }catch(e){console.error(e);$('message').innerHTML=`<div class="error">${esc(e.message)}</div>`}
 }
 
