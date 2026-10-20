@@ -386,6 +386,7 @@ async function cancelApproval(id){
     if(!r.ok||!j.ok)throw new Error(j.error||'Could not cancel this approval.');
     $('message').innerHTML='<div class="success">Approval cancelled. The assigned ticket numbers have been released and will not be reused.</div>';
     await renderAll();
+    await notifyBuyer(id);
   }catch(e){console.error(e);$('message').innerHTML=`<div class="error">${esc(e.message)}</div>`}
 }
 
