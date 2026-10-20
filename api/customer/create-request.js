@@ -91,6 +91,8 @@ module.exports = async (req, res) => {
       ? sha256('REF:' + reference.toUpperCase()).slice(0, 40)
       : sha256('PROOF:' + proof.digest).slice(0, 40);
     const proofUploadToken = crypto.randomBytes(32).toString('hex');
+    // Short, single-use secret for a Telegram deep link (64-character start-parameter limit).
+    const buyerLinkToken = crypto.randomBytes(10).toString('hex');
     const requestRef = db.collection('ticketRequests').doc(requestId);
     const phoneHash = sha256(phone);
     const publicRef = db.collection('publicStatus').doc(phoneHash).collection('requests').doc(requestId);
@@ -98,6 +100,7 @@ module.exports = async (req, res) => {
       lotteryId, lotteryName: String(lottery.name || lotteryId), name, phone, reference,
       quantity, price, total, status: 'pending', ticketNumbers: [],
       phoneHash, proofUploadTokenHash: sha256(proofUploadToken),
+      buyerLinkTokenHash: sha256(buyerLinkToken),
       createdAt: FieldValue.serverTimestamp()
     };
     if (telegramUser) {
@@ -146,7 +149,7 @@ module.exports = async (req, res) => {
       if (file) { try { await file.delete({ ignoreNotFound: true }); } catch (cleanupError) { console.error('proof cleanup failed', cleanupError); } }
       throw error;
     }
-    return res.status(200).json({ ok: true, created: true, requestId, total, proofUploadToken });
+    return res.status(200).json({ ok: true, created: true, requestId, total, proofUploadToken, buyerLinkToken });
   } catch (error) {
     if (error?.message === 'DUPLICATE_REFERENCE') {
       return res.status(409).json({ ok: false, error: 'This payment reference or receipt has already been submitted.' });
