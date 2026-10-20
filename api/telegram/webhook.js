@@ -100,7 +100,7 @@ module.exports = async function webhook(req, res) {
     console.log('Telegram update:', JSON.stringify({
       update_id: update?.update_id ?? null,
       keys: Object.keys(update || {}),
-      text: update?.message?.text || null,
+      text: /^\/start\s+r_[a-f0-9]{40}_[a-f0-9]{20}/.test(String(update?.message?.text || '')) ? '[buyer-link-redacted]' : (update?.message?.text || null),
       chat_id: update?.message?.chat?.id || null
     }));
 
