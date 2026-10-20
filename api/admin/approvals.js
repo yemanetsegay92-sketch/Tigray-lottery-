@@ -1,5 +1,5 @@
 const crypto = require('crypto');
-const { adminDb, telegram, escapeHtml, telegramMiniAppUrl, FieldValue } = require('../telegram/_lib');
+const { adminDb, FieldValue } = require('../telegram/_lib');
 const { getAuth } = require('firebase-admin/auth');
 const { getStorage } = require('firebase-admin/storage');
 
@@ -131,6 +131,11 @@ async function approveRequest(db, caller, profile, requestId, requestedLotteryId
     tx.update(lotteryRef, {
       nextTicketNumber: last + 1
     });
+    // The decision and the retryable notification are committed atomically.
+    tx.create(db.collection('buyerNotificationQueue').doc(requestId + '_approved'), {
+      requestId, lotteryId, decision: 'approved', state: 'pending',
+      attempts: 0, nextAttemptAt: now, createdAt: now
+    });
 
     const publicRef = db
       .collection('publicStatus')
@@ -216,6 +221,10 @@ async function cancelApproval(db, caller, profile, requestId, reason) {
       );
     }
 
+    tx.create(db.collection('buyerNotificationQueue').doc(requestId + '_cancelled'), {
+      requestId, lotteryId, decision: 'cancelled', state: 'pending',
+      attempts: 0, nextAttemptAt: now, createdAt: now
+    });
     tx.update(requestRef, {
       status: 'cancelled',
       cancelledAt: now,
@@ -256,88 +265,41 @@ async function cancelApproval(db, caller, profile, requestId, reason) {
     };
   });
 
-  if (notification?.chatId) {
-    try {
-      const formattedNumbers = notification.numbers
-        .map(n => String(n).padStart(6, '0'))
-        .join(', ');
 
-      await telegram('sendMessage', {
-        chat_id: notification.chatId,
-        text: [
-          '⚠️ <b>Your previously approved ticket request has been cancelled.</b>',
-          '',
-          `<b>Lottery:</b> ${escapeHtml(notification.lottery)}`,
-          `<b>Ticket numbers:</b> <b>${escapeHtml(formattedNumbers)}</b>`,
-          '',
-          `Reason: ${escapeHtml(reason)}`,
-          '',
-          'Please check your ticket status for details.'
-        ].join('\n'),
-        parse_mode: 'HTML',
-        disable_web_page_preview: true,
-        reply_markup: {
-          inline_keyboard: [[{
-            text: '🔎 Check Ticket Status',
-            web_app: { url: telegramMiniAppUrl() }
-          }]]
-        }
-      });
-    } catch (error) {
-      console.warn('Cancellation buyer Telegram notification failed:', error.message);
-    }
-  }
 }
 
 
-const PRIVATE_RECEIPT_BUCKET = 'tigiray-lottery.firebasestorage.app';
-const MAX_RECEIPT_BYTES = 2 * 1024 * 1024;
-
-// Reuse the existing admin function to stay within Vercel Hobby's 12-function limit.
-// A Firebase ID token and lottery-level authorization are required for every download.
-async function servePaymentReceipt(req, res) {
-  res.setHeader('Cache-Control', 'private, no-store, max-age=0');
-  res.setHeader('X-Content-Type-Options', 'nosniff');
-  try {
-    const db = adminDb();
-    const { profile } = await authenticateAdmin(req, db);
-    const requestId = String(req.query?.requestId || '').trim();
-    if (!/^[a-f0-9]{40}$/.test(requestId)) {
-      return res.status(400).json({ ok: false, error: 'Invalid request ID.' });
+async function rejectRequest(db, caller, profile, requestId, requestedLotteryId, reason) {
+  await db.runTransaction(async tx => {
+    const ref = db.collection('ticketRequests').doc(requestId);
+    const snap = await tx.get(ref);
+    if (!snap.exists) throw new Error('Request not found.');
+    const request = snap.data() || {};
+    const lotteryId = String(request.lotteryId || '');
+    if (requestedLotteryId && requestedLotteryId !== lotteryId) {
+      throw new Error('Request does not belong to the selected lottery.');
     }
-    const snapshot = await db.collection('ticketRequests').doc(requestId).get();
-    if (!snapshot.exists) return res.status(404).json({ ok: false, error: 'Request not found.' });
-    const request = snapshot.data() || {};
-    if (profile.role === 'lotteryAdmin') {
-      const allowedIds = Array.isArray(profile.lotteryIds) ? profile.lotteryIds : [];
-      if (!allowedIds.includes(String(request.lotteryId || ''))) {
-        return res.status(403).json({ ok: false, error: 'Not assigned to this lottery.' });
-      }
-    }
-    const path = String(request.proofPath || '');
-    const mime = String(request.proofMime || '');
-    if (!path.startsWith('payment-proofs/') ||
-      !['image/jpeg', 'image/png', 'image/webp', 'application/pdf'].includes(mime)) {
-      return res.status(404).json({ ok: false, error: 'No uploaded receipt for this request.' });
-    }
-    const [buffer] = await getStorage().bucket(PRIVATE_RECEIPT_BUCKET).file(path).download();
-    if (buffer.length > MAX_RECEIPT_BYTES) {
-      return res.status(413).json({ ok: false, error: 'Receipt too large.' });
-    }
-    const ext = mime === 'application/pdf' ? 'pdf' :
-      (mime === 'image/png' ? 'png' : (mime === 'image/webp' ? 'webp' : 'jpg'));
-    res.setHeader('Content-Type', mime);
-    res.setHeader('Content-Disposition', (mime === 'application/pdf' ? 'attachment' : 'inline') +
-      '; filename="payment-receipt-' + requestId + '.' + ext + '"');
-    return res.status(200).send(buffer);
-  } catch (error) {
-    const status = Number(error?.statusCode || 500);
-    if (status === 401 || status === 403) {
-      return res.status(status).json({ ok: false, error: 'Not authorized to view this receipt.' });
-    }
-    console.error('admin receipt', error);
-    return res.status(500).json({ ok: false, error: 'Could not retrieve receipt.' });
-  }
+    assertLotteryAccess(profile, lotteryId);
+    if (request.status !== 'pending') throw new Error('This request has already been reviewed.');
+    const now = FieldValue.serverTimestamp();
+    tx.update(ref, {
+      status: 'rejected', rejectionReason: reason,
+      reviewedBy: caller.uid, reviewedAt: now
+    });
+    const phone = normalizePhone(request.phone);
+    const phoneHash = String(request.phoneHash || sha256(phone));
+    tx.set(db.collection('publicStatus').doc(phoneHash).collection('requests').doc(requestId), {
+      lotteryId, status: 'rejected', rejectionReason: reason, reviewedAt: now
+    }, { merge: true });
+    tx.create(db.collection('buyerNotificationQueue').doc(requestId + '_rejected'), {
+      requestId, lotteryId, decision: 'rejected', state: 'pending',
+      attempts: 0, nextAttemptAt: now, createdAt: now
+    });
+    tx.create(db.collection('auditLogs').doc(), {
+      action: 'rejectRequest', lotteryId, requestId, adminId: caller.uid,
+      rejectionReason: reason, createdAt: now
+    });
+  });
 }
 
 module.exports = async (req, res) => {
@@ -358,8 +320,8 @@ module.exports = async (req, res) => {
       return res.status(400).json({ ok: false, error: 'requestId is required.' });
     }
 
-    if (!['approve', 'cancel'].includes(action)) {
-      return res.status(400).json({ ok: false, error: 'action must be approve or cancel.' });
+    if (!['approve', 'reject', 'cancel'].includes(action)) {
+      return res.status(400).json({ ok: false, error: 'action must be approve, reject, or cancel.' });
     }
 
     const db = adminDb();
@@ -381,6 +343,12 @@ module.exports = async (req, res) => {
       });
     }
 
+    if (action === 'reject') {
+      const reason = String(body.reason || '').trim().slice(0, 300);
+      if (!reason) return res.status(400).json({ ok: false, error: 'Rejection reason required.' });
+      await rejectRequest(db, caller, profile, requestId, requestedLotteryId, reason);
+      return res.status(200).json({ ok: true, rejected: true });
+    }
     const reason = String(
       body.reason || 'Approved in error.'
     ).trim().slice(0, 300) || 'Approved in error.';
