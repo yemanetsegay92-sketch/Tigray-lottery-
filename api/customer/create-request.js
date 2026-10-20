@@ -2,7 +2,34 @@ const crypto = require('crypto');
 const { getStorage } = require('firebase-admin/storage');
 const { adminDb, validateTelegramInitData, FieldValue } = require('../telegram/_lib');
 
-const BUCKET = 'tigiray-lottery.firebasestorage.app';
+const PRODUCTION_BUCKET = 'tigiray-lottery.firebasestorage.app';
+const PRODUCTION_PROJECT = 'tigiray-lottery';
+const IS_STAGING = process.env.LOAD_TEST_STAGING === 'true';
+function stagingConfig() {
+  if (!IS_STAGING) return { bucket: PRODUCTION_BUCKET };
+  let serviceAccount;
+  try { serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT_JSON || ''); }
+  catch { throw new Error('Staging requires a valid FIREBASE_SERVICE_ACCOUNT_JSON.'); }
+  const bucket = String(process.env.FIREBASE_STORAGE_BUCKET || '');
+  const projectId = String(serviceAccount.project_id || '');
+  const secret = String(process.env.STAGING_TEST_SECRET || '');
+  const lotteryId = String(process.env.STAGING_LOTTERY_ID || '');
+  if (!projectId || projectId === PRODUCTION_PROJECT ||
+      !bucket || bucket === PRODUCTION_BUCKET ||
+      !(bucket.endsWith('.firebasestorage.app') || bucket.endsWith('.appspot.com')) ||
+      secret.length < 32 || !/^loadtest-[a-z0-9-]+$/.test(lotteryId)) {
+    throw new Error('Unsafe staging setup: use a separate Firebase project, bucket, long secret and loadtest- lottery ID.');
+  }
+  return { bucket, projectId, secret, lotteryId };
+}
+function stagingAuthorized(req, config) {
+  if (!IS_STAGING) return true;
+  const supplied = String(req.headers?.['x-tigray-staging-secret'] || '');
+  const left = Buffer.from(config.secret);
+  const right = Buffer.from(supplied);
+  return left.length === right.length && crypto.timingSafeEqual(left, right);
+}
+
 const MAX_IMAGE_BYTES = 420 * 1024;
 const MAX_PDF_BYTES = 2 * 1024 * 1024;
 
@@ -57,9 +84,25 @@ function decodePaymentProof(dataUrl) {
 }
 
 module.exports = async (req, res) => {
-  if (req.method !== 'POST') return res.status(405).json({ ok: false, error: 'Method not allowed.' });
   try {
+    const stage = stagingConfig();
+    res.setHeader('Cache-Control', 'no-store');
+    if (IS_STAGING && req.method === 'GET' && String(req.query?.probe || '') === '1') {
+      if (!stagingAuthorized(req, stage)) return res.status(401).json({ ok: false });
+      return res.status(200).json({
+        ok: true, mode: 'isolated-staging', projectId: stage.projectId,
+        bucket: stage.bucket, lotteryId: stage.lotteryId,
+        telegramDisabled: true
+      });
+    }
+    if (req.method !== 'POST') return res.status(405).json({ ok: false, error: 'Method not allowed.' });
+    if (!stagingAuthorized(req, stage)) {
+      return res.status(401).json({ ok: false, error: 'Staging test secret required.' });
+    }
     const body = readBody(req);
+    if (IS_STAGING && (String(body.lotteryId || '') !== stage.lotteryId || body.telegramInitData)) {
+      return res.status(403).json({ ok: false, error: 'Staging accepts only the configured test lottery without Telegram.' });
+    }
     const lotteryId = String(body.lotteryId || '').trim();
     const name = String(body.name || '').trim();
     const phone = normalizePhone(body.phone);
@@ -115,7 +158,7 @@ module.exports = async (req, res) => {
       const safeLotteryId = encodeURIComponent(lotteryId);
       const path = 'payment-proofs/' + safeLotteryId + '/' + requestId + '-' +
         crypto.randomBytes(8).toString('hex') + '.' + proof.ext;
-      file = getStorage().bucket(BUCKET).file(path);
+      file = getStorage().bucket(stage.bucket).file(path);
       await file.save(proof.bytes, {
         resumable: false,
         contentType: proof.mime,
