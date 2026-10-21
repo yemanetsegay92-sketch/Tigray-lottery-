@@ -21,7 +21,7 @@ async function uploadPrivateReceipt(lotteryId, receipt) {
   // All signed policy fields precede the file, which must be the final form part.
   for(const [name,value] of Object.entries(policy.fields||{}))form.append(name,value);
   const filename=receipt.mime==='application/pdf'?'receipt.pdf':'receipt.jpg';
-  form.append('file',receipt.blob,filename);
+  form.append('file',new Blob([receipt.blob],{type:receipt.mime}),filename);
   let uploaded;
   try{uploaded=await fetch(policy.uploadUrl,{method:'POST',body:form,mode:'cors'});}
   catch{throw new Error('Direct upload failed. Check your connection and Firebase Storage CORS configuration.');}
