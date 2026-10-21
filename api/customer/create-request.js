@@ -1,6 +1,6 @@
 const crypto = require('crypto');
 const { getStorage } = require('firebase-admin/storage');
-const { verifyToken, validateStagedFile, sha256: proofHash } = require('./_receipt-upload');
+const { BUCKET: PRIVATE_BUCKET, TYPES, POLICY_TTL_MS, FINISH_TTL_MS, signToken, receiptPath, verifyToken, validateStagedFile, sha256: proofHash } = require('./_receipt-upload');
 const { adminDb, validateTelegramInitData, FieldValue } = require('../telegram/_lib');
 
 const BUCKET = 'tigiray-lottery.firebasestorage.app';
@@ -18,10 +18,52 @@ function readBody(req) {
 function badRequest(message) {
   return Object.assign(new Error(message), { statusCode: 400 });
 }
+// Same function handles authorization and checkout to fit Vercel Hobby's
+// 12-serverless-functions deployment limit.
+async function authorizeReceiptUpload(body, res) {
+  const lotteryId = String(body.lotteryId || '').trim();
+  const mime = String(body.mime || '').toLowerCase().trim();
+  const size = Number(body.bytes);
+  if (!/^[a-zA-Z0-9_-]{1,128}$/.test(lotteryId)) throw badRequest('Invalid lottery ID.');
+  if (!TYPES[mime]) throw badRequest('Choose a JPG, PNG, WebP or PDF receipt.');
+  if (!Number.isInteger(size) || size < 1 || size > TYPES[mime].max) {
+    throw badRequest('Receipt is too large. Images: 420 KB maximum; PDF: 2 MB maximum.');
+  }
+  const db = adminDb();
+  const snap = await db.collection('lotteries').doc(lotteryId).get();
+  if (!snap.exists || snap.data()?.status !== 'active') throw badRequest('Lottery is not open.');
+  const session = crypto.randomBytes(16).toString('hex');
+  const path = receiptPath(lotteryId, session, TYPES[mime].ext);
+  const [policy] = await getStorage().bucket(PRIVATE_BUCKET).file(path).generateSignedPostPolicyV4({
+    expires: Date.now() + POLICY_TTL_MS,
+    fields: {
+      'Content-Type': mime,
+      'success_action_status': '204',
+      'x-goog-meta-proofsession': session
+    },
+    conditions: [
+      // Small allowance for multipart boundary/metadata. Stored object strictly
+      // checked against 420 KB / 2 MB maximum on finalize.
+      ['content-length-range', 1, TYPES[mime].max + 64 * 1024],
+      ['eq', '$Content-Type', mime],
+      ['eq', '$x-goog-meta-proofsession', session]
+    ]
+  });
+  const proofUploadToken = signToken({
+    v: 1, lotteryId, mime, session, path, exp: Date.now() + FINISH_TTL_MS
+  });
+  return res.status(200).json({
+    ok: true, uploadUrl: policy.url, fields: policy.fields,
+    proofUploadToken, expiresInSeconds: POLICY_TTL_MS / 1000
+  });
+}
+
 module.exports = async (req, res) => {
   if (req.method !== 'POST') return res.status(405).json({ ok: false, error: 'Method not allowed.' });
   try {
     const body = readBody(req);
+    res.setHeader('Cache-Control','no-store');
+    if (body.action === 'authorize-receipt-upload') return await authorizeReceiptUpload(body, res);
     const lotteryId = String(body.lotteryId || '').trim();
     const name = String(body.name || '').trim();
     const phone = normalizePhone(body.phone);
