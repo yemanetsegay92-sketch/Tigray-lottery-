@@ -4,8 +4,6 @@ const { verifyToken, validateStagedFile, sha256: proofHash } = require('./_recei
 const { adminDb, validateTelegramInitData, FieldValue } = require('../telegram/_lib');
 
 const BUCKET = 'tigiray-lottery.firebasestorage.app';
-const MAX_IMAGE_BYTES = 420 * 1024;
-const MAX_PDF_BYTES = 2 * 1024 * 1024;
 
 function normalizePhone(phone) {
   return String(phone || '').replace(/[^0-9+]/g, '').replace(/^\+251/, '0').trim();
@@ -20,43 +18,6 @@ function readBody(req) {
 function badRequest(message) {
   return Object.assign(new Error(message), { statusCode: 400 });
 }
-function decodePaymentProof(dataUrl) {
-  if (!dataUrl) return null;
-  if (typeof dataUrl !== 'string' || dataUrl.length > 3 * 1024 * 1024) {
-    throw badRequest('Payment receipt exceeds the upload size limit.');
-  }
-  const match = dataUrl.match(/^data:(image\/jpeg|image\/png|image\/webp|application\/pdf);base64,([A-Za-z0-9+/=]+)$/i);
-  if (!match) throw badRequest('Upload a JPG, PNG, WebP or PDF receipt.');
-  const mime = match[1].toLowerCase();
-  const encoded = match[2];
-  const bytes = Buffer.from(encoded, 'base64');
-  if (!bytes.length || bytes.toString('base64').replace(/=+$/, '') !== encoded.replace(/=+$/, '')) {
-    throw badRequest('Receipt data is invalid.');
-  }
-  const max = mime === 'application/pdf' ? MAX_PDF_BYTES : MAX_IMAGE_BYTES;
-  if (bytes.length > max) throw badRequest(mime === 'application/pdf' ?
-    'PDF receipt is too large (maximum 2 MB).' : 'Compressed image is too large (maximum 420 KB).');
-  let valid = false;
-  let ext = 'jpg';
-  if (mime === 'application/pdf') {
-    valid = bytes.subarray(0, 5).toString('latin1') === '%PDF-' &&
-      bytes.subarray(Math.max(0, bytes.length - 2048)).includes(Buffer.from('%%EOF'));
-    ext = 'pdf';
-  } else if (mime === 'image/jpeg') {
-    valid = bytes.length >= 3 && bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff;
-  } else if (mime === 'image/png') {
-    valid = bytes.length >= 8 &&
-      bytes.subarray(0, 8).equals(Buffer.from([137,80,78,71,13,10,26,10]));
-    ext = 'png';
-  } else if (mime === 'image/webp') {
-    valid = bytes.length >= 12 && bytes.toString('ascii', 0, 4) === 'RIFF' &&
-      bytes.toString('ascii', 8, 12) === 'WEBP';
-    ext = 'webp';
-  }
-  if (!valid) throw badRequest('Receipt file does not match its declared format.');
-  return { bytes, mime, ext, digest: sha256(bytes) };
-}
-
 module.exports = async (req, res) => {
   if (req.method !== 'POST') return res.status(405).json({ ok: false, error: 'Method not allowed.' });
   try {
