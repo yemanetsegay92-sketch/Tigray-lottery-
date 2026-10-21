@@ -170,7 +170,7 @@ module.exports = async (req, res) => {
     if (error?.message === 'DUPLICATE_REFERENCE' || error?.code === 6 || error?.code === 'already-exists') {
       return res.status(409).json({ ok: false, error: 'This payment reference or receipt has already been submitted.' });
     }
-    if (error?.statusCode === 400) return res.status(400).json({ ok: false, error: error.message });
+    if (Number(error?.statusCode) >= 400 && Number(error?.statusCode) < 500) return res.status(error.statusCode).json({ ok: false, error: error.message });
     console.error('create-request error:', error);
     return res.status(500).json({ ok: false, error: 'Could not submit request. Please try again.' });
   }
