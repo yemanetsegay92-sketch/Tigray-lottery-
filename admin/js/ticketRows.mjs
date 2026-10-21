@@ -22,7 +22,7 @@ export function expandApprovedTicketRows(purchases) {
     const configuredPrice = Number(purchase.price);
     const price = Number.isFinite(configuredPrice) && configuredPrice > 0
       ? configuredPrice
-      : (Number.isFinite(total) && Number.isFinite(qty) && qty > 0 ? total / qty : 0);
+      : (Number.isFinite(total) && Number.isFinite(qty) && qty > 0 ? total / qty : NaN);
     const date = purchase.createdAt?.toDate
       ? purchase.createdAt.toDate().toLocaleString()
       : '';
@@ -47,16 +47,22 @@ export function expandApprovedTicketRows(purchases) {
 
 export function ticketRowValues(row) {
   return [row.date, row.name, row.phone, row.reference,
-    row.ticketNumber, row.price, row.purchaseQuantity, row.requestId];
+    row.ticketNumber, Number.isFinite(row.price) ? row.price : '', row.purchaseQuantity, row.requestId];
+}
+
+// Prevent spreadsheet programs from evaluating user-supplied text as formulas.
+function spreadsheetCell(value) {
+  const valueText = String(value ?? '').replace(/[\r\n\t]/g, ' ');
+  return /^\s*[=+\-@]/.test(valueText) ? "'" + valueText : valueText;
 }
 
 export function ticketRowsToTsv(rows) {
   return [TICKET_HEADERS, ...rows.map(ticketRowValues)]
-    .map(columns => columns.map(x => String(x ?? '').replace(/[\t\r\n]/g, ' ')).join('\t')).join('\n');
+    .map(columns => columns.map(spreadsheetCell).join('\t')).join('\n');
 }
 
 export function ticketRowsToCsv(rows) {
-  const quote = value => '"' + String(value ?? '').replace(/[\r\n]/g, ' ').replace(/"/g, '""') + '"';
+  const quote = value => '"' + spreadsheetCell(value).replace(/"/g, '""') + '"';
   return '\ufeff' + [TICKET_HEADERS, ...rows.map(ticketRowValues)]
     .map(columns => columns.map(quote).join(',')).join('\n');
 }
