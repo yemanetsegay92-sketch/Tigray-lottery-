@@ -307,7 +307,7 @@ async function rejectRequest(db, caller, profile, requestId, requestedLotteryId,
 // tickets, lottery counters, publicStatus, auditLogs or Telegram queues.
 const SHADOW_LOTTERY_ID = 'SmHhy38Cn6mnEHjjtPZl';
 function shadowApprovalConfig(req) {
-  if (process.env.LIVE_SHADOW_TEST_ENABLED !== 'true') return null;
+  if (process.env.LIVE_SHADOW_TEST_ENABLED !== 'true' || process.env.VERCEL_ENV !== 'preview') return null;
   const secret = String(process.env.LIVE_SHADOW_TEST_SECRET || '');
   const supplied = String(req.headers?.['x-tigray-shadow-secret'] || '');
   const a = Buffer.from(secret), b = Buffer.from(supplied);
@@ -413,6 +413,10 @@ module.exports = async (req, res) => {
       const result = await approveShadowRequest(adminDb(), shadow, Number(body.shadowSequence));
       res.setHeader('Cache-Control', 'no-store');
       return res.status(200).json({ ok: true, mode: 'live-shadow-approval', ...result });
+    }
+
+    if (process.env.LIVE_SHADOW_TEST_ENABLED === 'true' && process.env.VERCEL_ENV === 'preview') {
+      return res.status(404).json({ ok: false, error: 'Preview accepts only synthetic test approvals.' });
     }
 
     if (!requestId) {
