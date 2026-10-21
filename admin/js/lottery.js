@@ -206,28 +206,33 @@ async function findPaymentByReference(event){
   button.textContent='Searching…';
   result.innerHTML='<p class="muted">Looking up the exact payment reference…</p>';
   try {
-    const source=new TextEncoder().encode('REF:'+reference.toUpperCase());
-    const digest=await crypto.subtle.digest('SHA-256',source);
-    const requestId=Array.from(new Uint8Array(digest),x=>x.toString(16).padStart(2,'0')).join('').slice(0,40);
-    const snap=await getDoc(doc(db,'ticketRequests',requestId));
-    if(!snap.exists() || snap.data().lotteryId!==lot.id){
-      result.innerHTML='<div class="error">No request found for that reference in the selected lottery. Check the spelling and selected lottery.</div>';
+    const token=await auth.currentUser.getIdToken();
+    const response=await fetch('/api/admin/approvals',{
+      method:'POST',
+      headers:{'content-type':'application/json','authorization':'Bearer '+token},
+      body:JSON.stringify({action:'lookup-reference',lotteryId:lot.id,reference})
+    });
+    const payload=await response.json();
+    if(response.status===404 && payload.code==='PAYMENT_NOT_FOUND'){
+      result.innerHTML='<div class="muted">No payment found for this reference in the selected lottery. Check the number and try again.</div>';
       return;
     }
-    const data=snap.data();
+    if(!response.ok||!payload.ok)throw new Error(payload.error||'Could not search payments.');
+    const data=payload.request;
+    const requestId=data.id;
     const status=String(data.status||'unknown');
     const mime=String(data.proofMime||'');
-    const created=data.createdAt?.toDate?.().toLocaleString()||'';
+    const created=data.createdAt?new Date(data.createdAt).toLocaleString():'';
     result.innerHTML=`<div class="request-card">
       <div class="card-head"><div><b>${esc(data.name||'Unnamed customer')}</b> · ${esc(data.phone||'')}</div><span class="badge">${esc(status)}</span></div>
       <p>Reference: <b>${esc(data.reference||reference)}</b> · ${Number(data.quantity)||1} ticket(s) · ${Number(data.total)||0} Birr</p>
       <p class="muted">Submitted: ${esc(created)} · Request ID: ${esc(requestId)}</p>
-      ${data.proofPath?`<div class="actions"><button type="button" class="secondary" data-found-receipt="1">${mime==='application/pdf'?'📎 Download PDF receipt':'📎 View payment screenshot'}</button></div>`:'<p class="muted">This request has no uploaded receipt (reference only).</p>'}
+      ${data.hasProof?`<div class="actions"><button type="button" class="secondary" data-found-receipt="1">${mime==='application/pdf'?'📎 Download PDF receipt':'📎 View payment screenshot'}</button></div>`:'<p class="muted">This request has no uploaded receipt (reference only).</p>'}
     </div>`;
     result.querySelector('[data-found-receipt]')?.addEventListener('click',()=>openPrivateReceipt(requestId,mime));
   }catch(error){
     console.error('payment reference lookup failed',error);
-    result.innerHTML='<div class="error">'+(error?.code==='permission-denied'?'That reference could not be found or is not available to this admin. Try searching by phone number instead.':esc(error?.message||'Could not find this payment.'))+'</div>';
+    result.innerHTML='<div class="error">'+esc(error?.message||'Could not search for that payment reference.')+'</div>';
   }finally{
     button.disabled=false;
     button.textContent='Find payment';
