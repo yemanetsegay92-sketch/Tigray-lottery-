@@ -7,13 +7,13 @@
     "method": [
       "GET",
       "POST",
-      "HEAD"
+      "HEAD",
+      "OPTIONS"
     ],
     "responseHeader": [
       "Content-Type",
       "ETag",
-      "x-goog-meta-proofsession",
-      "x-goog-meta-storage-class"
+      "x-goog-meta-proofsession"
     ],
     "maxAgeSeconds": 3600
   }
