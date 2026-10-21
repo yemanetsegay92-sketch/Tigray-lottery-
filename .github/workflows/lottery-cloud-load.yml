@@ -1,0 +1,76 @@
+name: Tigray Lottery Cloud Load Test
+
+on:
+  workflow_dispatch:
+    inputs:
+      start:
+        description: "First unused buyer sequence (1..67 already used)"
+        required: true
+        default: "68"
+        type: string
+      count:
+        description: "Number of new screenshot purchases (start with 20)"
+        required: true
+        default: "20"
+        type: string
+      concurrency:
+        description: "Simultaneous buyers (1..16)"
+        required: true
+        default: "8"
+        type: string
+      confirm:
+        description: "Select RUN to authorize real Firebase writes and potential usage charges"
+        required: true
+        type: choice
+        options:
+          - "NO"
+          - "RUN"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: tigray-lottery-cloud-load
+  cancel-in-progress: false
+
+jobs:
+  cloud-buyers:
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+
+      - name: Install Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Generate fully synthetic receipt
+        run: |
+          python -m pip install --disable-pip-version-check Pillow
+          python tools/make_synthetic_receipt.py
+
+      - name: Run real-cloud buyer purchase test
+        env:
+          LOAD_START: ${{ inputs.start }}
+          LOAD_COUNT: ${{ inputs.count }}
+          LOAD_CONCURRENCY: ${{ inputs.concurrency }}
+          LOAD_CONFIRM: ${{ inputs.confirm }}
+        run: node tools/cloud-load-buyers.js
+
+      - name: Preserve cloud performance report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: lottery-cloud-report-${{ github.run_id }}
+          path: |
+            cloud-report.json
+            cloud-attempts.ndjson
+          if-no-files-found: warn
+          retention-days: 7
