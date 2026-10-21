@@ -20,10 +20,10 @@ d.text((155, 280), "TIGRAY LOTTERY LOAD TEST", fill=(40, 40, 40))
 d.text((155, 335), "Synthetic screenshot / no bank details", fill=(40, 40, 40))
 for y in range(450, 1200, 75):
     d.line((140, y, 780, y), fill=(120, 120, 120), width=2)
-for q in range(90, 40, -1):
+for q in range(88, 40, -1):
     bio = io.BytesIO()
     im.save(bio, format="JPEG", quality=q, optimize=True)
-    if 250*1024 <= bio.tell() <= 300*1024:
+    if 260*1024 <= bio.tell() <= 280*1024:
         with open("synthetic-receipt.jpg", "wb") as f:
             f.write(bio.getvalue())
         print("Created VALID synthetic JPEG:", bio.tell(), "bytes; quality:", q)
