@@ -3,6 +3,47 @@ const { getStorage } = require('firebase-admin/storage');
 const { adminDb, validateTelegramInitData, FieldValue } = require('../telegram/_lib');
 
 const BUCKET = 'tigiray-lottery.firebasestorage.app';
+
+// Shadow traffic uses the same cloud services, but NEVER live ticket, public-status,
+// approval, Telegram queue, or ticket-number collections. Disabled unless explicitly armed.
+const SHADOW_PROJECT = 'tigiray-lottery';
+const SHADOW_LOTTERY = 'SmHhy38Cn6mnEHjjtPZl';
+function sameSecret(a, b) {
+  const aa = Buffer.from(String(a || ''), 'utf8');
+  const bb = Buffer.from(String(b || ''), 'utf8');
+  return aa.length === bb.length && aa.length >= 32 && crypto.timingSafeEqual(aa, bb);
+}
+function liveShadowConfig(req) {
+  if (process.env.LIVE_SHADOW_TEST_ENABLED !== 'true' || process.env.VERCEL_ENV !== 'preview') return null;
+  const secret = process.env.LIVE_SHADOW_TEST_SECRET;
+  if (!sameSecret(req.headers?.['x-tigray-shadow-secret'], secret)) return null;
+  const runId = String(process.env.LIVE_SHADOW_RUN_ID || '');
+  const expires = Date.parse(String(process.env.LIVE_SHADOW_EXPIRES_AT || ''));
+  const max = Number(process.env.LIVE_SHADOW_MAX_PURCHASES || 0);
+  if (!/^shadow-[a-z0-9-]{6,40}$/.test(runId) ||
+      !Number.isFinite(expires) || expires <= Date.now() ||
+      expires > Date.now() + 24 * 60 * 60 * 1000 ||
+      !Number.isInteger(max) || max < 1 || max > 20000 ||
+      !secret || String(secret).length < 32) return null;
+  let project;
+  try { project = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT_JSON || '{}').project_id; }
+  catch { return null; }
+  if (project !== SHADOW_PROJECT) return null;
+  return { runId, max, expires, project };
+}
+function assertShadowBody(body, proof, config, quantity, phone, name, reference) {
+  const seq = Number(body.shadowSequence);
+  if (!Number.isInteger(seq) || seq < 1 || seq > config.max ||
+      String(body.lotteryId) !== SHADOW_LOTTERY ||
+      name !== 'LOAD TEST BUYER ' + seq || phone !== '0999999999' ||
+      reference !== 'LOADTEST-' + config.runId + '-' + seq ||
+      quantity !== 1 || !proof || proof.mime !== 'image/jpeg' ||
+      proof.bytes.length < 100 * 1024 || String(body.telegramInitData || '') !== '') {
+    throw badRequest('Invalid synthetic shadow purchase, sequence, or receipt.');
+  }
+  return seq;
+}
+
 const MAX_IMAGE_BYTES = 420 * 1024;
 const MAX_PDF_BYTES = 2 * 1024 * 1024;
 
@@ -57,8 +98,31 @@ function decodePaymentProof(dataUrl) {
 }
 
 module.exports = async (req, res) => {
-  if (req.method !== 'POST') return res.status(405).json({ ok: false, error: 'Method not allowed.' });
   try {
+    const hasShadowHeader = Object.prototype.hasOwnProperty.call(req.headers || {}, 'x-tigray-shadow-secret');
+    const probe = req.method === 'GET' && String(req.query?.shadowProbe || '') === '1';
+    const wantsShadow = hasShadowHeader || probe;
+    const shadow = wantsShadow ? liveShadowConfig(req) : null;
+    if (wantsShadow && !shadow) return res.status(404).json({ ok: false, error: 'Test mode unavailable.' });
+    if (probe) {
+      const exists = await adminDb().collection('lotteries').doc(SHADOW_LOTTERY).get();
+      if (!exists.exists || exists.data()?.status !== 'active' || Number(exists.data()?.price) <= 0) {
+        return res.status(409).json({ ok: false, error: 'Test lottery configuration missing.' });
+      }
+      res.setHeader('Cache-Control', 'no-store');
+      return res.status(200).json({
+        ok: true, mode: 'live-shadow-isolated', projectId: shadow.project,
+        bucket: BUCKET, lotteryId: SHADOW_LOTTERY,
+        runId: shadow.runId, maxPurchases: shadow.max,
+        expiresAt: new Date(shadow.expires).toISOString(), telegramDisabled: true,
+        approvalMode: 'isolated-shadow'
+      });
+    }
+    if (req.method !== 'POST') return res.status(405).json({ ok: false, error: 'Method not allowed.' });
+    // On a guarded preview, refuse all ordinary customer submissions. The
+    // production website remains unaffected because only Preview enables this.
+    if (process.env.LIVE_SHADOW_TEST_ENABLED === 'true' && process.env.VERCEL_ENV === 'preview' && !shadow)
+      return res.status(404).json({ ok: false, error: 'Test-only preview.' });
     const body = readBody(req);
     const lotteryId = String(body.lotteryId || '').trim();
     const name = String(body.name || '').trim();
@@ -66,6 +130,7 @@ module.exports = async (req, res) => {
     const reference = String(body.reference || '').trim();
     const quantity = Number(body.quantity || 1);
     const proof = decodePaymentProof(body.paymentProofData);
+    const shadowSequence = shadow ? assertShadowBody(body, proof, shadow, quantity, phone, name, reference) : 0;
     if (!Number.isInteger(quantity) || quantity < 1 || quantity > 5) {
       throw badRequest('You can request a maximum of 5 tickets per purchase.');
     }
@@ -87,17 +152,20 @@ module.exports = async (req, res) => {
     if (!Number.isFinite(price) || price <= 0) throw badRequest('Lottery price is not configured correctly.');
     const total = price * quantity;
     // Preserve existing reference-based duplicate detection, while allowing proof-only requests.
-    const requestId = reference
-      ? sha256('REF:' + reference.toUpperCase()).slice(0, 40)
-      : sha256('PROOF:' + proof.digest).slice(0, 40);
+    const requestId = shadow
+      ? sha256('SHADOW:' + shadow.runId + ':' + shadowSequence).slice(0, 40)
+      : (reference
+        ? sha256('REF:' + reference.toUpperCase()).slice(0, 40)
+        : sha256('PROOF:' + proof.digest).slice(0, 40));
     const proofUploadToken = crypto.randomBytes(32).toString('hex');
     // Short, single-use secret for a Telegram deep link (64-character start-parameter limit).
     const buyerLinkToken = crypto.randomBytes(10).toString('hex');
-    const requestRef = db.collection('ticketRequests').doc(requestId);
+    const requestRef = db.collection(shadow ? 'loadTestRequests' : 'ticketRequests').doc(requestId);
     const phoneHash = sha256(phone);
-    const publicRef = db.collection('publicStatus').doc(phoneHash).collection('requests').doc(requestId);
+    const publicRef = db.collection(shadow ? 'loadTestPublicStatus' : 'publicStatus').doc(phoneHash).collection('requests').doc(requestId);
     const requestData = {
       lotteryId, lotteryName: String(lottery.name || lotteryId), name, phone, reference,
+      ...(shadow ? { loadTest: true, loadTestRunId: shadow.runId, loadTestSequence: shadowSequence } : {}),
       quantity, price, total, status: 'pending', ticketNumbers: [],
       phoneHash, proofUploadTokenHash: sha256(proofUploadToken),
       buyerLinkTokenHash: sha256(buyerLinkToken),
@@ -113,7 +181,9 @@ module.exports = async (req, res) => {
     if (proof) {
       // Always store private proofs server-side; Firebase Storage client rules stay deny-all.
       const safeLotteryId = encodeURIComponent(lotteryId);
-      const path = 'payment-proofs/' + safeLotteryId + '/' + requestId + '-' +
+      const path = (shadow
+        ? 'load-test-proofs/' + shadow.runId + '/'
+        : 'payment-proofs/' + safeLotteryId + '/') + requestId + '-' +
         crypto.randomBytes(8).toString('hex') + '.' + proof.ext;
       file = getStorage().bucket(BUCKET).file(path);
       await file.save(proof.bytes, {
@@ -149,7 +219,9 @@ module.exports = async (req, res) => {
       if (file) { try { await file.delete({ ignoreNotFound: true }); } catch (cleanupError) { console.error('proof cleanup failed', cleanupError); } }
       throw error;
     }
-    return res.status(200).json({ ok: true, created: true, requestId, total, proofUploadToken, buyerLinkToken });
+    return res.status(200).json(shadow
+      ? { ok: true, created: true, mode: 'live-shadow-isolated', requestId, total, sequence: shadowSequence }
+      : { ok: true, created: true, requestId, total, proofUploadToken, buyerLinkToken });
   } catch (error) {
     if (error?.message === 'DUPLICATE_REFERENCE') {
       return res.status(409).json({ ok: false, error: 'This payment reference or receipt has already been submitted.' });

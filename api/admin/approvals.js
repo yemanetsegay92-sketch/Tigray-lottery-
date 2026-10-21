@@ -302,6 +302,97 @@ async function rejectRequest(db, caller, profile, requestId, requestedLotteryId,
   });
 }
 
+
+// TEST-ONLY bulk-approval path. It never reads/writes real ticketRequests,
+// tickets, lottery counters, publicStatus, auditLogs or Telegram queues.
+const SHADOW_LOTTERY_ID = 'SmHhy38Cn6mnEHjjtPZl';
+function shadowApprovalConfig(req) {
+  if (process.env.LIVE_SHADOW_TEST_ENABLED !== 'true' || process.env.VERCEL_ENV !== 'preview') return null;
+  const secret = String(process.env.LIVE_SHADOW_TEST_SECRET || '');
+  const supplied = String(req.headers?.['x-tigray-shadow-secret'] || '');
+  const a = Buffer.from(secret), b = Buffer.from(supplied);
+  if (a.length < 32 || a.length !== b.length || !crypto.timingSafeEqual(a, b)) return null;
+  const runId = String(process.env.LIVE_SHADOW_RUN_ID || '');
+  const max = Number(process.env.LIVE_SHADOW_MAX_PURCHASES || 0);
+  const expires = Date.parse(String(process.env.LIVE_SHADOW_EXPIRES_AT || ''));
+  let projectId = '';
+  try { projectId = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT_JSON || '{}').project_id; }
+  catch { return null; }
+  if (projectId !== 'tigiray-lottery' ||
+      !/^shadow-[a-z0-9-]{6,40}$/.test(runId) ||
+      !Number.isInteger(max) || max < 1 || max > 20000 ||
+      !Number.isFinite(expires) || expires <= Date.now() ||
+      expires > Date.now() + 24 * 3600000) return null;
+  return { runId, max, lotteryId: SHADOW_LOTTERY_ID };
+}
+async function approveShadowRequest(db, config, sequence) {
+  if (!Number.isInteger(sequence) || sequence < 1 || sequence > config.max) {
+    throw Object.assign(new Error('Invalid test sequence.'), { statusCode: 400 });
+  }
+  const requestId = sha256('SHADOW:' + config.runId + ':' + sequence).slice(0, 40);
+  const requestRef = db.collection('loadTestRequests').doc(requestId);
+  const runRef = db.collection('loadTestRuns').doc(config.runId);
+  const ticketCollection = db.collection('loadTestTickets');
+  let output;
+  await db.runTransaction(async tx => {
+    const requestSnap = await tx.get(requestRef);
+    const runSnap = await tx.get(runRef);
+    if (!requestSnap.exists) {
+      throw Object.assign(new Error('Test purchase not found.'), { statusCode: 404 });
+    }
+    const request = requestSnap.data() || {};
+    if (request.loadTest !== true || request.loadTestRunId !== config.runId ||
+        request.loadTestSequence !== sequence ||
+        request.lotteryId !== config.lotteryId ||
+        request.phone !== '0999999999' ||
+        request.quantity !== 1 ||
+        !String(request.proofPath || '').startsWith('load-test-proofs/' + config.runId + '/') ||
+        request.telegramChatId) {
+      throw Object.assign(new Error('Refusing non-synthetic ticket request.'), { statusCode: 403 });
+    }
+    if (request.status === 'approved') {
+      output = { requestId, sequence, ticketNumber: request.ticketNumbers?.[0], alreadyApproved: true };
+      return;
+    }
+    if (request.status !== 'pending') {
+      throw Object.assign(new Error('Request is not pending.'), { statusCode: 409 });
+    }
+    const next = runSnap.exists ? Number(runSnap.data()?.nextTicketNumber) : 1;
+    if (!Number.isInteger(next) || next < 1 || next > config.max) {
+      throw Object.assign(new Error('Synthetic ticket range exhausted.'), { statusCode: 409 });
+    }
+    const now = FieldValue.serverTimestamp();
+    const ticketRef = ticketCollection.doc(config.runId + '_' + next);
+    tx.create(ticketRef, {
+      loadTest: true, runId: config.runId,
+      lotteryId: config.lotteryId, requestId, number: next, assignedAt: now
+    });
+    tx.update(requestRef, {
+      status: 'approved', ticketNumbers: [next],
+      reviewedBy: 'synthetic-bulk-test', reviewedAt: now
+    });
+    tx.set(runRef, {
+      loadTest: true, lotteryId: config.lotteryId,
+      nextTicketNumber: next + 1, updatedAt: now
+    }, { merge: true });
+    tx.set(db.collection('loadTestPublicStatus')
+      .doc(String(request.phoneHash)).collection('requests').doc(requestId), {
+      status: 'approved', ticketNumbers: [next], reviewedAt: now
+    }, { merge: true });
+    // These remain in isolated collections, never consumed by Telegram workers.
+    tx.create(db.collection('loadTestNotificationQueue').doc(requestId + '_approved'), {
+      loadTest: true, runId: config.runId, requestId, decision: 'approved',
+      state: 'testOnly', createdAt: now
+    });
+    tx.create(db.collection('loadTestAuditLogs').doc(requestId), {
+      loadTest: true, runId: config.runId, requestId, action: 'approveRequest',
+      lotteryId: config.lotteryId, ticketNumbers: [next], createdAt: now
+    });
+    output = { requestId, sequence, ticketNumber: next, alreadyApproved: false };
+  });
+  return output;
+}
+
 module.exports = async (req, res) => {
   if (req.method === 'GET' && String(req.query?.receipt || '') === '1') {
     return servePaymentReceipt(req, res);
@@ -315,6 +406,18 @@ module.exports = async (req, res) => {
     const action = String(body.action || '').trim().toLowerCase();
     const requestId = String(body.requestId || '').trim();
     const requestedLotteryId = String(body.lotteryId || '').trim();
+
+    if (action === 'shadowapprove') {
+      const shadow = shadowApprovalConfig(req);
+      if (!shadow) return res.status(404).json({ ok: false, error: 'Test approval mode unavailable.' });
+      const result = await approveShadowRequest(adminDb(), shadow, Number(body.shadowSequence));
+      res.setHeader('Cache-Control', 'no-store');
+      return res.status(200).json({ ok: true, mode: 'live-shadow-approval', ...result });
+    }
+
+    if (process.env.LIVE_SHADOW_TEST_ENABLED === 'true' && process.env.VERCEL_ENV === 'preview') {
+      return res.status(404).json({ ok: false, error: 'Preview accepts only synthetic test approvals.' });
+    }
 
     if (!requestId) {
       return res.status(400).json({ ok: false, error: 'requestId is required.' });
