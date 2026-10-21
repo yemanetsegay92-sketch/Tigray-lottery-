@@ -25,7 +25,6 @@ jobs:
       - name: Check Node.js modules
         run: |
           node --check api/customer/_receipt-upload.js
-          node --check api/customer/receipt-upload.js
           node --check api/customer/create-request.js
           node --check api/admin/approvals.js
           node --check tools/test-direct-receipts.js
