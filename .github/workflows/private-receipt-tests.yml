@@ -6,6 +6,9 @@ on:
       - 'api/admin/approvals.js'
       - 'js/buy.js'
       - 'admin/js/lottery.js'
+      - 'admin/js/general.js'
+      - 'admin/js/ticketRows.mjs'
+      - 'tools/test-ticket-rows.mjs'
       - 'tools/test-direct-receipts.js'
       - 'tools/test-payment-lookup.js'
       - '.github/workflows/private-receipt-tests.yml'
@@ -31,8 +34,12 @@ jobs:
           node --check tools/test-direct-receipts.js
           node --check tools/test-payment-lookup.js
           node --input-type=module --check < admin/js/lottery.js
+          node --input-type=module --check < admin/js/general.js
+          node --check admin/js/ticketRows.mjs
+          node --check tools/test-ticket-rows.mjs
           node --input-type=module --check < js/buy.js
       - name: Test receipt security and validation
         run: |
           node tools/test-direct-receipts.js
           node tools/test-payment-lookup.js
+          node tools/test-ticket-rows.mjs
