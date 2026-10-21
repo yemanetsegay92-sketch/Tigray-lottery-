@@ -97,6 +97,8 @@ $('addAward')?.addEventListener('click',addAward);
 $('saveAwards')?.addEventListener('click',saveAwards);
 $('addPaymentAccount')?.addEventListener('click',addPaymentAccount);
 $('savePaymentAccounts')?.addEventListener('click',savePaymentAccounts);
+$('findPaymentForm')?.addEventListener('submit',findPaymentByReference);
+
 
 onAuthStateChanged(auth,async u=>{
   if(!u){location.href='login.html';return}
@@ -117,8 +119,55 @@ onAuthStateChanged(auth,async u=>{
   }catch(e){console.error(e);$('message').innerHTML=`<div class="error">${esc(e.message)}</div>`;}
 });
 
+// Reference-based request IDs are SHA-256('REF:' + uppercase(reference))
+// truncated to 40 hex characters by the existing customer API. An exact
+// Firestore document lookup avoids reading 20,000 unrelated requests.
+async function findPaymentByReference(event){
+  event?.preventDefault();
+  if(!lot || !me) return;
+  const reference=String($('paymentRefSearch')?.value||'').trim();
+  const result=$('findPaymentResult');
+  const button=$('findPaymentBtn');
+  if(!result || !button) return;
+  if(!reference || reference.length>180) {
+    result.innerHTML='<div class="error">Enter a valid exact payment reference.</div>';
+    return;
+  }
+  button.disabled=true;
+  button.textContent='Searching…';
+  result.innerHTML='<p class="muted">Looking up the exact payment reference…</p>';
+  try {
+    const source=new TextEncoder().encode('REF:'+reference.toUpperCase());
+    const digest=await crypto.subtle.digest('SHA-256',source);
+    const requestId=Array.from(new Uint8Array(digest),x=>x.toString(16).padStart(2,'0')).join('').slice(0,40);
+    const snap=await getDoc(doc(db,'ticketRequests',requestId));
+    if(!snap.exists() || snap.data().lotteryId!==lot.id){
+      result.innerHTML='<div class="error">No request found for that reference in the selected lottery. Check the spelling and selected lottery.</div>';
+      return;
+    }
+    const data=snap.data();
+    const status=String(data.status||'unknown');
+    const mime=String(data.proofMime||'');
+    const created=data.createdAt?.toDate?.().toLocaleString()||'';
+    result.innerHTML=`<div class="request-card">
+      <div class="card-head"><div><b>${esc(data.name||'Unnamed customer')}</b> · ${esc(data.phone||'')}</div><span class="badge">${esc(status)}</span></div>
+      <p>Reference: <b>${esc(data.reference||reference)}</b> · ${Number(data.quantity)||1} ticket(s) · ${Number(data.total)||0} Birr</p>
+      <p class="muted">Submitted: ${esc(created)} · Request ID: ${esc(requestId)}</p>
+      ${data.proofPath?`<div class="actions"><button type="button" class="secondary" data-found-receipt="1">${mime==='application/pdf'?'📎 Download PDF receipt':'📎 View payment screenshot'}</button></div>`:'<p class="muted">This request has no uploaded receipt (reference only).</p>'}
+    </div>`;
+    result.querySelector('[data-found-receipt]')?.addEventListener('click',()=>openPrivateReceipt(requestId,mime));
+  }catch(error){
+    console.error('payment reference lookup failed',error);
+    result.innerHTML='<div class="error">'+esc(error?.message||'Could not find this payment.')+'</div>';
+  }finally{
+    button.disabled=false;
+    button.textContent='Find payment';
+  }
+}
+
 async function renderAll(){
   if(!lot)return;
+  if($('findPaymentResult'))$('findPaymentResult').innerHTML='';
   $('lotteryName').textContent='· '+lot.name;
   $('lotteryInfo').innerHTML=`<span class="meta-pill"><b>${esc(lot.name)}</b></span><span class="meta-pill">Status: ${esc(lot.status)}</span><span class="meta-pill">Price: ${Number(lot.price||0)} Birr</span><span class="meta-pill">Sequence: ${esc(lot.min)} – ${esc(lot.max)}</span>`;
 
