@@ -1,6 +1,6 @@
 import { db, auth } from '../../firebase.js';
 import { onAuthStateChanged, signOut } from 'https://www.gstatic.com/firebasejs/12.2.1/firebase-auth.js';
-import { collection, getDocs, doc, getDoc, updateDoc, addDoc, query, where, limit, serverTimestamp } from 'https://www.gstatic.com/firebasejs/12.2.1/firebase-firestore.js';
+import { collection, getDocs, doc, getDoc, updateDoc, addDoc, query, where, orderBy, limit, serverTimestamp } from 'https://www.gstatic.com/firebasejs/12.2.1/firebase-firestore.js';
 import { phoneHash } from '../../js/phoneHash.js';
 
 const $ = id => document.getElementById(id);
@@ -98,6 +98,7 @@ $('saveAwards')?.addEventListener('click',saveAwards);
 $('addPaymentAccount')?.addEventListener('click',addPaymentAccount);
 $('savePaymentAccounts')?.addEventListener('click',savePaymentAccounts);
 $('findPaymentForm')?.addEventListener('submit',findPaymentByReference);
+$('findPhoneForm')?.addEventListener('submit',findPaymentByPhone);
 
 
 onAuthStateChanged(auth,async u=>{
@@ -122,6 +123,74 @@ onAuthStateChanged(auth,async u=>{
 // Reference-based request IDs are SHA-256('REF:' + uppercase(reference))
 // truncated to 40 hex characters by the existing customer API. An exact
 // Firestore document lookup avoids reading 20,000 unrelated requests.
+// Query the phone's public-status subcollection, ordered newest-first.
+// Unlike listing ticketRequests, this works for screenshot-only requests whose
+// request IDs cannot be reconstructed from a transaction reference.
+async function findPaymentByPhone(event) {
+  event?.preventDefault();
+  if(!lot || !me) return;
+  const raw=String($('paymentPhoneSearch')?.value||'').trim();
+  const result=$('findPhoneResult');
+  const button=$('findPhoneBtn');
+  if(!raw || !result || !button) return;
+  if(raw.replace(/[^0-9]/g,'').length<9){
+    result.innerHTML='<div class="error">Please enter the complete buyer phone number used at checkout.</div>';
+    return;
+  }
+  button.disabled=true;
+  button.textContent='Searching…';
+  result.innerHTML='<p class="muted">Finding recent requests for that phone…</p>';
+  try {
+    const hash=await phoneHash(raw);
+    // Single-field createdAt index, capped at 30 documents even when a load
+    // test used the same phone for 20,000 requests.
+    const recent=await getDocs(query(
+      collection(db,'publicStatus',hash,'requests'),
+      orderBy('createdAt','desc'),
+      limit(30)
+    ));
+    const candidates=recent.docs.filter(x=>x.data().lotteryId===lot.id).slice(0,12);
+    if(!candidates.length) {
+      result.innerHTML='<div class="error">No recent requests for that phone in this lottery. Check the phone number and selected lottery.</div>';
+      return;
+    }
+    const rows=[];
+    for(const item of candidates){
+      try{
+        const snap=await getDoc(doc(db,'ticketRequests',item.id));
+        if(snap.exists() && snap.data().lotteryId===lot.id){
+          rows.push({id:snap.id,data:snap.data()});
+        }
+      }catch(err){
+        console.warn('Could not read candidate request:',item.id,err.code||err.message);
+      }
+    }
+    if(!rows.length){
+      result.innerHTML='<div class="error">Matching status found, but the payment details could not be read. Check your admin permissions.</div>';
+      return;
+    }
+    result.innerHTML='<p class="muted">Showing '+rows.length+' most recent matching payment request(s).</p>'+
+      rows.map(({id,data})=>{
+        const mime=String(data.proofMime||'');
+        const created=data.createdAt?.toDate?.().toLocaleString()||'';
+        return \`<div class="request-card">
+          <div class="card-head"><div><b>\${esc(data.name||'Unnamed buyer')}</b> · \${esc(data.phone||'')}</div><span class="badge">\${esc(data.status||'pending')}</span></div>
+          <p>\${Number(data.quantity)||1} ticket(s) · \${Number(data.total)||0} Birr\${data.reference?\` · Ref \${esc(data.reference)}\`:' · Receipt-only (no reference)'}</p>
+          <p class="muted">Submitted: \${esc(created)} · Request ID: \${esc(id)}</p>
+          \${data.proofPath?\`<div class="actions"><button class="secondary" type="button" data-phone-receipt="\${esc(id)}" data-phone-mime="\${esc(mime)}">\${mime==='application/pdf'?'📎 Download PDF receipt':'📎 View payment screenshot'}</button></div>\`:'<p class="muted">Reference only; no uploaded receipt.</p>'}
+        </div>\`;
+      }).join('');
+    result.querySelectorAll('[data-phone-receipt]').forEach(btn=>
+      btn.addEventListener('click',()=>openPrivateReceipt(btn.dataset.phoneReceipt,btn.dataset.phoneMime)));
+  }catch(error){
+    console.error('phone payment lookup failed',error);
+    result.innerHTML='<div class="error">'+esc(error?.message||'Could not find payment by phone.')+'</div>';
+  }finally{
+    button.disabled=false;
+    button.textContent='Find by phone';
+  }
+}
+
 async function findPaymentByReference(event){
   event?.preventDefault();
   if(!lot || !me) return;
@@ -158,7 +227,7 @@ async function findPaymentByReference(event){
     result.querySelector('[data-found-receipt]')?.addEventListener('click',()=>openPrivateReceipt(requestId,mime));
   }catch(error){
     console.error('payment reference lookup failed',error);
-    result.innerHTML='<div class="error">'+esc(error?.message||'Could not find this payment.')+'</div>';
+    result.innerHTML='<div class="error">'+(error?.code==='permission-denied'?'That reference could not be found or is not available to this admin. Try searching by phone number instead.':esc(error?.message||'Could not find this payment.'))+'</div>';
   }finally{
     button.disabled=false;
     button.textContent='Find payment';
@@ -168,6 +237,7 @@ async function findPaymentByReference(event){
 async function renderAll(){
   if(!lot)return;
   if($('findPaymentResult'))$('findPaymentResult').innerHTML='';
+  if($('findPhoneResult'))$('findPhoneResult').innerHTML='';
   $('lotteryName').textContent='· '+lot.name;
   $('lotteryInfo').innerHTML=`<span class="meta-pill"><b>${esc(lot.name)}</b></span><span class="meta-pill">Status: ${esc(lot.status)}</span><span class="meta-pill">Price: ${Number(lot.price||0)} Birr</span><span class="meta-pill">Sequence: ${esc(lot.min)} – ${esc(lot.max)}</span>`;
 
