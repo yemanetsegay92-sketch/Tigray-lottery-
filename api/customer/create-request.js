@@ -114,7 +114,8 @@ module.exports = async (req, res) => {
         ok: true, mode: 'live-shadow-isolated', projectId: shadow.project,
         bucket: BUCKET, lotteryId: SHADOW_LOTTERY,
         runId: shadow.runId, maxPurchases: shadow.max,
-        expiresAt: new Date(shadow.expires).toISOString(), telegramDisabled: true
+        expiresAt: new Date(shadow.expires).toISOString(), telegramDisabled: true,
+        approvalMode: 'isolated-shadow'
       });
     }
     if (req.method !== 'POST') return res.status(405).json({ ok: false, error: 'Method not allowed.' });
