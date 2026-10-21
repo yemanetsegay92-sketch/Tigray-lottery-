@@ -9,8 +9,25 @@ async function getBuyerTelegramLink(requestId,buyerLinkToken){
 const T={en:{navCheck:'Check Ticket',backHome:'← Back to lotteries',yourDetails:'Your details',detailsNote:'Use the same phone number you will use to check your ticket.',fullName:'Full name',phoneNumber:'Phone number',tickets:'Tickets',ticketsNote:'Choose 1–5 tickets.',paymentProof:'Payment proof',proofNote:'Enter a transaction number or upload a screenshot/PDF bank receipt. You can also provide both.',referenceNumber:'Transaction / reference number',paymentScreenshot:'Payment screenshot or PDF receipt',uploadHint:'Choose an image or PDF',or:'OR',proofRule:'Enter a transaction number OR attach a screenshot/PDF receipt. Both are accepted.',ticketPrice:'Ticket price',numberOfTickets:'Number of tickets',total:'Total',submitRequest:'Submit ticket request',manualNote:'Payment is verified manually. Ticket numbers are assigned after approval.',ticketPending:'Your ticket numbers are assigned after approval.',requestReceived:'Request received',pending:'Your request is waiting for payment verification.',keepPhone:'Keep your phone number. You can use it later to check your status.',checkStatus:'Check status',screenshotAdded:'Receipt attached',chooseImage:'Choose an image or PDF',requiredProof:'Enter a transaction reference OR attach a screenshot/PDF receipt.',lotUnavailable:'Lottery unavailable',goBack:'Go back'},ti:{navCheck:'መረጋገጺ ቲኬት',backHome:'← ናብ ሎተሪታት',yourDetails:'ዝርዝር ሓበሬታኻ',detailsNote:'ንምርግጋጽ ቲኬትካ እቲ ዝተጠቐምካሉ ቁጽሪ ስልኪ ተጠቐም።',fullName:'ምሉእ ስም',phoneNumber:'ቁጽሪ ስልኪ',tickets:'ቲኬት',ticketsNote:'1–5 ቲኬት ምረጽ።',paymentProof:'መረጋገጺ ክፍሊት',proofNote:'ቁጽሪ ግብይት ወይ ስክሪንሾት/PDF ናይ ባንኪ መረጋገጺ ኣቕርብ። ክልቲኦም እውን ትኽእል።',referenceNumber:'ቁጽሪ መረጋገጺ ግብሪ',paymentScreenshot:'ስክሪንሾት ወይ PDF ክፍሊት',uploadHint:'ስክሪንሾት ወይ PDF ምረጽ',or:'ወይ',proofRule:'ቁጽሪ ግብይት ወይ ስክሪንሾት/PDF ኣቕርብ። ክልቲኦም እውን ይፍቀዱ።',ticketPrice:'ዋጋ ሓደ ቲኬት',numberOfTickets:'ብዝሒ ቲኬት',total:'ጠቕላላ',submitRequest:'ሕቶ ቲኬት ልኣኽ',manualNote:'ክፍሊት ብኢድ ይረጋገጽ። ቁጽሪ ቲኬት ድሕሪ ምጽዳቕ ይረኽብ።',ticketPending:'ቁጽሪ ቲኬትካ ድሕሪ ምጽዳቕ ይምደብ።',requestReceived:'ሕቶ ተቐቢልና',pending:'ሕቶኻ ንምርግጋጽ ክፍሊት ይጽበ ኣሎ።',keepPhone:'ቁጽሪ ስልኪኻ ሓዞ። ንኩነታትካ ድሕሪ ግዜ ብእኡ ክትምርምር ትኽእል።',checkStatus:'ኩነታት ኣረጋግጽ',screenshotAdded:'መረጋገጺ ተወሲኹ',chooseImage:'ስክሪንሾት ወይ PDF ምረጽ',requiredProof:'ቁጽሪ ግብይት ወይ ስክሪንሾት/PDF ኣቕርብ።',lotUnavailable:'ሎተሪ ኣይርከብን',goBack:'ተመለስ'}};
 const lang=localStorage.getItem('tl_lang')||'ti',t=T[lang];function applyText(){document.documentElement.lang=lang==='ti'?'ti':'en';document.querySelectorAll('[data-i18n]').forEach(el=>{if(t[el.dataset.i18n])el.textContent=t[el.dataset.i18n]});const b=$('langToggle');if(b)b.textContent=lang==='en'?'ትግርኛ':'English'}$('langToggle')?.addEventListener('click',e=>{e.preventDefault();localStorage.setItem('tl_lang',lang==='en'?'ti':'en');location.reload()});applyText();
 function blob(canvas,q){return new Promise((res,rej)=>canvas.toBlob(b=>b?res(b):rej(new Error('Could not prepare image.')),'image/jpeg',q))}
-async function compressImage(file){const bitmap=await createImageBitmap(file);let w=bitmap.width,h=bitmap.height,scale=Math.min(1,1280/Math.max(w,h));w=Math.max(1,Math.round(w*scale));h=Math.max(1,Math.round(h*scale));const c=document.createElement('canvas');c.width=w;c.height=h;c.getContext('2d',{alpha:false}).drawImage(bitmap,0,0,w,h);bitmap.close();let q=.70,b=await blob(c,q);while(b.size>300*1024&&q>.42){q-=.08;b=await blob(c,q)}if(b.size>340*1024){const s=Math.min(w,h),scale2=720/s,c2=document.createElement('canvas');c2.width=Math.max(1,Math.round(w*scale2));c2.height=Math.max(1,Math.round(h*scale2));c2.getContext('2d',{alpha:false}).drawImage(c,0,0,c2.width,c2.height);b=await blob(c2,.52);w=c2.width;h=c2.height}if(b.size>380*1024)throw new Error('Please choose a smaller image.');const data=await new Promise((resolve,reject)=>{const r=new FileReader();r.onload=()=>resolve(r.result);r.onerror=()=>reject(new Error('Could not read image.'));r.readAsDataURL(b)});return {data,size:b.size,originalSize:file.size}}
-function readAsDataURL(file){return new Promise((res,rej)=>{const r=new FileReader();r.onload=()=>res(r.result);r.onerror=()=>rej(new Error('Could not read receipt.'));r.readAsDataURL(file)})}
+async function compressImage(file){const bitmap=await createImageBitmap(file);let w=bitmap.width,h=bitmap.height,scale=Math.min(1,1280/Math.max(w,h));w=Math.max(1,Math.round(w*scale));h=Math.max(1,Math.round(h*scale));const c=document.createElement('canvas');c.width=w;c.height=h;c.getContext('2d',{alpha:false}).drawImage(bitmap,0,0,w,h);bitmap.close();let q=.70,b=await blob(c,q);while(b.size>300*1024&&q>.42){q-=.08;b=await blob(c,q)}if(b.size>340*1024){const s=Math.min(w,h),scale2=720/s,c2=document.createElement('canvas');c2.width=Math.max(1,Math.round(w*scale2));c2.height=Math.max(1,Math.round(h*scale2));c2.getContext('2d',{alpha:false}).drawImage(c,0,0,c2.width,c2.height);b=await blob(c2,.52);w=c2.width;h=c2.height}if(b.size>380*1024)throw new Error('Please choose a smaller image.');return {blob:b,size:b.size,originalSize:file.size}}
+async function uploadPrivateReceipt(lotteryId, receipt) {
+  const response=await fetch('/api/customer/receipt-upload',{
+    method:'POST',headers:{'content-type':'application/json'},
+    body:JSON.stringify({lotteryId,mime:receipt.mime,bytes:receipt.size})
+  });
+  const policy=await response.json();
+  if(!response.ok||!policy.ok)throw new Error(policy.error||'Could not prepare private receipt upload.');
+  const form=new FormData();
+  // All signed policy fields precede the file, which must be the final form part.
+  for(const [name,value] of Object.entries(policy.fields||{}))form.append(name,value);
+  const filename=receipt.mime==='application/pdf'?'receipt.pdf':'receipt.jpg';
+  form.append('file',receipt.blob,filename);
+  let uploaded;
+  try{uploaded=await fetch(policy.uploadUrl,{method:'POST',body:form,mode:'cors'});}
+  catch{throw new Error('Direct upload failed. Check your connection and Firebase Storage CORS configuration.');}
+  if(!uploaded.ok)throw new Error('Private receipt upload failed ('+uploaded.status+'). Please try again.');
+  return String(policy.proofUploadToken||'');
+}
 $('screenshot')?.addEventListener('change',async e=>{
   compressedScreenshot=null;
   const f=e.target.files?.[0];
@@ -19,9 +36,7 @@ $('screenshot')?.addEventListener('change',async e=>{
     const isPdf=f.type==='application/pdf'||/\.pdf$/i.test(f.name);
     if(isPdf){
       if(f.size>2*1024*1024)throw new Error('PDF receipt must be 2 MB or smaller.');
-      const data=await readAsDataURL(f);
-      const normalizedData=data.replace(/^data:[^;,]*;base64,/i,'data:application/pdf;base64,');
-      compressedScreenshot={data:normalizedData,size:f.size,originalSize:f.size,mime:'application/pdf'};
+      compressedScreenshot={blob:f,size:f.size,originalSize:f.size,mime:'application/pdf'};
     }else{
       if(!['image/jpeg','image/png','image/webp'].includes(f.type))throw new Error('Choose a JPG, PNG, WebP or PDF receipt.');
       compressedScreenshot={...await compressImage(f),mime:'image/jpeg'};
@@ -57,9 +72,17 @@ $('buyForm').addEventListener('submit',async e=>{
   btn.disabled=true;
   btn.textContent='Submitting…';
   try{
+    // The JPEG/PDF bytes go directly from this browser to private GCS.
+    // Only a small signed upload token is sent through Vercel.
+    let proofUploadToken='';
+    if(compressedScreenshot){
+      btn.textContent='Uploading receipt…';
+      proofUploadToken=await uploadPrivateReceipt(lot.id,compressedScreenshot);
+    }
+    btn.textContent='Submitting…';
     const r=await fetch('/api/customer/create-request',{
       method:'POST',headers:{'content-type':'application/json'},
-      body:JSON.stringify({lotteryId:lot.id,name,phone,reference,quantity,telegramInitData,paymentProofData:compressedScreenshot?.data||'',paymentProofOriginalBytes:compressedScreenshot?.originalSize||0})
+      body:JSON.stringify({lotteryId:lot.id,name,phone,reference,quantity,telegramInitData,proofUploadToken,paymentProofOriginalBytes:compressedScreenshot?.originalSize||0})
     });
     const j=await r.json();
     if(!r.ok||!j.ok)throw new Error(j.error||'Could not submit request.');
