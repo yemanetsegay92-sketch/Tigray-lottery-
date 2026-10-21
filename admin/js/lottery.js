@@ -173,12 +173,12 @@ async function findPaymentByPhone(event) {
       rows.map(({id,data})=>{
         const mime=String(data.proofMime||'');
         const created=data.createdAt?.toDate?.().toLocaleString()||'';
-        return \`<div class="request-card">
-          <div class="card-head"><div><b>\${esc(data.name||'Unnamed buyer')}</b> · \${esc(data.phone||'')}</div><span class="badge">\${esc(data.status||'pending')}</span></div>
-          <p>\${Number(data.quantity)||1} ticket(s) · \${Number(data.total)||0} Birr\${data.reference?\` · Ref \${esc(data.reference)}\`:' · Receipt-only (no reference)'}</p>
-          <p class="muted">Submitted: \${esc(created)} · Request ID: \${esc(id)}</p>
-          \${data.proofPath?\`<div class="actions"><button class="secondary" type="button" data-phone-receipt="\${esc(id)}" data-phone-mime="\${esc(mime)}">\${mime==='application/pdf'?'📎 Download PDF receipt':'📎 View payment screenshot'}</button></div>\`:'<p class="muted">Reference only; no uploaded receipt.</p>'}
-        </div>\`;
+        return `<div class="request-card">
+          <div class="card-head"><div><b>${esc(data.name||'Unnamed buyer')}</b> · ${esc(data.phone||'')}</div><span class="badge">${esc(data.status||'pending')}</span></div>
+          <p>${Number(data.quantity)||1} ticket(s) · ${Number(data.total)||0} Birr${data.reference?` · Ref ${esc(data.reference)}`:' · Receipt-only (no reference)'}</p>
+          <p class="muted">Submitted: ${esc(created)} · Request ID: ${esc(id)}</p>
+          ${data.proofPath?`<div class="actions"><button class="secondary" type="button" data-phone-receipt="${esc(id)}" data-phone-mime="${esc(mime)}">${mime==='application/pdf'?'📎 Download PDF receipt':'📎 View payment screenshot'}</button></div>`:'<p class="muted">Reference only; no uploaded receipt.</p>'}
+        </div>`;
       }).join('');
     result.querySelectorAll('[data-phone-receipt]').forEach(btn=>
       btn.addEventListener('click',()=>openPrivateReceipt(btn.dataset.phoneReceipt,btn.dataset.phoneMime)));
