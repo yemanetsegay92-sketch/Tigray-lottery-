@@ -207,7 +207,15 @@ async function openPrivateReceipt(id,mime){
       let err={};try{err=await response.json()}catch{}
       throw new Error(err.error||'Could not load payment receipt.');
     }
-    const blob=await response.blob();
+    const signed=await response.json();
+    if(!signed.ok||!signed.url)throw new Error(signed.error||'Could not authorize private receipt.');
+    // The file is fetched directly from private Google Cloud Storage using a
+    // short-lived signed URL. Keep downloaded bytes in an ephemeral Blob.
+    let receiptResponse;
+    try{receiptResponse=await fetch(signed.url,{cache:'no-store'});}
+    catch{throw new Error('Could not download receipt from Storage. Check bucket CORS for this website.');}
+    if(!receiptResponse.ok)throw new Error('Private receipt download failed ('+receiptResponse.status+').');
+    const blob=await receiptResponse.blob();
     const url=URL.createObjectURL(blob);
     if(mime==='application/pdf'){
       const link=document.createElement('a');
