@@ -354,6 +354,49 @@ async function servePaymentReceipt(req, res) {
   }
 }
 
+// Verify that a reference belongs to a lottery this caller is allowed to
+// manage. Server-side lookup distinguishes a missing document (404) from an
+// actual permissions failure (403), unlike client Firestore security rules.
+async function lookupReference(req, res, body) {
+  res.setHeader('Cache-Control', 'no-store');
+  const lotteryId = String(body.lotteryId || '').trim();
+  const reference = String(body.reference || '').trim();
+  if (!/^[a-zA-Z0-9_-]{1,128}$/.test(lotteryId) || !reference || reference.length > 180) {
+    return res.status(400).json({ ok: false, error: 'Provide the selected lottery and an exact payment reference.' });
+  }
+
+  const db = adminDb();
+  const { profile } = await authenticateAdmin(req, db);
+  if (profile.role === 'lotteryAdmin' &&
+      !(Array.isArray(profile.lotteryIds) && profile.lotteryIds.includes(lotteryId))) {
+    return res.status(403).json({ ok: false, error: 'You are not assigned to this lottery.' });
+  }
+
+  const requestId = sha256('REF:' + reference.toUpperCase()).slice(0, 40);
+  const snap = await db.collection('ticketRequests').doc(requestId).get();
+  if (!snap.exists || snap.data()?.lotteryId !== lotteryId) {
+    return res.status(404).json({
+      ok: false, code: 'PAYMENT_NOT_FOUND',
+      error: 'No payment found for this reference in the selected lottery. Check the number and try again.'
+    });
+  }
+  const data = snap.data() || {};
+  return res.status(200).json({
+    ok: true, request: {
+      id: requestId,
+      name: String(data.name || ''),
+      phone: String(data.phone || ''),
+      reference: String(data.reference || reference),
+      status: String(data.status || 'pending'),
+      quantity: Number(data.quantity || 1),
+      total: Number(data.total || 0),
+      proofMime: String(data.proofMime || ''),
+      hasProof: Boolean(data.proofPath),
+      createdAt: data.createdAt?.toDate?.().toISOString() || null
+    }
+  });
+}
+
 module.exports = async (req, res) => {
   if (req.method === 'GET' && String(req.query?.receipt || '') === '1') {
     return servePaymentReceipt(req, res);
@@ -365,6 +408,7 @@ module.exports = async (req, res) => {
   try {
     const body = readBody(req);
     const action = String(body.action || '').trim().toLowerCase();
+    if (action === 'lookup-reference') return await lookupReference(req, res, body);
     const requestId = String(body.requestId || '').trim();
     const requestedLotteryId = String(body.lotteryId || '').trim();
 
