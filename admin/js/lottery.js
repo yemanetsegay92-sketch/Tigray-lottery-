@@ -1,6 +1,7 @@
+import { TICKET_HEADERS, expandApprovedTicketRows, ticketRowsToTsv, ticketRowsToCsv } from './ticketRows.mjs';
 import { db, auth } from '../../firebase.js';
 import { onAuthStateChanged, signOut } from 'https://www.gstatic.com/firebasejs/12.2.1/firebase-auth.js';
-import { collection, getDocs, doc, getDoc, updateDoc, addDoc, query, where, orderBy, limit, serverTimestamp } from 'https://www.gstatic.com/firebasejs/12.2.1/firebase-firestore.js';
+import { collection, getDocs, doc, getDoc, updateDoc, addDoc, query, where, orderBy, limit, getCountFromServer, serverTimestamp } from 'https://www.gstatic.com/firebasejs/12.2.1/firebase-firestore.js';
 import { phoneHash } from '../../js/phoneHash.js';
 
 const $ = id => document.getElementById(id);
@@ -239,6 +240,21 @@ async function findPaymentByReference(event){
   }
 }
 
+
+async function refreshSoldTicketCount(){
+  if(!lot)return;
+  const selected=lot.id;
+  const target=$('statTickets');
+  if(target)target.textContent='…';
+  try{
+    const count=await getCountFromServer(query(collection(db,'tickets'),where('lotteryId','==',selected)));
+    if(lot?.id===selected&&target)target.textContent=count.data().count.toLocaleString('en-US');
+  }catch(error){
+    console.error('Exact ticket count unavailable:',error);
+    if(lot?.id===selected&&target)target.textContent='—';
+  }
+}
+
 async function renderAll(){
   if(!lot)return;
   if($('findPaymentResult'))$('findPaymentResult').innerHTML='';
@@ -262,8 +278,7 @@ async function renderAll(){
   $('statApproved').textContent=approvedHasMore?'100+':displayedApproved.length;
   $('statRejected').textContent='—';
   if($('statCancelled')) $('statCancelled').textContent='—';
-  const displayedTicketTotal=displayedApproved.reduce((s,x)=>s+Number(x.quantity||0),0);
-  $('statTickets').textContent=approvedHasMore?`${displayedTicketTotal}+`:`${displayedTicketTotal}`;
+  await refreshSoldTicketCount();
 
   renderPending(pending,pendingHasMore);
   renderSummary(displayedApproved,approvedHasMore);
@@ -373,16 +388,26 @@ function renderPending(items,hasMore=false){
   document.querySelectorAll('[data-private-proof]').forEach(b=>b.addEventListener('click',()=>openPrivateReceipt(b.dataset.privateProof,b.dataset.proofMime)));
 }
 
-function rows(data){return data.map(x=>({id:x.id,date:x.createdAt?.toDate?x.createdAt.toDate().toLocaleString():'',name:x.name||'',phone:x.phone||'',reference:x.reference||'',quantity:Number(x.quantity||0),total:Number(x.total||0),status:x.status||'',ticketNumbers:(x.ticketNumbers||[]).map(n=>String(n).padStart(6,'0')).join(' ')}))}
 function renderSummary(items,hasMore=false){
-  const r=rows(items);
-  $('summaryCount').textContent=hasMore?`${r.length} shown · more approved requests`:`${r.length} approved request(s)`;
-  $('summaryTable').innerHTML=r.length?`<table><thead><tr><th>Date</th><th>Name</th><th>Phone</th><th>Reference</th><th>Qty</th><th>Total</th><th>Ticket Numbers</th><th>Action</th></tr></thead><tbody>${r.map(x=>`<tr><td>${esc(x.date)}</td><td>${esc(x.name)}</td><td>${esc(x.phone)}</td><td>${esc(x.reference)}</td><td>${x.quantity}</td><td>${x.total}</td><td>${esc(x.ticketNumbers)}</td><td><button class="danger small-btn" data-cancel="${esc(x.id)}">Cancel</button></td></tr>`).join('')}</tbody></table>`:'<p class="muted">No approved requests yet.</p>';
-  $('downloadCsv').onclick=()=>downloadCsv(`${safeFileName(lot.name)}-approved.csv`,r);
-  $('copyExcel').onclick=async()=>{const tsv=[['Date','Name','Phone','Reference','Qty','Total','Ticket Numbers'],...r.map(x=>[x.date,x.name,x.phone,x.reference,x.quantity,x.total,x.ticketNumbers])].map(row=>row.map(v=>String(v).replace(/\t/g,' ').replace(/\n/g,' ')).join('\t')).join('\n');try{await navigator.clipboard.writeText(tsv);$('summaryMessage').innerHTML='<div class="success">Copied. Paste directly into Excel or Google Sheets.</div>'}catch{$('summaryMessage').innerHTML='<div class="error">Copy is blocked. Use Download CSV instead.</div>'}};
+  const {rows:r,missingTicketRequests}=expandApprovedTicketRows(items);
+  const count=$('summaryCount');
+  count.textContent=r.length+' individual ticket(s) shown from '+items.length+' approved purchase(s)' +
+    (hasMore?' · More approved purchases exist (export includes only those loaded).':'') +
+    (missingTicketRequests?' · WARNING: '+missingTicketRequests+' approved purchase(s) have no assigned ticket numbers.':'');
+  const head='<thead><tr><th>Date</th><th>Name</th><th>Phone</th><th>Reference</th><th>Ticket Number</th><th>Ticket Price (Birr)</th><th>Purchase Qty</th><th>Action</th></tr></thead>';
+  $('summaryTable').innerHTML=r.length?'<table>'+head+'<tbody>'+r.map(x=>'<tr><td>'+esc(x.date)+'</td><td>'+esc(x.name)+'</td><td>'+esc(x.phone)+'</td><td>'+esc(x.reference)+'</td><td><b>'+esc(x.ticketNumber)+'</b></td><td>'+esc(Number.isFinite(x.price)?x.price:'—')+'</td><td>'+esc(x.purchaseQuantity)+'</td><td>'+(x.firstInPurchase?'<button class="danger small-btn" data-cancel="'+esc(x.requestId)+'">Cancel purchase</button>':'—')+'</td></tr>').join('')+'</tbody></table>':'<p class="muted">No approved ticket numbers in the loaded purchases.</p>';
+  $('downloadCsv').onclick=()=>downloadCsv(safeFileName(lot.name)+'-tickets.csv',r);
+  $('copyExcel').onclick=async()=>{
+    try{await navigator.clipboard.writeText(ticketRowsToTsv(r));$('summaryMessage').innerHTML='<div class="success">One row per ticket copied. Paste into Excel or Google Sheets.</div>'}
+    catch{$('summaryMessage').innerHTML='<div class="error">Copy is blocked. Use Download CSV instead.</div>'}
+  };
   document.querySelectorAll('[data-cancel]').forEach(b=>b.addEventListener('click',()=>cancelApproval(b.dataset.cancel)));
 }
-function downloadCsv(name,rows){const h=['Date','Name','Phone','Reference','Qty','Total','Ticket Numbers'];const csv='\ufeff'+[h,...rows.map(x=>[x.date,x.name,x.phone,x.reference,x.quantity,x.total,x.ticketNumbers])].map(r=>r.map(v=>`"${String(v??'').replace(/"/g,'""')}"`).join(',')).join('\n');const blob=new Blob([csv],{type:'text/csv;charset=utf-8'}),a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000)}
+function downloadCsv(name,rows){
+  const csv=ticketRowsToCsv(rows);
+  const blob=new Blob([csv],{type:'text/csv;charset=utf-8'}),a=document.createElement('a');
+  a.href=URL.createObjectURL(blob);a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000);
+}
 function safeFileName(s){return String(s||'lottery').replace(/[^a-z0-9_-]+/gi,'_').slice(0,60)}
 
 function renderAwardsEditor(){
@@ -577,8 +602,7 @@ async function approve(id){
     $('statPending').textContent=pendingHasMore?'50+':pendingTotal;
     $('statApproved').textContent=approvedHasMore?'100+':displayedApproved.length;
 
-    const displayedTicketTotal=displayedApproved.reduce((s,x)=>s+Number(x.quantity||0),0);
-    $('statTickets').textContent=approvedHasMore?`${displayedTicketTotal}+`:`${displayedTicketTotal}`;
+    await refreshSoldTicketCount();
 
     renderSummary(displayedApproved,approvedHasMore);
     $('message').innerHTML='<div class="success">Payment approved and ticket number(s) assigned.</div>';
