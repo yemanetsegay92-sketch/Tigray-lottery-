@@ -7,7 +7,7 @@ The previous 20,000-buyer test uploaded images/PDFs through Vercel, bringing Fas
 ## Checkout flow
 
 1. The existing 200–300 KB JPEG compressor is reused. PDF uploads up to 2 MB and transaction references without uploads are still supported.
-2. POST /api/customer/receipt-upload issues a 10-minute GCS V4 signed POST policy, restricted to a random temporary object, MIME type, session metadata and upload size.
+2. POST /api/customer/create-request with action authorize-receipt-upload issues a 10-minute GCS V4 signed POST policy, restricted to a random temporary object, MIME type, session metadata and upload size.
 3. The browser uploads the binary file with FormData directly to Google Cloud Storage.
 4. POST /api/customer/create-request receives only a small HMAC-signed proofUploadToken. It verifies the lottery, session, GCS metadata, file limits and magic bytes using small reads; it copies the private object into a permanent storage path before recording the request and an atomic one-time claim in Firestore.
 5. Lottery admins receive a 60-second signed private read URL after Firebase authentication/authorization. Receipt bytes also bypass Vercel when admins view them.
@@ -33,7 +33,7 @@ Temporary uploads are stored under payment-proof-incoming/. The sample config/st
 
 - A signed policy constrains expiry, size, exact MIME, metadata and a random object name.
 - Once validated, receipts are copied to a final location that the client CANNOT overwrite with its original signed policy. A Firestore receiptUploadClaims transaction prevents token reuse for multiple checkouts.
-- The signer endpoint is anonymous because checkout supports buyers without accounts. Before production, add Vercel Firewall rate limits to /api/customer/receipt-upload and /api/customer/create-request to prevent upload-policy abuse and runaway Storage charges.
+- The upload authorization action is anonymous because checkout supports buyers without accounts. Before production, add Vercel Firewall rate limits to /api/customer/create-request to prevent upload-policy abuse and runaway Storage charges.
 - Test one reference-only purchase, JPEG, PDF, admin receipt download, duplicate reference, tampered/expired token, oversized PDF, invalid mime and unfinished upload.
 - Old cached checkout clients posting base64 proof data now receive a prompt to refresh the page, intentionally preventing future high-transfer uploads through Vercel.
 - Confirm the Vercel Fast Origin Transfer meter stays low for new receipts.
@@ -44,3 +44,5 @@ Temporary uploads are stored under payment-proof-incoming/. The sample config/st
     node tools/test-direct-receipts.js
 
 Automated unit tests check token signatures, expiry, MIME, size and lottery binding. Actual Cloud Storage upload tests still require bucket CORS and Google credentials.
+
+**Vercel Hobby deployment limit:** The upload authorization is an action in the EXISTING /api/customer/create-request function rather than a separate API file. Vercel Hobby allows at most 12 serverless functions per deployment.
