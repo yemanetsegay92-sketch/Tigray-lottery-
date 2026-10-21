@@ -11,9 +11,9 @@ const lang=localStorage.getItem('tl_lang')||'ti',t=T[lang];function applyText(){
 function blob(canvas,q){return new Promise((res,rej)=>canvas.toBlob(b=>b?res(b):rej(new Error('Could not prepare image.')),'image/jpeg',q))}
 async function compressImage(file){const bitmap=await createImageBitmap(file);let w=bitmap.width,h=bitmap.height,scale=Math.min(1,1280/Math.max(w,h));w=Math.max(1,Math.round(w*scale));h=Math.max(1,Math.round(h*scale));const c=document.createElement('canvas');c.width=w;c.height=h;c.getContext('2d',{alpha:false}).drawImage(bitmap,0,0,w,h);bitmap.close();let q=.70,b=await blob(c,q);while(b.size>300*1024&&q>.42){q-=.08;b=await blob(c,q)}if(b.size>340*1024){const s=Math.min(w,h),scale2=720/s,c2=document.createElement('canvas');c2.width=Math.max(1,Math.round(w*scale2));c2.height=Math.max(1,Math.round(h*scale2));c2.getContext('2d',{alpha:false}).drawImage(c,0,0,c2.width,c2.height);b=await blob(c2,.52);w=c2.width;h=c2.height}if(b.size>380*1024)throw new Error('Please choose a smaller image.');return {blob:b,size:b.size,originalSize:file.size}}
 async function uploadPrivateReceipt(lotteryId, receipt) {
-  const response=await fetch('/api/customer/receipt-upload',{
+  const response=await fetch('/api/customer/create-request',{
     method:'POST',headers:{'content-type':'application/json'},
-    body:JSON.stringify({lotteryId,mime:receipt.mime,bytes:receipt.size})
+    body:JSON.stringify({action:'authorize-receipt-upload',lotteryId,mime:receipt.mime,bytes:receipt.size})
   });
   const policy=await response.json();
   if(!response.ok||!policy.ok)throw new Error(policy.error||'Could not prepare private receipt upload.');
