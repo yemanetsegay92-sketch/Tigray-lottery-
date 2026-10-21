@@ -28,5 +28,7 @@ jobs:
           node --check api/customer/create-request.js
           node --check api/admin/approvals.js
           node --check tools/test-direct-receipts.js
+          node --input-type=module --check < admin/js/lottery.js
+          node --input-type=module --check < js/buy.js
       - name: Test receipt security and validation
         run: node tools/test-direct-receipts.js
