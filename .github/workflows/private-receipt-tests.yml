@@ -1,0 +1,34 @@
+name: Private Receipt Upload Tests
+on:
+  pull_request:
+    paths:
+      - 'api/customer/**'
+      - 'api/admin/approvals.js'
+      - 'js/buy.js'
+      - 'admin/js/lottery.js'
+      - 'tools/test-direct-receipts.js'
+      - '.github/workflows/private-receipt-tests.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  unit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Check Node.js modules
+        run: |
+          node --check api/customer/_receipt-upload.js
+          node --check api/customer/create-request.js
+          node --check api/admin/approvals.js
+          node --check tools/test-direct-receipts.js
+          node --input-type=module --check < admin/js/lottery.js
+          node --input-type=module --check < js/buy.js
+      - name: Test receipt security and validation
+        run: node tools/test-direct-receipts.js

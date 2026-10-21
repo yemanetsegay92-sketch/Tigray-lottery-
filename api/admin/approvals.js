@@ -302,6 +302,58 @@ async function rejectRequest(db, caller, profile, requestId, requestedLotteryId,
   });
 }
 
+// Admin-authenticated, short-lived read link. Private bucket rules stay deny-all;
+// only a verified admin assigned to this lottery may obtain the signed URL.
+// Actual receipt bytes travel Storage -> browser, not Storage -> Vercel -> browser.
+async function servePaymentReceipt(req, res) {
+  res.setHeader('Cache-Control', 'no-store');
+  try {
+    const requestId = String(req.query?.requestId || '').trim();
+    if (!/^[a-f0-9]{40}$/.test(requestId)) {
+      return res.status(400).json({ ok: false, error: 'Invalid request ID.' });
+    }
+    const db = adminDb();
+    const { profile } = await authenticateAdmin(req, db);
+    const snap = await db.collection('ticketRequests').doc(requestId).get();
+    if (!snap.exists) return res.status(404).json({ ok: false, error: 'Request not found.' });
+    const data = snap.data() || {};
+    const lotteryId = String(data.lotteryId || '');
+    assertLotteryAccess(profile, lotteryId);
+    const path = String(data.proofPath || '');
+    if (!path || !path.startsWith('payment-proofs/' + encodeURIComponent(lotteryId) + '/') ||
+        path.includes('..') || path.includes('\\')) {
+      return res.status(404).json({ ok: false, error: 'Receipt not found.' });
+    }
+    const bucket = getStorage().bucket('tigiray-lottery.firebasestorage.app');
+    const file = bucket.file(path);
+    const [metadata] = await file.getMetadata();
+    const bytes = Number(metadata.size);
+    const mime = String(data.proofMime || '');
+    if (!['image/jpeg', 'image/png', 'image/webp', 'application/pdf'].includes(mime) ||
+        mime !== metadata.contentType || !Number.isSafeInteger(bytes) || bytes < 1 ||
+        bytes > (mime === 'application/pdf' ? 2 * 1024 * 1024 : 420 * 1024)) {
+      return res.status(409).json({ ok: false, error: 'Receipt metadata is invalid.' });
+    }
+    const [url] = await file.getSignedUrl({
+      action: 'read',
+      expires: Date.now() + 60 * 1000,
+      responseDisposition: 'attachment'
+    });
+    return res.status(200).json({ ok: true, url, mime, expiresInSeconds: 60 });
+  } catch (error) {
+    const status = Number(error?.statusCode || 0);
+    if (status >= 400 && status < 500) {
+      return res.status(status).json({ ok: false, error: error.message });
+    }
+    if (error?.code === 404) return res.status(404).json({ ok: false, error: 'Receipt not found.' });
+    if (error?.message === 'You are not assigned to this lottery.') {
+      return res.status(403).json({ ok: false, error: 'Not authorized for this lottery.' });
+    }
+    console.error('payment receipt read authorization failed', error);
+    return res.status(500).json({ ok: false, error: 'Could not access the receipt.' });
+  }
+}
+
 module.exports = async (req, res) => {
   if (req.method === 'GET' && String(req.query?.receipt || '') === '1') {
     return servePaymentReceipt(req, res);

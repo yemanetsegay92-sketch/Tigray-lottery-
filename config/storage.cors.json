@@ -1,0 +1,20 @@
+[
+  {
+    "origin": [
+      "https://tigraylottery.com",
+      "https://www.tigraylottery.com"
+    ],
+    "method": [
+      "GET",
+      "POST",
+      "HEAD",
+      "OPTIONS"
+    ],
+    "responseHeader": [
+      "Content-Type",
+      "ETag",
+      "x-goog-meta-proofsession"
+    ],
+    "maxAgeSeconds": 3600
+  }
+]
