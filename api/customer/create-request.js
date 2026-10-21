@@ -14,7 +14,7 @@ function sameSecret(a, b) {
   return aa.length === bb.length && aa.length >= 32 && crypto.timingSafeEqual(aa, bb);
 }
 function liveShadowConfig(req) {
-  if (process.env.LIVE_SHADOW_TEST_ENABLED !== 'true') return null;
+  if (process.env.LIVE_SHADOW_TEST_ENABLED !== 'true' || process.env.VERCEL_ENV !== 'preview') return null;
   const secret = process.env.LIVE_SHADOW_TEST_SECRET;
   if (!sameSecret(req.headers?.['x-tigray-shadow-secret'], secret)) return null;
   const runId = String(process.env.LIVE_SHADOW_RUN_ID || '');
@@ -121,7 +121,7 @@ module.exports = async (req, res) => {
     if (req.method !== 'POST') return res.status(405).json({ ok: false, error: 'Method not allowed.' });
     // On a guarded preview, refuse all ordinary customer submissions. The
     // production website remains unaffected because only Preview enables this.
-    if (process.env.LIVE_SHADOW_TEST_ENABLED === 'true' && !shadow)
+    if (process.env.LIVE_SHADOW_TEST_ENABLED === 'true' && process.env.VERCEL_ENV === 'preview' && !shadow)
       return res.status(404).json({ ok: false, error: 'Test-only preview.' });
     const body = readBody(req);
     const lotteryId = String(body.lotteryId || '').trim();
