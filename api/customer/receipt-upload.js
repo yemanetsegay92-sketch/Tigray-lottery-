@@ -33,7 +33,8 @@ module.exports = async (req, res) => {
         'x-goog-meta-proofsession': session
       },
       conditions: [
-        ['content-length-range', 1, TYPES[mime].max],
+        // Allow multipart form overhead; the stored object's size is checked strictly on finalize.
+        ['content-length-range', 1, TYPES[mime].max + 64 * 1024],
         ['eq', '$Content-Type', mime],
         ['eq', '$x-goog-meta-proofsession', session]
       ]
