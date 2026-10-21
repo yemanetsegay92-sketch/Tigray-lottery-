@@ -23,7 +23,7 @@ function liveShadowConfig(req) {
   if (!/^shadow-[a-z0-9-]{6,40}$/.test(runId) ||
       !Number.isFinite(expires) || expires <= Date.now() ||
       expires > Date.now() + 24 * 60 * 60 * 1000 ||
-      !Number.isInteger(max) || max < 1 || max > 5000 ||
+      !Number.isInteger(max) || max < 1 || max > 20000 ||
       !secret || String(secret).length < 32) return null;
   let project;
   try { project = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT_JSON || '{}').project_id; }
@@ -118,6 +118,10 @@ module.exports = async (req, res) => {
       });
     }
     if (req.method !== 'POST') return res.status(405).json({ ok: false, error: 'Method not allowed.' });
+    // On a guarded preview, refuse all ordinary customer submissions. The
+    // production website remains unaffected because only Preview enables this.
+    if (process.env.LIVE_SHADOW_TEST_ENABLED === 'true' && !shadow)
+      return res.status(404).json({ ok: false, error: 'Test-only preview.' });
     const body = readBody(req);
     const lotteryId = String(body.lotteryId || '').trim();
     const name = String(body.name || '').trim();
