@@ -7,7 +7,7 @@ const BUCKET = 'tigiray-lottery.firebasestorage.app';
 // Shadow traffic uses the same cloud services, but NEVER live ticket, public-status,
 // approval, Telegram queue, or ticket-number collections. Disabled unless explicitly armed.
 const SHADOW_PROJECT = 'tigiray-lottery';
-const SHADOW_LOTTERY = 'loadtest-buys';
+const SHADOW_LOTTERY = 'SmHhy38Cn6mnEHjjtPZl';
 function sameSecret(a, b) {
   const aa = Buffer.from(String(a || ''), 'utf8');
   const bb = Buffer.from(String(b || ''), 'utf8');
@@ -105,7 +105,7 @@ module.exports = async (req, res) => {
     const shadow = wantsShadow ? liveShadowConfig(req) : null;
     if (wantsShadow && !shadow) return res.status(404).json({ ok: false, error: 'Test mode unavailable.' });
     if (probe) {
-      const exists = await adminDb().collection('loadTestLotteries').doc(SHADOW_LOTTERY).get();
+      const exists = await adminDb().collection('lotteries').doc(SHADOW_LOTTERY).get();
       if (!exists.exists || exists.data()?.status !== 'active' || Number(exists.data()?.price) <= 0) {
         return res.status(409).json({ ok: false, error: 'Test lottery configuration missing.' });
       }
@@ -143,7 +143,7 @@ module.exports = async (req, res) => {
     if (telegramInitData) telegramUser = validateTelegramInitData(telegramInitData).user;
 
     const db = adminDb();
-    const lotterySnap = await db.collection(shadow ? 'loadTestLotteries' : 'lotteries').doc(lotteryId).get();
+    const lotterySnap = await db.collection('lotteries').doc(lotteryId).get();
     if (!lotterySnap.exists) return res.status(404).json({ ok: false, error: 'Lottery not found.' });
     const lottery = lotterySnap.data();
     if (lottery.status !== 'active') throw badRequest('This lottery is not currently open.');
