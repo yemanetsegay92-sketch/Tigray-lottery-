@@ -59,7 +59,7 @@ function verifyToken(token, lotteryId) {
   return d;
 }
 function receiptPath(lotteryId, session, ext) {
-  return 'payment-proofs/' + encodeURIComponent(lotteryId) + '/incoming/' + session + '.' + ext;
+  return 'payment-proof-incoming/' + encodeURIComponent(lotteryId) + '/' + session + '.' + ext;
 }
 function confirmFileHeader(mime, head, tail) {
   if (mime === 'image/jpeg') return head.length >= 3 && head[0] === 0xff && head[1] === 0xd8 && head[2] === 0xff;
