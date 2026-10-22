@@ -11,6 +11,7 @@ on:
       - 'tools/test-ticket-rows.mjs'
       - 'tools/test-direct-receipts.js'
       - 'tools/test-payment-lookup.js'
+      - 'tools/test-lottery-cleanup-guards.js'
       - 'tools/final-load-buyers.js'
       - '.github/workflows/final-10k-load.yml'
       - '.github/workflows/private-receipt-tests.yml'
@@ -35,6 +36,7 @@ jobs:
           node --check api/admin/approvals.js
           node --check tools/test-direct-receipts.js
           node --check tools/test-payment-lookup.js
+          node --check tools/test-lottery-cleanup-guards.js
           node --check tools/final-load-buyers.js
           node --input-type=module --check < admin/js/lottery.js
           node --input-type=module --check < admin/js/general.js
@@ -45,6 +47,7 @@ jobs:
         run: |
           node tools/test-direct-receipts.js
           node tools/test-payment-lookup.js
+          node tools/test-lottery-cleanup-guards.js
           node tools/test-ticket-rows.mjs
           if env LOAD_CONFIRM=NO LOAD_START=1 LOAD_COUNT=10 LOAD_CONCURRENCY=2 node tools/final-load-buyers.js; then
             echo 'ERROR: load test unexpectedly ran without confirmation' >&2

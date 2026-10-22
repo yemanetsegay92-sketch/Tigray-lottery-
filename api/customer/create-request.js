@@ -152,7 +152,13 @@ module.exports = async (req, res) => {
     }
     try {
       await db.runTransaction(async tx => {
-        const existing = await tx.get(requestRef);
+        const [existing, currentLottery] = await Promise.all([
+          tx.get(requestRef), tx.get(db.collection('lotteries').doc(lotteryId))
+        ]);
+        if (!currentLottery.exists || currentLottery.data().status !== 'active' ||
+            currentLottery.data().cleanupInProgress === true) {
+          throw badRequest('This lottery is closed or being removed. No new purchases are accepted.');
+        }
         if (existing.exists) throw new Error('DUPLICATE_REFERENCE');
         if (uploadClaimRef) tx.create(uploadClaimRef, {
           requestId, lotteryId, createdAt: FieldValue.serverTimestamp()

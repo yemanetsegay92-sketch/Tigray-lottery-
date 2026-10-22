@@ -1,7 +1,7 @@
 import { expandApprovedTicketRows, ticketRowsToCsv, ticketRowsToTsv } from './ticketRows.mjs';
 import { db, auth, createSecondaryAuth } from '../../firebase.js';
 import { onAuthStateChanged, signOut, createUserWithEmailAndPassword, updateProfile, signOut as authSignOut } from 'https://www.gstatic.com/firebasejs/12.2.1/firebase-auth.js';
-import { collection, getDocs, doc, getDoc, addDoc, updateDoc, deleteDoc, setDoc, serverTimestamp, query, where, limit, getCountFromServer, arrayUnion } from 'https://www.gstatic.com/firebasejs/12.2.1/firebase-firestore.js';
+import { collection, getDocs, doc, getDoc, addDoc, updateDoc, setDoc, serverTimestamp, query, where, limit, getCountFromServer, arrayUnion } from 'https://www.gstatic.com/firebasejs/12.2.1/firebase-firestore.js';
 
 const $=id=>document.getElementById(id);
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -107,7 +107,7 @@ async function renderAdminList(){
 async function renderLotteries(){
   const ls=await getDocs(collection(db,'lotteries'));lots=ls.docs.map(d=>({id:d.id,...d.data()}));$('statLotteries').textContent=lots.length;
   const opts=lots.map(x=>`<option value="${esc(x.id)}">${esc(x.name)}</option>`).join('');$('adminLottery').innerHTML=opts;$('assignLottery').innerHTML=opts;if($('drawLotterySelect'))$('drawLotterySelect').innerHTML=opts;
-  $('lotteries').innerHTML=lots.map(x=>`<div class="row"><b>${esc(x.name)}</b> <span class="badge ${esc(x.status)}">${esc(x.status)}</span><br><span class="muted">ID: ${esc(x.id)} · ${Number(x.price||0)} Birr · ${esc(x.min)}–${esc(x.max)} · Next: ${esc(x.nextTicketNumber??x.min)}</span><div class="actions"><button data-edit="${esc(x.id)}">Edit</button><button class="secondary" data-summary="${esc(x.id)}">Open Summary</button><button class="danger" data-delete="${esc(x.id)}">Delete</button></div></div>`).join('')||'<p class="muted">No lotteries.</p>';
+  $('lotteries').innerHTML=lots.map(x=>`<div class="row"><b>${esc(x.name)}</b> <span class="badge ${esc(x.status)}">${esc(x.status)}</span><br><span class="muted">ID: ${esc(x.id)} · ${Number(x.price||0)} Birr · ${esc(x.min)}–${esc(x.max)} · Next: ${esc(x.nextTicketNumber??x.min)}</span><div class="actions"><button data-edit="${esc(x.id)}">Edit</button><button class="secondary" data-summary="${esc(x.id)}">Open Summary</button><button class="danger" data-delete="${esc(x.id)}">${x.cleanupInProgress?"Continue Cleanup":"Delete & Clear"}</button></div></div>`).join('')||'<p class="muted">No lotteries.</p>';
   document.querySelectorAll('[data-edit]').forEach(b=>b.addEventListener('click',()=>editLottery(b.dataset.edit)));
   document.querySelectorAll('[data-delete]').forEach(b=>b.addEventListener('click',()=>removeLottery(b.dataset.delete)));
   document.querySelectorAll('[data-summary]').forEach(b=>b.addEventListener('click',()=>openLotterySummary(b.dataset.summary)));
@@ -186,7 +186,106 @@ function downloadCsv(name,rows){
 function safeFileName(s){return String(s||'lottery').replace(/[^a-z0-9_-]+/gi,'_').slice(0,60)}
 
 async function editLottery(id){const x=lots.find(l=>l.id===id);if(!x)return;const name=prompt('Lottery name',x.name);if(name===null)return;const price=Number(prompt('Ticket price (Birr)',x.price));if(!price||price<=0)return alert('Invalid price.');const status=prompt('Status: active, upcoming, closed, drawn',x.status)||x.status;try{await updateDoc(doc(db,'lotteries',id),{name:name.trim(),price,status});await addDoc(collection(db,'auditLogs'),{action:'editLottery',lotteryId:id,adminId:auth.currentUser.uid,createdAt:serverTimestamp()});await renderLotteries();await renderSummaryOverview();setupDraw();}catch(e){alert(e.message)}}
-async function removeLottery(id){if(!confirm('Delete this lottery? This action should only be used when the lottery is no longer needed.'))return;try{await deleteDoc(doc(db,'lotteries',id));await addDoc(collection(db,'auditLogs'),{action:'deleteLottery',lotteryId:id,adminId:auth.currentUser.uid,createdAt:serverTimestamp()});await renderLotteries();await renderSummaryOverview();setupDraw();}catch(e){alert(e.message)}}
+
+let cleanupBusy = false;
+async function cleanupApi(action, lotteryId, extras={}) {
+  const token = await auth.currentUser.getIdToken();
+  const res = await fetch('/api/admin/approvals', {
+    method:'POST',
+    headers:{'content-type':'application/json','authorization':'Bearer '+token},
+    body:JSON.stringify({action,lotteryId,...extras})
+  });
+  const body = await res.json().catch(()=>({}));
+  if (!res.ok || !body.ok) {
+    const error = new Error(body.error || 'Cleanup request failed (HTTP '+res.status+').');
+    error.status = res.status;
+    throw error;
+  }
+  return body;
+}
+async function removeLottery(id) {
+  if (cleanupBusy) return;
+  const lottery = lots.find(item=>item.id===id);
+  if (!lottery) return;
+  cleanupBusy = true;
+  const banner = $('message');
+  try {
+    if (!lottery.cleanupInProgress) {
+      banner.innerHTML='<div class="muted">Checking linked records for '+esc(lottery.name)+'…</div>';
+      const p = await cleanupApi('lottery-cleanup-preview',id);
+      const detail =
+        'Lottery: '+p.name+'\n'+
+        'Payment requests: '+p.requests+'\n'+
+        'Approved requests: '+p.approved+'\n'+
+        'Issued tickets: '+p.tickets+'\n'+
+        'Receipt claims: '+p.claims+'\n'+
+        'Queued notifications: '+p.notifications+'\n\n'+
+        'This PERMANENTLY removes its requests, ticket numbers, receipts and admin assignments. '+
+        'All customers in this lottery, including any real buyers, will lose their records. '+
+        'Historical audit logs remain. Cleanup stops at 5,000 deleted documents per day and can resume later. '+
+        'The lottery remains closed throughout cleanup. To proceed type:\nDELETE '+id;
+      const confirmation = prompt(detail);
+      if (confirmation !== 'DELETE '+id) {
+        banner.innerHTML='<div class="muted">Lottery cleanup cancelled. No data changed.</div>';
+        return;
+      }
+      if (p.approved>0 || p.tickets>0) {
+        const extra = confirm('WARNING: This lottery has '+p.approved+
+          ' approved purchases and '+p.tickets+' issued tickets. '+
+          'These ticket records will also be permanently removed. Continue?');
+        if (!extra) return;
+      }
+      const consent = confirm('Last confirmation: close and permanently delete lottery '+p.name+
+        ' and ALL its related purchase data? This cannot be undone.');
+      if (!consent) return;
+      await cleanupApi('lottery-cleanup-start',id,{
+        confirm:'DELETE '+id, acceptIrreversible:true
+      });
+      lottery.cleanupInProgress = true;
+    } else if (!confirm('Resume the existing deletion of '+lottery.name+
+      '? Related test data will be removed in small batches.')) {
+      return;
+    }
+    let steps = 0, requests = 0, documents = 0, files = 0;
+    while (steps < 1000) {
+      const step = await cleanupApi('lottery-cleanup-step',id);
+      steps++;
+      requests += step.phase==='requests' ? step.processed||0 : 0;
+      documents += step.deletedDocuments||0;
+      files += step.removedFiles||0;
+      banner.innerHTML='<div class="muted">Cleanup running for <b>'+esc(lottery.name)+
+        '</b> — phase: '+esc(step.phase||'')+'; batches: '+steps+
+        '; requests cleared in this session: '+requests+
+        '; Firestore documents removed: '+documents+
+        '; Storage files removed: '+files+
+        '. Keep this tab open. Cleanup can resume if interrupted.</div>';
+      if (step.paused) {
+        banner.innerHTML='<div class="muted">Cleanup is safely paused until '+esc(step.waitingUntil||'later')+
+          ' while previously issued Storage upload links expire. Return and click Continue Cleanup afterward.</div>';
+        break;
+      }
+      if (step.done) {
+        banner.innerHTML='<div class="success">Lottery '+esc(lottery.name)+
+          ' and its linked records were deleted. Audit logs preserved.</div>';
+        break;
+      }
+    }
+    if (steps>=1000) {
+      banner.innerHTML='<div class="muted">Cleanup paused after 1,000 batches for safety. Click Continue Cleanup to resume.</div>';
+    }
+  } catch(error) {
+    const prefix = error.status===429
+      ? 'Cleanup safely paused by the daily Firestore deletion guard. '
+      : 'Cleanup stopped without automatically retrying. ';
+    banner.innerHTML='<div class="error">'+esc(prefix+error.message)+
+      ' Refresh General Admin and select Continue Cleanup when safe.</div>';
+  } finally {
+    cleanupBusy=false;
+    try { await renderLotteries(); await renderSummaryOverview(); setupDraw(); }
+    catch(error) { console.warn('Dashboard refresh after cleanup:',error); }
+  }
+}
+
 
 async function loadContactSettings(){
   try{

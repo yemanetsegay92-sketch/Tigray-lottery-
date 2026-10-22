@@ -79,6 +79,7 @@ async function approveRequest(db, caller, profile, requestId, requestedLotteryId
     if (!lotterySnap.exists) throw new Error('Lottery not found.');
 
     const lottery = lotterySnap.data() || {};
+    if (lottery.cleanupInProgress === true) throw new Error('Lottery cleanup is in progress. Approvals are disabled.');
     assertLotteryAccess(profile, lotteryId);
 
     const min = Number(lottery.min);
@@ -203,6 +204,7 @@ async function cancelApproval(db, caller, profile, requestId, reason) {
     if (!lotterySnap.exists) throw new Error('Lottery not found.');
 
     const lottery = lotterySnap.data() || {};
+    if (lottery.cleanupInProgress === true) throw new Error('Lottery cleanup is in progress. Approvals are disabled.');
     assertLotteryAccess(profile, lotteryId);
 
     if (lottery.status === 'drawn') {
@@ -280,6 +282,10 @@ async function rejectRequest(db, caller, profile, requestId, requestedLotteryId,
       throw new Error('Request does not belong to the selected lottery.');
     }
     assertLotteryAccess(profile, lotteryId);
+    const selectedLottery = await tx.get(db.collection('lotteries').doc(lotteryId));
+    if (!selectedLottery.exists || selectedLottery.data().cleanupInProgress === true) {
+      throw new Error('Lottery cleanup is in progress. Payment decisions are disabled.');
+    }
     if (request.status !== 'pending') throw new Error('This request has already been reviewed.');
     const now = FieldValue.serverTimestamp();
     tx.update(ref, {
@@ -397,6 +403,212 @@ async function lookupReference(req, res, body) {
   });
 }
 
+
+// General-Admin-only, resumable test-lottery cleanup. It never transfers
+// receipt image bytes via Vercel. This deliberately uses an existing API
+// function so Hobby deployments do not acquire an additional function.
+const CLEANUP_PHASES = [
+  'requests', 'tickets', 'receiptClaims', 'notifications',
+  'finalProofs', 'incomingProofs', 'adminAssignments', 'finish'
+];
+const CLEANUP_BATCH = 30;
+const CLEANUP_DAILY_DELETE_LIMIT = 5000; // Firestore documents, all lotteries combined.
+function cleanupFailure(message, statusCode = 400) {
+  return Object.assign(new Error(message), { statusCode });
+}
+function cleanupDatePacific() {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'America/Los_Angeles', year: 'numeric', month: '2-digit', day: '2-digit'
+  }).formatToParts(new Date());
+  const find = key => parts.find(p => p.type === key)?.value;
+  return find('year') + '-' + find('month') + '-' + find('day');
+}
+async function cleanupCount(collectionRef, field, value) {
+  return Number((await collectionRef.where(field, '==', value).count().get()).data().count || 0);
+}
+async function cleanupPreview(db, lotteryId, lotterySnap) {
+  const [requests, approved, tickets, claims, notifications] = await Promise.all([
+    cleanupCount(db.collection('ticketRequests'), 'lotteryId', lotteryId),
+    Number((await db.collection('ticketRequests').where('lotteryId','==',lotteryId)
+      .where('status','==','approved').count().get()).data().count || 0),
+    cleanupCount(db.collection('tickets'), 'lotteryId', lotteryId),
+    cleanupCount(db.collection('receiptUploadClaims'), 'lotteryId', lotteryId),
+    cleanupCount(db.collection('buyerNotificationQueue'), 'lotteryId', lotteryId)
+  ]);
+  return {
+    lotteryId, name: String(lotterySnap.data().name || lotteryId),
+    lotteryStatus: String(lotterySnap.data().status || ''),
+    cleanupInProgress: lotterySnap.data().cleanupInProgress === true,
+    cleanupPhase: String(lotterySnap.data().cleanupPhase || ''),
+    requests, approved, tickets, claims, notifications,
+    warning: 'Deletes all related records in this lottery, including real transactions. Audit logs and user accounts are preserved.'
+  };
+}
+async function cleanupDeleteDocuments(db, refs) {
+  const unique = [...new Map(refs.map(ref => [ref.path, ref])).values()];
+  if (!unique.length) return 0;
+  const day = cleanupDatePacific();
+  const dailyRef = db.collection('cleanupDailyUsage').doc(day);
+  await db.runTransaction(async tx => {
+    const snapshot = await tx.get(dailyRef);
+    const used = Number(snapshot.data()?.deletedDocuments || 0);
+    if (used + unique.length > CLEANUP_DAILY_DELETE_LIMIT) {
+      throw cleanupFailure('Daily cleanup safety limit reached. Resume after midnight Pacific time, when Firestore free quotas reset.', 429);
+    }
+    unique.forEach(ref => tx.delete(ref));
+    tx.set(dailyRef, {
+      deletedDocuments: used + unique.length,
+      updatedAt: FieldValue.serverTimestamp()
+    }, { merge: true });
+  });
+  return unique.length;
+}
+async function cleanupStep(db, lotteryId, lotteryRef, data) {
+  const phase = String(data.cleanupPhase || 'requests');
+  const nextPhase = async () => {
+    const index = CLEANUP_PHASES.indexOf(phase);
+    if (index < 0 || index === CLEANUP_PHASES.length - 1)
+      throw cleanupFailure('Invalid cleanup phase. Contact technical support.');
+    const next = CLEANUP_PHASES[index+1];
+    await lotteryRef.update({ cleanupPhase: next });
+    return { ok:true, phase:next, advanced:true, processed:0, deletedDocuments:0 };
+  };
+  const collections = {
+    requests:'ticketRequests', tickets:'tickets',
+    receiptClaims:'receiptUploadClaims', notifications:'buyerNotificationQueue'
+  };
+  if (collections[phase]) {
+    const snap = await db.collection(collections[phase]).where('lotteryId','==',lotteryId)
+      .limit(CLEANUP_BATCH).get();
+    if (snap.empty) return nextPhase();
+    const proofPaths = [];
+    if (phase === 'requests') {
+      for (const requestDoc of snap.docs) {
+        const proofPath = String(requestDoc.data().proofPath || '');
+        if (proofPath) {
+          const prefix = 'payment-proofs/' + encodeURIComponent(lotteryId) + '/';
+          if (!proofPath.startsWith(prefix) || proofPath.includes('..') || proofPath.includes('\\')) {
+            throw cleanupFailure('Unsafe receipt path in request ' + requestDoc.id + '. Cleanup stopped.');
+          }
+          proofPaths.push(proofPath);
+        }
+      }
+    }
+    const refs = [];
+    for (const item of snap.docs) {
+      refs.push(item.ref);
+      if (phase === 'requests') {
+        const record = item.data();
+        const phoneHash = String(record.phoneHash || '') || sha256(normalizePhone(record.phone));
+        if (!/^[a-f0-9]{64}$/.test(phoneHash)) {
+          throw cleanupFailure('Invalid phone hash in request ' + item.id + '. Cleanup stopped.');
+        }
+        refs.push(db.collection('publicStatus').doc(phoneHash).collection('requests').doc(item.id));
+      }
+    }
+    const deletedDocuments = await cleanupDeleteDocuments(db, refs);
+    // Delete proof objects only after the database batch commits. If GCS removal
+    // fails, finalProofs later sweeps this lottery prefix, so cleanup is resumable.
+    if (proofPaths.length) {
+      const bucket = getStorage().bucket('tigiray-lottery.firebasestorage.app');
+      await Promise.all(proofPaths.map(path => bucket.file(path).delete({ignoreNotFound:true})));
+    }
+    return { ok:true, phase, processed:snap.size, deletedDocuments, removedFiles:proofPaths.length };
+  }
+  if (phase === 'finalProofs' || phase === 'incomingProofs') {
+    const prefix = (phase === 'finalProofs' ? 'payment-proofs/' : 'payment-proof-incoming/') +
+      encodeURIComponent(lotteryId) + '/';
+    const [files] = await getStorage().bucket('tigiray-lottery.firebasestorage.app').getFiles({
+      prefix, autoPaginate:false, maxResults:CLEANUP_BATCH
+    });
+    if (!files.length) return nextPhase();
+    await Promise.all(files.map(file => file.delete({ ignoreNotFound:true })));
+    return { ok:true, phase, processed:files.length, deletedDocuments:0, removedFiles:files.length };
+  }
+  if (phase === 'adminAssignments') {
+    const snap = await db.collection('users').where('lotteryIds','array-contains',lotteryId)
+      .limit(CLEANUP_BATCH).get();
+    if (snap.empty) return nextPhase();
+    const batch = db.batch();
+    snap.forEach(item => batch.update(item.ref, { lotteryIds: FieldValue.arrayRemove(lotteryId) }));
+    await batch.commit();
+    return { ok:true, phase, processed:snap.size, deletedDocuments:0 };
+  }
+  if (phase === 'finish') {
+    // A previously issued signed Storage POST remains usable for up to 10
+    // minutes. Do a final incoming-file sweep only after those policies expire.
+    const started = data.cleanupStartedAt?.toMillis?.() || 0;
+    const safeAt = started + 11 * 60 * 1000;
+    if (started && Date.now() < safeAt) {
+      await lotteryRef.update({ cleanupPhase:'incomingProofs' });
+      return { ok:true, phase:'incomingProofs', paused:true,
+        waitingUntil:new Date(safeAt).toISOString(), processed:0, deletedDocuments:0 };
+    }
+    const proofBucket = getStorage().bucket('tigiray-lottery.firebasestorage.app');
+    const [requests, tickets, claims, notifications, admins, finals, incoming] = await Promise.all([
+      db.collection('ticketRequests').where('lotteryId','==',lotteryId).limit(1).get(),
+      db.collection('tickets').where('lotteryId','==',lotteryId).limit(1).get(),
+      db.collection('receiptUploadClaims').where('lotteryId','==',lotteryId).limit(1).get(),
+      db.collection('buyerNotificationQueue').where('lotteryId','==',lotteryId).limit(1).get(),
+      db.collection('users').where('lotteryIds','array-contains',lotteryId).limit(1).get(),
+      proofBucket.getFiles({prefix:'payment-proofs/'+encodeURIComponent(lotteryId)+'/',autoPaginate:false,maxResults:1}),
+      proofBucket.getFiles({prefix:'payment-proof-incoming/'+encodeURIComponent(lotteryId)+'/',autoPaginate:false,maxResults:1})
+    ]);
+    if ([requests,tickets,claims,notifications,admins].some(x => !x.empty) ||
+        finals[0].length || incoming[0].length) {
+      await lotteryRef.update({ cleanupPhase:'requests' });
+      return { ok:true, phase:'requests', advanced:true, processed:0, deletedDocuments:0 };
+    }
+    const batch = db.batch();
+    batch.delete(lotteryRef);
+    batch.create(db.collection('auditLogs').doc(), {
+      action:'fullLotteryCleanup', lotteryId, lotteryName:String(data.name || ''),
+      startedBy:String(data.cleanupStartedBy || ''), finishedAt:FieldValue.serverTimestamp(),
+      note:'Deleted linked lottery data. Historical audit logs retained.'
+    });
+    await batch.commit();
+    return { ok:true, done:true, phase:'done', processed:0, deletedDocuments:1 };
+  }
+  throw cleanupFailure('Unknown cleanup phase. Cleanup stopped.');
+}
+async function handleLotteryCleanup(req, res, body) {
+  res.setHeader('Cache-Control','no-store');
+  const action = String(body.action || '');
+  const lotteryId = String(body.lotteryId || '').trim();
+  if (!/^[a-zA-Z0-9_-]{1,128}$/.test(lotteryId)) throw cleanupFailure('Invalid lottery ID.');
+  const db = adminDb();
+  const { caller, profile } = await authenticateAdmin(req, db);
+  if (profile.role !== 'generalAdmin') throw cleanupFailure('Only General Admin can delete lotteries.', 403);
+  const lotteryRef = db.collection('lotteries').doc(lotteryId);
+  const snap = await lotteryRef.get();
+  if (!snap.exists) return res.status(404).json({ ok:false, error:'Lottery not found or already deleted.' });
+  if (action === 'lottery-cleanup-preview') {
+    return res.status(200).json({ ok:true, ...(await cleanupPreview(db,lotteryId,snap)) });
+  }
+  if (action === 'lottery-cleanup-start') {
+    if (body.confirm !== 'DELETE ' + lotteryId || body.acceptIrreversible !== true) {
+      throw cleanupFailure('Type DELETE and the full lottery ID to confirm irreversible deletion.');
+    }
+    await db.runTransaction(async tx => {
+      const current = await tx.get(lotteryRef);
+      if (!current.exists) throw cleanupFailure('Lottery no longer exists.',404);
+      if (current.data().cleanupInProgress) return;
+      tx.update(lotteryRef, {
+        cleanupInProgress:true, cleanupPhase:'requests', status:'closed',
+        cleanupStartedBy:caller.uid, cleanupStartedAt:FieldValue.serverTimestamp()
+      });
+    });
+    return res.status(200).json({ ok:true, started:true });
+  }
+  if (action === 'lottery-cleanup-step') {
+    if (snap.data().cleanupInProgress !== true) {
+      throw cleanupFailure('Cleanup was not started or the lottery has already been removed.',409);
+    }
+    return res.status(200).json(await cleanupStep(db,lotteryId,lotteryRef,snap.data()));
+  }
+  throw cleanupFailure('Unsupported cleanup action.');
+}
+
 module.exports = async (req, res) => {
   if (req.method === 'GET' && String(req.query?.receipt || '') === '1') {
     return servePaymentReceipt(req, res);
@@ -409,6 +621,7 @@ module.exports = async (req, res) => {
     const body = readBody(req);
     const action = String(body.action || '').trim().toLowerCase();
     if (action === 'lookup-reference') return await lookupReference(req, res, body);
+    if (action.startsWith('lottery-cleanup-')) return await handleLotteryCleanup(req, res, body);
     const requestId = String(body.requestId || '').trim();
     const requestedLotteryId = String(body.lotteryId || '').trim();
 
