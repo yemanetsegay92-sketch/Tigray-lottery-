@@ -6,6 +6,13 @@ import { collection, getDocs, doc, getDoc, addDoc, updateDoc, setDoc, serverTime
 const $=id=>document.getElementById(id);
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 let lots=[];
+const cleanupNotices = new Map();
+function showCleanupNotice(lotteryId, text) {
+  cleanupNotices.set(lotteryId, text);
+  const box = [...document.querySelectorAll('[data-cleanup-message]')]
+    .find(element => element.dataset.cleanupMessage === lotteryId);
+  if (box) box.textContent = text;
+}
 let drawDigits=[];
 let drawBusy=false;
 const DEFAULT_PAYMENT_ACCOUNTS=[{bank:'CBE',number:'1000000000000',holderName:''}];
@@ -107,7 +114,7 @@ async function renderAdminList(){
 async function renderLotteries(){
   const ls=await getDocs(collection(db,'lotteries'));lots=ls.docs.map(d=>({id:d.id,...d.data()}));$('statLotteries').textContent=lots.length;
   const opts=lots.map(x=>`<option value="${esc(x.id)}">${esc(x.name)}</option>`).join('');$('adminLottery').innerHTML=opts;$('assignLottery').innerHTML=opts;if($('drawLotterySelect'))$('drawLotterySelect').innerHTML=opts;
-  $('lotteries').innerHTML=lots.map(x=>`<div class="row"><b>${esc(x.name)}</b> <span class="badge ${esc(x.status)}">${esc(x.status)}</span><br><span class="muted">ID: ${esc(x.id)} · ${Number(x.price||0)} Birr · ${esc(x.min)}–${esc(x.max)} · Next: ${esc(x.nextTicketNumber??x.min)}</span><div class="actions"><button data-edit="${esc(x.id)}">Edit</button><button class="secondary" data-summary="${esc(x.id)}">Open Summary</button><button class="danger" data-delete="${esc(x.id)}">${x.cleanupInProgress?"Continue Cleanup":"Delete & Clear"}</button></div></div>`).join('')||'<p class="muted">No lotteries.</p>';
+  $('lotteries').innerHTML=lots.map(x=>`<div class="row"><b>${esc(x.name)}</b> <span class="badge ${esc(x.status)}">${esc(x.status)}</span><br><span class="muted">ID: ${esc(x.id)} · ${Number(x.price||0)} Birr · ${esc(x.min)}–${esc(x.max)} · Next: ${esc(x.nextTicketNumber??x.min)}</span><div class="actions"><button data-edit="${esc(x.id)}">Edit</button><button class="secondary" data-summary="${esc(x.id)}">Open Summary</button><button class="danger" data-delete="${esc(x.id)}">${x.cleanupInProgress?"Continue Cleanup":"Delete & Clear"}</button></div><div class="muted" data-cleanup-message="${esc(x.id)}">${esc(cleanupNotices.get(x.id) || (x.cleanupInProgress?'Cleanup already started: this lottery is closed. Click Continue Cleanup to resume.':'Click Delete & Clear to preview linked data; then type DELETE followed by the exact lottery ID to confirm.'))}</div></div>`).join('')||'<p class="muted">No lotteries.</p>';
   document.querySelectorAll('[data-edit]').forEach(b=>b.addEventListener('click',()=>editLottery(b.dataset.edit)));
   document.querySelectorAll('[data-delete]').forEach(b=>b.addEventListener('click',()=>removeLottery(b.dataset.delete)));
   document.querySelectorAll('[data-summary]').forEach(b=>b.addEventListener('click',()=>openLotterySummary(b.dataset.summary)));
@@ -212,7 +219,9 @@ async function removeLottery(id) {
   try {
     if (!lottery.cleanupInProgress) {
       banner.innerHTML='<div class="muted">Checking linked records for '+esc(lottery.name)+'…</div>';
+      showCleanupNotice(id, 'Checking linked records…');
       const p = await cleanupApi('lottery-cleanup-preview',id);
+      showCleanupNotice(id, 'Preview: '+p.requests+' purchases, '+p.approved+' approved, '+p.tickets+' tickets. Deletion has NOT started.');
       const detail =
         'Lottery: '+p.name+'\n'+
         'Payment requests: '+p.requests+'\n'+
@@ -227,23 +236,26 @@ async function removeLottery(id) {
       const confirmation = prompt(detail);
       if (confirmation !== 'DELETE '+id) {
         banner.innerHTML='<div class="muted">Lottery cleanup cancelled. No data changed.</div>';
+        showCleanupNotice(id, 'Cancelled: you must enter DELETE '+id+' exactly. No data was changed.');
         return;
       }
       if (p.approved>0 || p.tickets>0) {
         const extra = confirm('WARNING: This lottery has '+p.approved+
           ' approved purchases and '+p.tickets+' issued tickets. '+
           'These ticket records will also be permanently removed. Continue?');
-        if (!extra) return;
+        if (!extra) { showCleanupNotice(id, 'Cancelled at approved-ticket warning. No data was changed.'); return; }
       }
       const consent = confirm('Last confirmation: close and permanently delete lottery '+p.name+
         ' and ALL its related purchase data? This cannot be undone.');
-      if (!consent) return;
+      if (!consent) { showCleanupNotice(id, 'Cancelled at final confirmation. No data was changed.'); return; }
       await cleanupApi('lottery-cleanup-start',id,{
         confirm:'DELETE '+id, acceptIrreversible:true
       });
       lottery.cleanupInProgress = true;
+      showCleanupNotice(id, 'Deletion started. This lottery is now closed; running small batches…');
     } else if (!confirm('Resume the existing deletion of '+lottery.name+
       '? Related test data will be removed in small batches.')) {
+      showCleanupNotice(id, 'Resume cancelled. Cleanup remains paused and the lottery stays closed.');
       return;
     }
     let steps = 0, requests = 0, documents = 0, files = 0;
@@ -259,9 +271,11 @@ async function removeLottery(id) {
         '; Firestore documents removed: '+documents+
         '; Storage files removed: '+files+
         '. Keep this tab open. Cleanup can resume if interrupted.</div>';
+      showCleanupNotice(id, 'Cleaning '+step.phase+': '+documents+' Firestore documents and '+files+' Storage files removed in this session.');
       if (step.paused) {
         banner.innerHTML='<div class="muted">Cleanup is safely paused until '+esc(step.waitingUntil||'later')+
           ' while previously issued Storage upload links expire. Return and click Continue Cleanup afterward.</div>';
+        showCleanupNotice(id, 'Temporarily paused while old upload links expire. Click Continue Cleanup later.');
         break;
       }
       if (step.done) {
@@ -271,12 +285,14 @@ async function removeLottery(id) {
       }
     }
     if (steps>=1000) {
+      showCleanupNotice(id, 'Paused after 1,000 batches; click Continue Cleanup to resume.');
       banner.innerHTML='<div class="muted">Cleanup paused after 1,000 batches for safety. Click Continue Cleanup to resume.</div>';
     }
   } catch(error) {
     const prefix = error.status===429
       ? 'Cleanup safely paused by the daily Firestore deletion guard. '
       : 'Cleanup stopped without automatically retrying. ';
+    showCleanupNotice(id, prefix+error.message);
     banner.innerHTML='<div class="error">'+esc(prefix+error.message)+
       ' Refresh General Admin and select Continue Cleanup when safe.</div>';
   } finally {
