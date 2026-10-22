@@ -40,6 +40,8 @@ onAuthStateChanged(auth,async u=>{
     await loadContactSettings();
     renderCreatePaymentAccountsEditor();
     setupDraw();
+    // Previously confirmed cleanups resume automatically after refresh/sign-in.
+    void autoResumeCleanupOnLoad();
   }catch(e){console.error(e);$('message').innerHTML=`<div class="error">${esc(e.message||'Could not load the General Admin dashboard.')}</div>`;}
 });
 
@@ -210,7 +212,15 @@ async function cleanupApi(action, lotteryId, extras={}) {
   }
   return body;
 }
-async function removeLottery(id) {
+async function autoResumeCleanupOnLoad() {
+  const pending = lots.filter(lottery => lottery.cleanupInProgress === true).map(lottery=>lottery.id);
+  for (const id of pending) {
+    // Every pending item was already confirmed when cleanup started.
+    if (!lots.some(lottery=>lottery.id===id && lottery.cleanupInProgress)) continue;
+    await removeLottery(id, true);
+  }
+}
+async function removeLottery(id, alreadyConfirmed=false) {
   if (cleanupBusy) return;
   const lottery = lots.find(item=>item.id===id);
   if (!lottery) return;
@@ -231,7 +241,8 @@ async function removeLottery(id) {
         'Queued notifications: '+p.notifications+'\n\n'+
         'This PERMANENTLY removes its requests, ticket numbers, receipts and admin assignments. '+
         'All customers in this lottery, including any real buyers, will lose their records. '+
-        'Historical audit logs remain. Cleanup stops at 5,000 deleted documents per day and can resume later. '+
+        'Lottery-specific audit history is also cleared, leaving a minimal deletion certificate. '+
+        'Firebase quotas or billing may apply. '+
         'The lottery remains closed throughout cleanup. To proceed type:\nDELETE '+id;
       const confirmation = prompt(detail);
       if (confirmation !== 'DELETE '+id) {
@@ -253,14 +264,26 @@ async function removeLottery(id) {
       });
       lottery.cleanupInProgress = true;
       showCleanupNotice(id, 'Deletion started. This lottery is now closed; running small batches…');
-    } else if (!confirm('Resume the existing deletion of '+lottery.name+
+    } else if (!alreadyConfirmed && !confirm('Resume the existing deletion of '+lottery.name+
       '? Related test data will be removed in small batches.')) {
       showCleanupNotice(id, 'Resume cancelled. Cleanup remains paused and the lottery stays closed.');
       return;
     }
-    let steps = 0, requests = 0, documents = 0, files = 0;
+    let steps = 0, requests = 0, documents = 0, files = 0, quotaRetries=0;
     while (steps < 1000) {
-      const step = await cleanupApi('lottery-cleanup-step',id);
+      let step;
+      try {
+        step = await cleanupApi('lottery-cleanup-step',id);
+      } catch (e) {
+        // Firebase can still impose real quota limits even without our old daily cap.
+        if (e.status !== 429 && e.status !== 503) throw e;
+        quotaRetries++;
+        const waitMs = Math.min(30*60*1000,60*1000*Math.pow(2,Math.min(quotaRetries,5)));
+        showCleanupNotice(id,'Firebase is limiting requests. Automatically retrying when the cooldown ends; keep the tab open.');
+        await new Promise(resolve=>setTimeout(resolve,waitMs));
+        continue;
+      }
+      quotaRetries = 0;
       steps++;
       requests += step.phase==='requests' ? step.processed||0 : 0;
       documents += step.deletedDocuments||0;
@@ -298,7 +321,7 @@ async function removeLottery(id) {
       }
     }
     if (steps>=1000) {
-      showCleanupNotice(id, 'Paused after 1,000 batches; click Continue Cleanup to resume.');
+      showCleanupNotice(id, 'Reached the single-session safety cap. Cleanup automatically resumes after refresh.');
       banner.innerHTML='<div class="muted">Cleanup paused after 1,000 batches for safety. Click Continue Cleanup to resume.</div>';
     }
   } catch(error) {
