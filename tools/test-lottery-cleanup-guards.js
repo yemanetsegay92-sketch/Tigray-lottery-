@@ -12,9 +12,10 @@ includes(api, /profile\.role !== 'generalAdmin'/, 'Only general admin may clean 
 includes(api, /body\.confirm !== 'DELETE ' \+ lotteryId/, 'Exact lottery ID required');
 includes(api, /body\.acceptIrreversible !== true/, 'Irreversible deletion confirmation required');
 includes(api, /cleanupInProgress:true, cleanupPhase:'requests', status:'closed'/, 'Close the lottery before deleting');
-includes(api, /cleanupDatePacific\(\)/, 'Timezone-aware daily quota');
-includes(api, /CLEANUP_DAILY_DELETE_LIMIT = 5000/, 'Conservative quota cap');
-includes(api, /db\.runTransaction\(async tx => \{[\s\S]*?tx\.set\(dailyRef,/, 'Atomic quota and deletes');
+assert.doesNotMatch(api, /CLEANUP_DAILY_DELETE_LIMIT/, 'No artificial per-day delete limit');
+includes(api, /const batch = db\.batch\(\);/, 'Delete in small Firebase batches');
+includes(api, /await batch\.commit\(\)/, 'Await each delete batch');
+includes(api, /auditLogs:'auditLogs'/, 'Delete old lottery audit entries');
 includes(api, /where\('lotteryId','==',lotteryId\)/, 'Scope deletions to selected lottery');
 includes(api, /db\.collection\('publicStatus'\)\.doc\(phoneHash\)\.collection\('requests'\)\.doc\(item\.id\)/, 'Remove linked public request');
 includes(api, /phase === 'finalProofs' \|\| phase === 'incomingProofs'/, 'Sweep finalized and incoming Storage files');
@@ -26,6 +27,9 @@ includes(checkout, /currentLottery\.data\(\)\.cleanupInProgress === true/, 'Prev
 includes(ui, /'lottery-cleanup-preview'/, 'Show confirmation preview');
 includes(ui, /'lottery-cleanup-start'/, 'Start confirmed cleanup');
 includes(ui, /'lottery-cleanup-step'/, 'Support resumable cleanup');
+includes(ui, /autoResumeCleanupOnLoad\(\)/, 'Resume after reload');
+includes(ui, /await new Promise\(resolve=>setTimeout\(resolve,waitMs\)\)/, 'Automatic cooldown without repeated clicks');
+includes(ui, /e\.status !== 429 && e\.status !== 503/, 'Retry real Firebase quota pressure');
 assert.doesNotMatch(ui, /await deleteDoc\(doc\(db,'lotteries',id\)\)/, 'Old orphan-producing deletion removed');
 console.log('Cleanup authorization, lifecycle and safety checks passed');
 
@@ -43,7 +47,8 @@ const fakeDb = {
           collection(subName) { return fakeDb.collection(subName); },
           get: async () => snapshot(name==='lotteries' ? (id==='sandbox'?lottery:null) :
             name==='users' ? (id==='general'?{role:'generalAdmin'}:{role:'lotteryAdmin'}) : null),
-          update: async changes => { if (name==='lotteries') Object.assign(lottery,changes); }
+          update: async changes => { if (name==='lotteries') Object.assign(lottery,changes); },
+          get path() {return name+'/'+id;}
         };
       },
       where() {
@@ -53,6 +58,15 @@ const fakeDb = {
           limit() {return {get:async()=>({empty:true,size:0,docs:[]})};}
         };
       }
+    };
+  },
+  batch() {
+    const steps = [];
+    return {
+      delete(ref){steps.push(()=>{ if(ref.path==='lotteries/sandbox') lottery=null; });},
+      create(ref,record){steps.push(()=>{});},
+      update(ref,changes){steps.push(()=>ref.update(changes));},
+      async commit(){ for(const op of steps)await op(); }
     };
   },
   async runTransaction(cb) {
@@ -70,7 +84,7 @@ const sandbox = {
       serverTimestamp:()=>new Date(),arrayRemove:value=>({remove:value})
     }};
     if (spec==='firebase-admin/auth') return {getAuth:()=>({verifyIdToken:async token=>({uid:token})})};
-    if (spec==='firebase-admin/storage') return {getStorage:()=>({bucket:()=>({})})};
+    if (spec==='firebase-admin/storage') return {getStorage:()=>({bucket:()=>({getFiles:async()=>[[]]})})};
     throw new Error('Unexpected require: '+spec);
   }
 };
@@ -102,5 +116,16 @@ async function send(uid,body) {
   r=await send('general',{action:'lottery-cleanup-step',lotteryId:'sandbox'});
   assert.equal(r.code,200,'Empty phase advances successfully');
   assert.equal(lottery.cleanupPhase,'tickets','Cleanup progress remains resumable');
+  const phases=[];
+  for (let i=0; i<12 && lottery; i++) {
+    const step=await send('general',{action:'lottery-cleanup-step',lotteryId:'sandbox'});
+    assert.equal(step.code,200,'Next cleanup phase succeeds without a new confirmation');
+    phases.push(step.output.phase);
+  }
+  assert.equal(lottery,null,'Lottery document is gone after all data phases');
+  assert.ok(phases.includes('auditLogs'),'Historical lottery audit records are considered');
+  assert.ok(phases.includes('finalProofs'),'Final receipts are considered');
+  assert.ok(phases.includes('incomingProofs'),'Temporary receipts are considered');
+  assert.equal(phases.at(-1),'done','Completion is confirmed by backend');
   console.log('Mocked General Admin cleanup API tests passed');
 })().catch(e=>{console.error(e);process.exitCode=1;});

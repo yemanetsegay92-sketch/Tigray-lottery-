@@ -408,59 +408,43 @@ async function lookupReference(req, res, body) {
 // receipt image bytes via Vercel. This deliberately uses an existing API
 // function so Hobby deployments do not acquire an additional function.
 const CLEANUP_PHASES = [
-  'requests', 'tickets', 'receiptClaims', 'notifications',
+  'requests', 'tickets', 'receiptClaims', 'notifications', 'auditLogs',
   'finalProofs', 'incomingProofs', 'adminAssignments', 'finish'
 ];
 const CLEANUP_BATCH = 30;
-const CLEANUP_DAILY_DELETE_LIMIT = 5000; // Firestore documents, all lotteries combined.
 function cleanupFailure(message, statusCode = 400) {
   return Object.assign(new Error(message), { statusCode });
-}
-function cleanupDatePacific() {
-  const parts = new Intl.DateTimeFormat('en-US', {
-    timeZone: 'America/Los_Angeles', year: 'numeric', month: '2-digit', day: '2-digit'
-  }).formatToParts(new Date());
-  const find = key => parts.find(p => p.type === key)?.value;
-  return find('year') + '-' + find('month') + '-' + find('day');
 }
 async function cleanupCount(collectionRef, field, value) {
   return Number((await collectionRef.where(field, '==', value).count().get()).data().count || 0);
 }
 async function cleanupPreview(db, lotteryId, lotterySnap) {
-  const [requests, approved, tickets, claims, notifications] = await Promise.all([
+  const [requests, approved, tickets, claims, notifications, auditLogs] = await Promise.all([
     cleanupCount(db.collection('ticketRequests'), 'lotteryId', lotteryId),
     Number((await db.collection('ticketRequests').where('lotteryId','==',lotteryId)
       .where('status','==','approved').count().get()).data().count || 0),
     cleanupCount(db.collection('tickets'), 'lotteryId', lotteryId),
     cleanupCount(db.collection('receiptUploadClaims'), 'lotteryId', lotteryId),
-    cleanupCount(db.collection('buyerNotificationQueue'), 'lotteryId', lotteryId)
+    cleanupCount(db.collection('buyerNotificationQueue'), 'lotteryId', lotteryId),
+    cleanupCount(db.collection('auditLogs'), 'lotteryId', lotteryId)
   ]);
   return {
     lotteryId, name: String(lotterySnap.data().name || lotteryId),
     lotteryStatus: String(lotterySnap.data().status || ''),
     cleanupInProgress: lotterySnap.data().cleanupInProgress === true,
     cleanupPhase: String(lotterySnap.data().cleanupPhase || ''),
-    requests, approved, tickets, claims, notifications,
-    warning: 'Deletes all related records in this lottery, including real transactions. Audit logs and user accounts are preserved.'
+    requests, approved, tickets, claims, notifications, auditLogs,
+    warning: 'Deletes all related records in this lottery, including real transactions. User accounts are preserved. Historical lottery audit entries are removed; a deletion certificate remains.'
   };
 }
 async function cleanupDeleteDocuments(db, refs) {
   const unique = [...new Map(refs.map(ref => [ref.path, ref])).values()];
   if (!unique.length) return 0;
-  const day = cleanupDatePacific();
-  const dailyRef = db.collection('cleanupDailyUsage').doc(day);
-  await db.runTransaction(async tx => {
-    const snapshot = await tx.get(dailyRef);
-    const used = Number(snapshot.data()?.deletedDocuments || 0);
-    if (used + unique.length > CLEANUP_DAILY_DELETE_LIMIT) {
-      throw cleanupFailure('Daily cleanup safety limit reached. Resume after midnight Pacific time, when Firestore free quotas reset.', 429);
-    }
-    unique.forEach(ref => tx.delete(ref));
-    tx.set(dailyRef, {
-      deletedDocuments: used + unique.length,
-      updatedAt: FieldValue.serverTimestamp()
-    }, { merge: true });
-  });
+  // Small atomic batches, not one Vercel request per document.
+  // Firebase itself enforces any remaining free-plan quotas.
+  const batch = db.batch();
+  for (const ref of unique) batch.delete(ref);
+  await batch.commit();
   return unique.length;
 }
 async function cleanupStep(db, lotteryId, lotteryRef, data) {
@@ -475,7 +459,7 @@ async function cleanupStep(db, lotteryId, lotteryRef, data) {
   };
   const collections = {
     requests:'ticketRequests', tickets:'tickets',
-    receiptClaims:'receiptUploadClaims', notifications:'buyerNotificationQueue'
+    receiptClaims:'receiptUploadClaims', notifications:'buyerNotificationQueue', auditLogs:'auditLogs'
   };
   if (collections[phase]) {
     const snap = await db.collection(collections[phase]).where('lotteryId','==',lotteryId)
@@ -545,16 +529,17 @@ async function cleanupStep(db, lotteryId, lotteryRef, data) {
         waitingUntil:new Date(safeAt).toISOString(), processed:0, deletedDocuments:0 };
     }
     const proofBucket = getStorage().bucket('tigiray-lottery.firebasestorage.app');
-    const [requests, tickets, claims, notifications, admins, finals, incoming] = await Promise.all([
+    const [requests, tickets, claims, notifications, admins, audit, finals, incoming] = await Promise.all([
       db.collection('ticketRequests').where('lotteryId','==',lotteryId).limit(1).get(),
       db.collection('tickets').where('lotteryId','==',lotteryId).limit(1).get(),
       db.collection('receiptUploadClaims').where('lotteryId','==',lotteryId).limit(1).get(),
       db.collection('buyerNotificationQueue').where('lotteryId','==',lotteryId).limit(1).get(),
       db.collection('users').where('lotteryIds','array-contains',lotteryId).limit(1).get(),
+      db.collection('auditLogs').where('lotteryId','==',lotteryId).limit(1).get(),
       proofBucket.getFiles({prefix:'payment-proofs/'+encodeURIComponent(lotteryId)+'/',autoPaginate:false,maxResults:1}),
       proofBucket.getFiles({prefix:'payment-proof-incoming/'+encodeURIComponent(lotteryId)+'/',autoPaginate:false,maxResults:1})
     ]);
-    if ([requests,tickets,claims,notifications,admins].some(x => !x.empty) ||
+    if ([requests,tickets,claims,notifications,admins,audit].some(x => !x.empty) ||
         finals[0].length || incoming[0].length) {
       await lotteryRef.update({ cleanupPhase:'requests' });
       return { ok:true, phase:'requests', advanced:true, processed:0, deletedDocuments:0 };
@@ -564,7 +549,7 @@ async function cleanupStep(db, lotteryId, lotteryRef, data) {
     batch.create(db.collection('auditLogs').doc(), {
       action:'fullLotteryCleanup', lotteryId, lotteryName:String(data.name || ''),
       startedBy:String(data.cleanupStartedBy || ''), finishedAt:FieldValue.serverTimestamp(),
-      note:'Deleted linked lottery data. Historical audit logs retained.'
+      note:'Deleted linked lottery data, including historical lottery audit entries. Minimal deletion certificate retained.'
     });
     await batch.commit();
     return { ok:true, done:true, phase:'done', processed:0, deletedDocuments:1 };
