@@ -47,7 +47,8 @@ const fakeDb = {
           collection(subName) { return fakeDb.collection(subName); },
           get: async () => snapshot(name==='lotteries' ? (id==='sandbox'?lottery:null) :
             name==='users' ? (id==='general'?{role:'generalAdmin'}:{role:'lotteryAdmin'}) : null),
-          update: async changes => { if (name==='lotteries') Object.assign(lottery,changes); }
+          update: async changes => { if (name==='lotteries') Object.assign(lottery,changes); },
+          get path() {return name+'/'+id;}
         };
       },
       where() {
@@ -57,6 +58,15 @@ const fakeDb = {
           limit() {return {get:async()=>({empty:true,size:0,docs:[]})};}
         };
       }
+    };
+  },
+  batch() {
+    const steps = [];
+    return {
+      delete(ref){steps.push(()=>{ if(ref.path==='lotteries/sandbox') lottery=null; });},
+      create(ref,record){steps.push(()=>{});},
+      update(ref,changes){steps.push(()=>ref.update(changes));},
+      async commit(){ for(const op of steps)await op(); }
     };
   },
   async runTransaction(cb) {
@@ -74,7 +84,7 @@ const sandbox = {
       serverTimestamp:()=>new Date(),arrayRemove:value=>({remove:value})
     }};
     if (spec==='firebase-admin/auth') return {getAuth:()=>({verifyIdToken:async token=>({uid:token})})};
-    if (spec==='firebase-admin/storage') return {getStorage:()=>({bucket:()=>({})})};
+    if (spec==='firebase-admin/storage') return {getStorage:()=>({bucket:()=>({getFiles:async()=>[[]]})})};
     throw new Error('Unexpected require: '+spec);
   }
 };
@@ -106,5 +116,16 @@ async function send(uid,body) {
   r=await send('general',{action:'lottery-cleanup-step',lotteryId:'sandbox'});
   assert.equal(r.code,200,'Empty phase advances successfully');
   assert.equal(lottery.cleanupPhase,'tickets','Cleanup progress remains resumable');
+  const phases=[];
+  for (let i=0; i<12 && lottery; i++) {
+    const step=await send('general',{action:'lottery-cleanup-step',lotteryId:'sandbox'});
+    assert.equal(step.code,200,'Next cleanup phase succeeds without a new confirmation');
+    phases.push(step.output.phase);
+  }
+  assert.equal(lottery,null,'Lottery document is gone after all data phases');
+  assert.ok(phases.includes('auditLogs'),'Historical lottery audit records are considered');
+  assert.ok(phases.includes('finalProofs'),'Final receipts are considered');
+  assert.ok(phases.includes('incomingProofs'),'Temporary receipts are considered');
+  assert.equal(phases.at(-1),'done','Completion is confirmed by backend');
   console.log('Mocked General Admin cleanup API tests passed');
 })().catch(e=>{console.error(e);process.exitCode=1;});
