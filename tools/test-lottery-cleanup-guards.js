@@ -48,6 +48,7 @@ const fakeDb = {
       },
       where() {
         return {
+          where() {return this;},
           count() { return {get: async () => ({data:()=>({count:0})})}; },
           limit() {return {get:async()=>({empty:true,size:0,docs:[]})};}
         };
