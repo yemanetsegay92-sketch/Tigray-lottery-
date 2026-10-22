@@ -270,7 +270,7 @@ async function removeLottery(id, alreadyConfirmed=false) {
       return;
     }
     let steps = 0, requests = 0, documents = 0, files = 0, quotaRetries=0;
-    while (steps < 1000) {
+    while (true) {
       let step;
       try {
         step = await cleanupApi('lottery-cleanup-step',id);
@@ -285,6 +285,8 @@ async function removeLottery(id, alreadyConfirmed=false) {
       }
       quotaRetries = 0;
       steps++;
+      // Yield occasionally; large lotteries remain automatic without flooding Vercel.
+      if (steps%200 === 0) await new Promise(resolve=>setTimeout(resolve,1500));
       requests += step.phase==='requests' ? step.processed||0 : 0;
       documents += step.deletedDocuments||0;
       files += step.removedFiles||0;
@@ -319,10 +321,6 @@ async function removeLottery(id, alreadyConfirmed=false) {
           ' and its linked records were deleted. Audit logs preserved.</div>';
         break;
       }
-    }
-    if (steps>=1000) {
-      showCleanupNotice(id, 'Reached the single-session safety cap. Cleanup automatically resumes after refresh.');
-      banner.innerHTML='<div class="muted">Cleanup paused after 1,000 batches for safety. Click Continue Cleanup to resume.</div>';
     }
   } catch(error) {
     const prefix = error.status===429
