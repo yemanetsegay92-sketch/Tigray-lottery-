@@ -12,9 +12,10 @@ includes(api, /profile\.role !== 'generalAdmin'/, 'Only general admin may clean 
 includes(api, /body\.confirm !== 'DELETE ' \+ lotteryId/, 'Exact lottery ID required');
 includes(api, /body\.acceptIrreversible !== true/, 'Irreversible deletion confirmation required');
 includes(api, /cleanupInProgress:true, cleanupPhase:'requests', status:'closed'/, 'Close the lottery before deleting');
-includes(api, /cleanupDatePacific\(\)/, 'Timezone-aware daily quota');
-includes(api, /CLEANUP_DAILY_DELETE_LIMIT = 5000/, 'Conservative quota cap');
-includes(api, /db\.runTransaction\(async tx => \{[\s\S]*?tx\.set\(dailyRef,/, 'Atomic quota and deletes');
+assert.doesNotMatch(api, /CLEANUP_DAILY_DELETE_LIMIT/, 'No artificial per-day delete limit');
+includes(api, /const batch = db\.batch\(\);/, 'Delete in small Firebase batches');
+includes(api, /await batch\.commit\(\)/, 'Await each delete batch');
+includes(api, /auditLogs:'auditLogs'/, 'Delete old lottery audit entries');
 includes(api, /where\('lotteryId','==',lotteryId\)/, 'Scope deletions to selected lottery');
 includes(api, /db\.collection\('publicStatus'\)\.doc\(phoneHash\)\.collection\('requests'\)\.doc\(item\.id\)/, 'Remove linked public request');
 includes(api, /phase === 'finalProofs' \|\| phase === 'incomingProofs'/, 'Sweep finalized and incoming Storage files');
@@ -26,6 +27,9 @@ includes(checkout, /currentLottery\.data\(\)\.cleanupInProgress === true/, 'Prev
 includes(ui, /'lottery-cleanup-preview'/, 'Show confirmation preview');
 includes(ui, /'lottery-cleanup-start'/, 'Start confirmed cleanup');
 includes(ui, /'lottery-cleanup-step'/, 'Support resumable cleanup');
+includes(ui, /autoResumeCleanupOnLoad\(\)/, 'Resume after reload');
+includes(ui, /await new Promise\(resolve=>setTimeout\(resolve,waitMs\)\)/, 'Automatic cooldown without repeated clicks');
+includes(ui, /e\.status !== 429 && e\.status !== 503/, 'Retry real Firebase quota pressure');
 assert.doesNotMatch(ui, /await deleteDoc\(doc\(db,'lotteries',id\)\)/, 'Old orphan-producing deletion removed');
 console.log('Cleanup authorization, lifecycle and safety checks passed');
 
