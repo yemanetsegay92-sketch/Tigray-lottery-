@@ -79,6 +79,7 @@ async function approveRequest(db, caller, profile, requestId, requestedLotteryId
     if (!lotterySnap.exists) throw new Error('Lottery not found.');
 
     const lottery = lotterySnap.data() || {};
+    if (lottery.cleanupInProgress === true) throw new Error('Lottery cleanup is in progress. Approvals are disabled.');
     assertLotteryAccess(profile, lotteryId);
 
     const min = Number(lottery.min);
@@ -203,6 +204,7 @@ async function cancelApproval(db, caller, profile, requestId, reason) {
     if (!lotterySnap.exists) throw new Error('Lottery not found.');
 
     const lottery = lotterySnap.data() || {};
+    if (lottery.cleanupInProgress === true) throw new Error('Lottery cleanup is in progress. Approvals are disabled.');
     assertLotteryAccess(profile, lotteryId);
 
     if (lottery.status === 'drawn') {
@@ -280,6 +282,10 @@ async function rejectRequest(db, caller, profile, requestId, requestedLotteryId,
       throw new Error('Request does not belong to the selected lottery.');
     }
     assertLotteryAccess(profile, lotteryId);
+    const selectedLottery = await tx.get(db.collection('lotteries').doc(lotteryId));
+    if (!selectedLottery.exists || selectedLottery.data().cleanupInProgress === true) {
+      throw new Error('Lottery cleanup is in progress. Payment decisions are disabled.');
+    }
     if (request.status !== 'pending') throw new Error('This request has already been reviewed.');
     const now = FieldValue.serverTimestamp();
     tx.update(ref, {
@@ -475,8 +481,8 @@ async function cleanupStep(db, lotteryId, lotteryRef, data) {
     const snap = await db.collection(collections[phase]).where('lotteryId','==',lotteryId)
       .limit(CLEANUP_BATCH).get();
     if (snap.empty) return nextPhase();
+    const proofPaths = [];
     if (phase === 'requests') {
-      const bucket = getStorage().bucket('tigiray-lottery.firebasestorage.app');
       for (const requestDoc of snap.docs) {
         const proofPath = String(requestDoc.data().proofPath || '');
         if (proofPath) {
@@ -484,7 +490,7 @@ async function cleanupStep(db, lotteryId, lotteryRef, data) {
           if (!proofPath.startsWith(prefix) || proofPath.includes('..') || proofPath.includes('\\')) {
             throw cleanupFailure('Unsafe receipt path in request ' + requestDoc.id + '. Cleanup stopped.');
           }
-          await bucket.file(proofPath).delete({ ignoreNotFound:true });
+          proofPaths.push(proofPath);
         }
       }
     }
@@ -501,7 +507,13 @@ async function cleanupStep(db, lotteryId, lotteryRef, data) {
       }
     }
     const deletedDocuments = await cleanupDeleteDocuments(db, refs);
-    return { ok:true, phase, processed:snap.size, deletedDocuments };
+    // Delete proof objects only after the database batch commits. If GCS removal
+    // fails, finalProofs later sweeps this lottery prefix, so cleanup is resumable.
+    if (proofPaths.length) {
+      const bucket = getStorage().bucket('tigiray-lottery.firebasestorage.app');
+      await Promise.all(proofPaths.map(path => bucket.file(path).delete({ignoreNotFound:true})));
+    }
+    return { ok:true, phase, processed:snap.size, deletedDocuments, removedFiles:proofPaths.length };
   }
   if (phase === 'finalProofs' || phase === 'incomingProofs') {
     const prefix = (phase === 'finalProofs' ? 'payment-proofs/' : 'payment-proof-incoming/') +
