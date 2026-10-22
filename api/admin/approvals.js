@@ -535,6 +535,15 @@ async function cleanupStep(db, lotteryId, lotteryRef, data) {
     return { ok:true, phase, processed:snap.size, deletedDocuments:0 };
   }
   if (phase === 'finish') {
+    // A previously issued signed Storage POST remains usable for up to 10
+    // minutes. Do a final incoming-file sweep only after those policies expire.
+    const started = data.cleanupStartedAt?.toMillis?.() || 0;
+    const safeAt = started + 11 * 60 * 1000;
+    if (started && Date.now() < safeAt) {
+      await lotteryRef.update({ cleanupPhase:'incomingProofs' });
+      return { ok:true, phase:'incomingProofs', paused:true,
+        waitingUntil:new Date(safeAt).toISOString(), processed:0, deletedDocuments:0 };
+    }
     const proofBucket = getStorage().bucket('tigiray-lottery.firebasestorage.app');
     const [requests, tickets, claims, notifications, admins, finals, incoming] = await Promise.all([
       db.collection('ticketRequests').where('lotteryId','==',lotteryId).limit(1).get(),
