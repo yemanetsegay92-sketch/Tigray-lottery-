@@ -273,12 +273,25 @@ async function removeLottery(id) {
         '. Keep this tab open. Cleanup can resume if interrupted.</div>';
       showCleanupNotice(id, 'Cleaning '+step.phase+': '+documents+' Firestore documents and '+files+' Storage files removed in this session.');
       if (step.paused) {
-        banner.innerHTML='<div class="muted">Cleanup is safely paused until '+esc(step.waitingUntil||'later')+
-          ' while previously issued Storage upload links expire. Return and click Continue Cleanup afterward.</div>';
-        showCleanupNotice(id, 'Temporarily paused while old upload links expire. Click Continue Cleanup later.');
-        break;
+        const readyTime = Date.parse(String(step.waitingUntil||''));
+        if (!Number.isFinite(readyTime)) {
+          showCleanupNotice(id, 'Cleanup paused. The safe resume time could not be read. Click Continue Cleanup later.');
+          break;
+        }
+        const waitMs = Math.max(0,readyTime-Date.now())+1200;
+        const minutes = Math.max(1,Math.ceil(waitMs/60000));
+        const waiting = 'Storage safety pause: automatic resume in about '+minutes+
+          ' minute(s). Keep this tab open; no Vercel API requests are made during the pause.';
+        banner.innerHTML='<div class="muted">'+esc(waiting)+'</div>';
+        showCleanupNotice(id,waiting);
+        // Pause the browser rather than issuing repeated Vercel Function requests.
+        // If Chrome closes, the saved cleanup state allows one-click resumption.
+        await new Promise(resolve=>setTimeout(resolve,waitMs));
+        showCleanupNotice(id, 'Upload links have expired. Resuming the final cleanup automatically…');
+        continue;
       }
       if (step.done) {
+        cleanupNotices.delete(id);
         banner.innerHTML='<div class="success">Lottery '+esc(lottery.name)+
           ' and its linked records were deleted. Audit logs preserved.</div>';
         break;
