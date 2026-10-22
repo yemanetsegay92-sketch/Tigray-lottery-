@@ -1,0 +1,67 @@
+name: Final 10K Buyer Load Test
+
+on:
+  workflow_dispatch:
+    inputs:
+      batch:
+        description: 'Execute in order: 10, 100, then remaining 9,890 purchases'
+        required: true
+        default: 'pilot-10'
+        type: choice
+        options:
+          - pilot-10
+          - pilot-100
+          - remaining-9890
+      confirm:
+        description: 'Real Firebase writes and possible billing charges; select RUN to execute'
+        required: true
+        default: 'NO'
+        type: choice
+        options:
+          - 'NO'
+          - RUN
+
+permissions:
+  contents: read
+
+concurrency:
+  group: tigray-lottery-final-10k-buyer-load
+  cancel-in-progress: false
+
+jobs:
+  test-buyers:
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    env:
+      LOAD_CONFIRM: ${{ inputs.confirm }}
+    steps:
+      - name: Checkout GitHub project
+        uses: actions/checkout@v4
+      - name: Install Node 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Install Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Generate synthetic receipt (not a real bank payment }}
+        run: |
+          python -m pip install --disable-pip-version-check Pillow
+          python tools/make_synthetic_receipt.py
+      - name: Execute purchase batch using the current direct-upload flow
+        env:
+          LOAD_START: ${{ inputs.batch == 'pilot-10' && '1' || (inputs.batch == 'pilot-100' && '11' || '111') }}
+          LOAD_COUNT: ${{ inputs.batch == 'pilot-10' && '10' || (inputs.batch == 'pilot-100' && '100' || '9890') }}
+          LOAD_CONCURRENCY: ${{ inputs.batch == 'pilot-10' && '2' || (inputs.batch == 'pilot-100' && '4' || '8') }}
+        run: node tools/final-load-buyers.js
+      - name: Preserve report for manual audit
+        if: always( }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: final-buyer-load-${{ github.run_id }}
+          path: |
+            final-load-report.json
+            final-load-attempts.ndjson
+          if-no-files-found: warn
+          retention-days: 14
