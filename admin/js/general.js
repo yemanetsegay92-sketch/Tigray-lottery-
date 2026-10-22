@@ -1,7 +1,7 @@
 import { expandApprovedTicketRows, ticketRowsToCsv, ticketRowsToTsv } from './ticketRows.mjs';
 import { db, auth, createSecondaryAuth } from '../../firebase.js';
 import { onAuthStateChanged, signOut, createUserWithEmailAndPassword, updateProfile, signOut as authSignOut } from 'https://www.gstatic.com/firebasejs/12.2.1/firebase-auth.js';
-import { collection, getDocs, doc, getDoc, addDoc, updateDoc, deleteDoc, setDoc, serverTimestamp, query, where, limit, getCountFromServer, arrayUnion } from 'https://www.gstatic.com/firebasejs/12.2.1/firebase-firestore.js';
+import { collection, getDocs, doc, getDoc, addDoc, updateDoc, setDoc, serverTimestamp, query, where, limit, getCountFromServer, arrayUnion } from 'https://www.gstatic.com/firebasejs/12.2.1/firebase-firestore.js';
 
 const $=id=>document.getElementById(id);
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -222,7 +222,8 @@ async function removeLottery(id) {
         'Queued notifications: '+p.notifications+'\n\n'+
         'This PERMANENTLY removes its requests, ticket numbers, receipts and admin assignments. '+
         'All customers in this lottery, including any real buyers, will lose their records. '+
-        'Historical audit logs remain. To proceed type:\nDELETE '+id;
+        'Historical audit logs remain. Cleanup stops at 5,000 deleted documents per day and can resume later. '+
+        'The lottery remains closed throughout cleanup. To proceed type:\nDELETE '+id;
       const confirmation = prompt(detail);
       if (confirmation !== 'DELETE '+id) {
         banner.innerHTML='<div class="muted">Lottery cleanup cancelled. No data changed.</div>';
@@ -258,6 +259,11 @@ async function removeLottery(id) {
         '; Firestore documents removed: '+documents+
         '; Storage files removed: '+files+
         '. Keep this tab open. Cleanup can resume if interrupted.</div>';
+      if (step.paused) {
+        banner.innerHTML='<div class="muted">Cleanup is safely paused until '+esc(step.waitingUntil||'later')+
+          ' while previously issued Storage upload links expire. Return and click Continue Cleanup afterward.</div>';
+        break;
+      }
       if (step.done) {
         banner.innerHTML='<div class="success">Lottery '+esc(lottery.name)+
           ' and its linked records were deleted. Audit logs preserved.</div>';
