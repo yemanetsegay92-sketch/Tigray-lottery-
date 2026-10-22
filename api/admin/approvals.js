@@ -412,16 +412,8 @@ const CLEANUP_PHASES = [
   'finalProofs', 'incomingProofs', 'adminAssignments', 'finish'
 ];
 const CLEANUP_BATCH = 30;
-const CLEANUP_DAILY_DELETE_LIMIT = 5000; // Firestore documents, all lotteries combined.
 function cleanupFailure(message, statusCode = 400) {
   return Object.assign(new Error(message), { statusCode });
-}
-function cleanupDatePacific() {
-  const parts = new Intl.DateTimeFormat('en-US', {
-    timeZone: 'America/Los_Angeles', year: 'numeric', month: '2-digit', day: '2-digit'
-  }).formatToParts(new Date());
-  const find = key => parts.find(p => p.type === key)?.value;
-  return find('year') + '-' + find('month') + '-' + find('day');
 }
 async function cleanupCount(collectionRef, field, value) {
   return Number((await collectionRef.where(field, '==', value).count().get()).data().count || 0);
@@ -447,20 +439,11 @@ async function cleanupPreview(db, lotteryId, lotterySnap) {
 async function cleanupDeleteDocuments(db, refs) {
   const unique = [...new Map(refs.map(ref => [ref.path, ref])).values()];
   if (!unique.length) return 0;
-  const day = cleanupDatePacific();
-  const dailyRef = db.collection('cleanupDailyUsage').doc(day);
-  await db.runTransaction(async tx => {
-    const snapshot = await tx.get(dailyRef);
-    const used = Number(snapshot.data()?.deletedDocuments || 0);
-    if (used + unique.length > CLEANUP_DAILY_DELETE_LIMIT) {
-      throw cleanupFailure('Daily cleanup safety limit reached. Resume after midnight Pacific time, when Firestore free quotas reset.', 429);
-    }
-    unique.forEach(ref => tx.delete(ref));
-    tx.set(dailyRef, {
-      deletedDocuments: used + unique.length,
-      updatedAt: FieldValue.serverTimestamp()
-    }, { merge: true });
-  });
+  // Small atomic batches, not one Vercel request per document.
+  // Firebase itself enforces any remaining free-plan quotas.
+  const batch = db.batch();
+  for (const ref of unique) batch.delete(ref);
+  await batch.commit();
   return unique.length;
 }
 async function cleanupStep(db, lotteryId, lotteryRef, data) {
