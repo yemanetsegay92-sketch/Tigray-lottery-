@@ -14,7 +14,7 @@ const bank = Object.freeze({
   reportedTransactionNumber:'FTTEST12345', bank:'cbe',
   verificationMethod:'official', providerDuplicate:false
 });
-const none = {otherCount:0,truncated:false};
+const none = {otherCount:0,truncated:false,claimStatus:'unused'};
 function match(overrides={}, p=purchase, duplicate=none) {
   return comparePaymentToRequest(p,{...bank,...overrides},lottery,duplicate);
 }
@@ -55,7 +55,7 @@ test('provider omitting transaction reference requires review',()=>{
   assert.equal(result.recommendation,'MANUAL_REVIEW');
 });
 test('duplicate ticket requests and branch duplicate are flagged separately',()=>{
-  const result=match({providerDuplicate:true},purchase,{otherCount:1,truncated:false});
+  const result=match({providerDuplicate:true},purchase,{otherCount:1,truncated:false,claimStatus:'unused'});
   assert.equal(result.checks.otherRequestsWithExactReference,1);
   assert.equal(result.checks.providerReportedDuplicate,true);
   assert.equal(result.recommendation,'MANUAL_REVIEW');
@@ -72,4 +72,19 @@ test('wrong lottery is a manual review concern',()=>{
 test('non-official verification method is flagged',()=>{
   const result=match({verificationMethod:'parsed'});
   assert.equal(result.recommendation,'MANUAL_REVIEW');
+});
+
+test('reference already consumed by another purchase never looks clean',()=>{
+  const result=match({},purchase,{otherCount:0,otherApprovedCount:0,truncated:false,claimStatus:'used_by_another_request'});
+  assert.equal(result.recommendation,'MANUAL_REVIEW');
+  assert.equal(result.checks.referenceClaimStatus,'used_by_another_request');
+});
+test('legacy approved request with same reference is flagged',()=>{
+  const result=match({},purchase,{otherCount:1,otherApprovedCount:1,truncated:false,claimStatus:'unused'});
+  assert.equal(result.recommendation,'MANUAL_REVIEW');
+});
+test('documented masked official receiver is still review-only without negative control',()=>{
+  const result=match({receiverAccountStatus:'masked_unverifiable',providerCbeAccountCheck:true});
+  assert.equal(result.recommendation,'MANUAL_REVIEW');
+  assert.match(result.concerns.join(' '),/negative-control account test/);
 });
