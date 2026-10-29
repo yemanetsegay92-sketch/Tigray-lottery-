@@ -780,8 +780,15 @@ async function handleCheckEtPendingMatch(req, res, body) {
       assessment.concerns.push('The PDF/image reference differs from the customer-entered reference.');
     }
   }
+  const {evaluateAutoPayment}=require('../../lib/cbe-auto-eligibility');
+  // Informative only: Preview uses the same production Firestore but will NEVER
+  // change tickets based on this eligibility report.
+  const autoEligibility=evaluateAutoPayment({
+    purchase,lottery,verification,duplicate
+  });
   return res.status(200).json({
     ok:true,readOnly:true,verificationInput:method,
+    autoEligibility,
     request:{id:requestSnap.id,lotteryId,total:Number(purchase.total||0),
       reference:storedReference,extractedReference:method==='receipt'?providerReference:''},
     payment:{
