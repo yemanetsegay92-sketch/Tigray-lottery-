@@ -100,6 +100,7 @@ async function approveRequest(db, caller, profile, requestId, requestedLotteryId
     assertLotteryAccess(profile, lotteryId);
     if (claimRef) assertClaimFree(claimSnapshotStatus(claimSnap, requestId));
     if(autoGuard){
+      const {isAfterCutover,cutoverMs}=require('../../lib/cbe-auto-cutover');
       const {enabledFor}=require('../../lib/cbe-auto-worker');
       const {nameKey,cbeAccounts,timestampMs}=require('../../lib/cbe-auto-eligibility');
       const [configured]=cbeAccounts(lottery);
@@ -111,6 +112,8 @@ async function approveRequest(db, caller, profile, requestId, requestedLotteryId
         String(autoGuard.lotteryId)===lotteryId &&
         autoGuard.policy==='CBE_UNATTENDED_V1' &&
         autoGuard.bankMethod==='official' &&
+        Number(autoGuard.cutoffMs)===cutoverMs() &&
+        isAfterCutover(request.createdAt,autoGuard.transactionDate) &&
         normalizePaymentReference(autoGuard.reference)===normalized &&
         (!request.reference || normalizePaymentReference(request.reference)===normalized) &&
         Number(autoGuard.expectedAmount)===Number(request.total) &&
@@ -820,9 +823,10 @@ async function handleAutoCbeWorker(req,res){
   res.setHeader('Cache-Control','no-store');
   const {checkWorkerSecret,runBatch}=require('../../lib/cbe-auto-worker');
   if(!checkWorkerSecret(req))return res.status(401).json({ok:false,error:'Unauthorized.'});
+  const {cutoverMs}=require('../../lib/cbe-auto-cutover');
   if(process.env.VERCEL_ENV!=='production' ||
      process.env.LOTTERY_CBE_AUTO_APPROVAL_ENABLED!=='true' ||
-     process.env.LOTTERY_CBE_PAYMENT_CLAIMS_BACKFILLED!=='true') {
+     !Number.isFinite(cutoverMs()) || Date.now()<cutoverMs()) {
     return res.status(403).json({ok:false,error:'CBE automatic approval is not enabled.'});
   }
   const db=adminDb();
