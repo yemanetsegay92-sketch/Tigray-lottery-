@@ -1,4 +1,5 @@
 import { TICKET_HEADERS, expandApprovedTicketRows, ticketRowsToTsv, ticketRowsToCsv } from './ticketRows.mjs';
+import { renderChecketMatch, cbeAccounts } from './checketMatchUI.mjs';
 import { db, auth } from '../../firebase.js';
 import { onAuthStateChanged, signOut } from 'https://www.gstatic.com/firebasejs/12.2.1/firebase-auth.js';
 import { collection, getDocs, doc, getDoc, updateDoc, addDoc, query, where, orderBy, limit, getCountFromServer, serverTimestamp } from 'https://www.gstatic.com/firebasejs/12.2.1/firebase-firestore.js';
@@ -377,15 +378,55 @@ async function openPrivateReceipt(id,mime){
 }
 
 function renderPending(items,hasMore=false){
+  const availableCbe = cbeAccounts(lot);
+  const verificationControls = item => {
+    if (!item.reference) return '<p class="muted">Check.et: Receipt-only request. No transaction reference available.</p>';
+    if (!availableCbe.length) return '<p class="muted">Check.et: Configure this lottery\'s real CBE payment account first.</p>';
+    const id = esc(item.id);
+    const opts = availableCbe.map(a=>`<option value="${a.index}">${esc(a.label)}</option>`).join('');
+    return `<div class="actions" style="align-items:flex-end"><label>CBE receiving account
+      <select data-checket-account="${id}">${opts}</select></label>
+      <button class="secondary" type="button" data-match-pending="${id}">🔎 Verify CBE payment (read only)</button></div>
+      <div data-checket-pending-result="${id}" aria-live="polite"></div>`;
+  };
+
   ensureScreenshotModal();
   window.__screenshotData=Object.create(null);
   items.forEach(x=>{if(x.screenshotData)window.__screenshotData[x.id]=x.screenshotData;});
   $('pendingCount').textContent=hasMore?`${items.length} shown · more pending requests`:`${items.length} pending`;
-  $('requests').innerHTML=items.map(x=>`<div class="request-card"><div class="card-head"><div><b>${esc(x.name)}</b> · ${esc(x.phone)}</div><span class="badge pending">PENDING</span></div><p>${Number(x.quantity||1)} ticket(s) · <b>${Number(x.total||0)} Birr</b>${x.reference?` · Ref ${esc(x.reference)}`:''}</p>${x.screenshotData?`<div class="screenshot-wrap"><button type="button" class="screenshot-preview" data-view-screenshot="${esc(x.id)}"><img src="${esc(normalizeScreenshot(x.screenshotData))}" alt="Payment screenshot"><span>Tap to view full size</span></button></div>`:''}${x.proofPath?`<div class="actions"><button type="button" class="secondary" data-private-proof="${esc(x.id)}" data-proof-mime="${esc(x.proofMime||'')}">📎 ${x.proofMime==='application/pdf'?'Download PDF receipt':'View payment screenshot'}</button></div>`:''}<div class="actions"><button data-approve="${esc(x.id)}">✓ Approve & Assign</button><button class="danger" data-reject="${esc(x.id)}">✕ Reject</button></div></div>`).join('')||'<div class="success">No pending requests.</div>';
+  $('requests').innerHTML=items.map(x=>`<div class="request-card"><div class="card-head"><div><b>${esc(x.name)}</b> · ${esc(x.phone)}</div><span class="badge pending">PENDING</span></div><p>${Number(x.quantity||1)} ticket(s) · <b>${Number(x.total||0)} Birr</b>${x.reference?` · Ref ${esc(x.reference)}`:''}</p>${x.screenshotData?`<div class="screenshot-wrap"><button type="button" class="screenshot-preview" data-view-screenshot="${esc(x.id)}"><img src="${esc(normalizeScreenshot(x.screenshotData))}" alt="Payment screenshot"><span>Tap to view full size</span></button></div>`:''}${x.proofPath?`<div class="actions"><button type="button" class="secondary" data-private-proof="${esc(x.id)}" data-proof-mime="${esc(x.proofMime||'')}">📎 ${x.proofMime==='application/pdf'?'Download PDF receipt':'View payment screenshot'}</button></div>`:''}${verificationControls(x)}<div class="actions"><button data-approve="${esc(x.id)}">✓ Approve & Assign</button><button class="danger" data-reject="${esc(x.id)}">✕ Reject</button></div></div>`).join('')||'<div class="success">No pending requests.</div>';
   document.querySelectorAll('[data-approve]').forEach(b=>b.addEventListener('click',()=>approve(b.dataset.approve)));
   document.querySelectorAll('[data-reject]').forEach(b=>b.addEventListener('click',()=>reject(b.dataset.reject)));
+  document.querySelectorAll('[data-match-pending]').forEach(b=>b.addEventListener('click',()=>verifyPendingPayment(b)));
   document.querySelectorAll('[data-view-screenshot]').forEach(b=>b.addEventListener('click',()=>openScreenshotModal(b.dataset.viewScreenshot)));
   document.querySelectorAll('[data-private-proof]').forEach(b=>b.addEventListener('click',()=>openPrivateReceipt(b.dataset.privateProof,b.dataset.proofMime)));
+}
+
+async function verifyPendingPayment(button) {
+  const requestId = button.dataset.matchPending;
+  const parent = button.closest('.request-card');
+  const accountSelect = parent?.querySelector('[data-checket-account]');
+  const target = parent?.querySelector('[data-checket-pending-result]');
+  if (!requestId || !target || !accountSelect || !lot) return;
+  const selectedLotteryId = lot.id;
+  button.disabled = true;
+  target.textContent = 'Checking payment and matching to this pending ticket…';
+  try {
+    const token = await auth.currentUser.getIdToken();
+    const response = await fetch('/api/admin/approvals', {
+      method:'POST',
+      headers:{'content-type':'application/json',authorization:'Bearer '+token},
+      body:JSON.stringify({action:'checket-match-pending',
+        requestId,lotteryId:selectedLotteryId,accountIndex:Number(accountSelect.value)})
+    });
+    const data = await response.json();
+    if (!response.ok || !data.ok) throw new Error(data.error || 'Check.et verification failed.');
+    target.innerHTML = renderChecketMatch(data);
+  } catch (error) {
+    target.innerHTML = '<div class="error">'+esc(error.message||'Verification failed.')+'</div>';
+  } finally {
+    button.disabled = false;
+  }
 }
 
 function renderSummary(items,hasMore=false){
