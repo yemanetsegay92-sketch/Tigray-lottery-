@@ -66,7 +66,7 @@ async function loadPendingChecketReceipts(){
           return `<option value="${esc(d.id)}">${esc(suffix)} · ${esc(Number(item.total||0))} ETB · ${esc(String(item.name||'Buyer').slice(0,35))} · ${esc(d.id.slice(0,8))}</option>`;
         }).join('')
       : '<option value="">No pending PDF/image receipts in the first 50 requests</option>';
-    button.disabled=!receipts.length || $('checketMatchButton').disabled;
+    button.disabled=true; // Require explicit selection of a particular pending purchase.
   }catch(error){
     select.innerHTML='<option value="">Could not load pending receipts</option>';
     $('checketReceiptResult').innerHTML='<div class="error">'+esc(error.message||'Receipt lookup failed.')+'</div>';
