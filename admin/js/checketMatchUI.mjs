@@ -35,7 +35,7 @@ export function renderChecketMatch(data) {
     <p>Exact-reference occurrences in other ticket requests: ${esc(checks.otherRequestsWithExactReference??0)}
       (not a complete duplicate guarantee)</p>
     <p>Timing: ${esc(checks.dateStatus||'missing')}
-      · Transaction reference: ${esc(checks.referenceMatch===true?'matches provider':checks.referenceMatch===false?'does not match':'not independently returned')}</p>
+      · Transaction reference: ${esc(checks.referenceMatch===true?'matches provider':checks.referenceMatch===false?'does not match':(data.verificationInput==='receipt' && request.extractedReference?'extracted from receipt (review)':'not independently returned'))}</p>
     ${messages.length?'<p><strong>Issues requiring attention:</strong></p><ul>'+messages.map(x=>'<li>'+esc(x)+'</li>').join('')+'</ul>':'<p>No mismatch found in available data. Verify the actual receiving account before approving.</p>'}
     <p><strong>READ-ONLY: No ticket approved. Manual approval is separate.</strong></p>
   </div>`;
