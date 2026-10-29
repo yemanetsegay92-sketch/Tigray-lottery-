@@ -4,6 +4,9 @@ on:
     paths:
       - 'lib/checket-verify.js'
       - 'lib/checket-request-match.js'
+      - 'lib/payment-claims.js'
+      - 'tools/test-payment-claims.cjs'
+      - 'firestore.rules'
       - 'tools/test-checket-request-match.cjs'
       - 'admin/js/checketMatchUI.mjs'
       - 'admin/js/general.js'
@@ -29,6 +32,8 @@ jobs:
         run: |
           node --check lib/checket-verify.js
           node --check lib/checket-request-match.js
+          node --check lib/payment-claims.js
+          node --check tools/test-payment-claims.cjs
           node --check admin/js/checketMatchUI.mjs
           node --input-type=module --check < admin/js/general.js
           node --input-type=module --check < admin/js/lottery.js
@@ -36,4 +41,4 @@ jobs:
           node --check api/admin/approvals.js
           node --check tools/test-checket-verification.cjs
       - name: Run mocked tests; no real Check.et calls or credentials
-        run: node --test tools/test-checket-verification.cjs tools/test-checket-request-match.cjs
+        run: node --test tools/test-checket-verification.cjs tools/test-checket-request-match.cjs tools/test-payment-claims.cjs
