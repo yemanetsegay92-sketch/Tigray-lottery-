@@ -394,7 +394,7 @@ function renderPending(items,hasMore=false){
   window.__screenshotData=Object.create(null);
   items.forEach(x=>{if(x.screenshotData)window.__screenshotData[x.id]=x.screenshotData;});
   $('pendingCount').textContent=hasMore?`${items.length} shown · more pending requests`:`${items.length} pending`;
-  $('requests').innerHTML=items.map(x=>`<div class="request-card"><div class="card-head"><div><b>${esc(x.name)}</b> · ${esc(x.phone)}</div><span class="badge pending">PENDING</span></div><p>${Number(x.quantity||1)} ticket(s) · <b>${Number(x.total||0)} Birr</b>${x.reference?` · Ref ${esc(x.reference)}`:''}</p>${x.screenshotData?`<div class="screenshot-wrap"><button type="button" class="screenshot-preview" data-view-screenshot="${esc(x.id)}"><img src="${esc(normalizeScreenshot(x.screenshotData))}" alt="Payment screenshot"><span>Tap to view full size</span></button></div>`:''}${x.proofPath?`<div class="actions"><button type="button" class="secondary" data-private-proof="${esc(x.id)}" data-proof-mime="${esc(x.proofMime||'')}">📎 ${x.proofMime==='application/pdf'?'Download PDF receipt':'View payment screenshot'}</button></div>`:''}${verificationControls(x)}<div class="actions"><button data-approve="${esc(x.id)}">✓ Approve & Assign</button><button class="danger" data-reject="${esc(x.id)}">✕ Reject</button></div></div>`).join('')||'<div class="success">No pending requests.</div>';
+  $('requests').innerHTML=items.map(x=>`<div class="request-card"><div class="card-head"><div><b>${esc(x.name)}</b> · ${esc(x.phone)}</div><span class="badge pending">PENDING</span></div><p>${Number(x.quantity||1)} ticket(s) · <b>${Number(x.total||0)} Birr</b>${x.reference?` · Ref ${esc(x.reference)}`:''}</p>${x.screenshotData?`<div class="screenshot-wrap"><button type="button" class="screenshot-preview" data-view-screenshot="${esc(x.id)}"><img src="${esc(normalizeScreenshot(x.screenshotData))}" alt="Payment screenshot"><span>Tap to view full size</span></button></div>`:''}${x.proofPath?`<div class="actions"><button type="button" class="secondary" data-private-proof="${esc(x.id)}" data-proof-mime="${esc(x.proofMime||'')}">📎 ${x.proofMime==='application/pdf'?'Download PDF receipt':'View payment screenshot'}</button></div>`:''}${verificationControls(x)}<div class="actions"><button data-approve="${esc(x.id)}" data-reference-missing="${x.reference?'0':'1'}">✓ Approve & Assign</button><button class="danger" data-reject="${esc(x.id)}">✕ Reject</button></div></div>`).join('')||'<div class="success">No pending requests.</div>';
   document.querySelectorAll('[data-approve]').forEach(b=>b.addEventListener('click',()=>approve(b.dataset.approve)));
   document.querySelectorAll('[data-reject]').forEach(b=>b.addEventListener('click',()=>reject(b.dataset.reject)));
   document.querySelectorAll('[data-match-pending]').forEach(b=>b.addEventListener('click',()=>verifyPendingPayment(b)));
@@ -589,8 +589,20 @@ async function cancelApproval(id){
 }
 
 async function approve(id){
-  if(!confirm('Approve this payment and assign the next available ticket number(s)?'))return;
   const button=document.querySelector(`[data-approve="${CSS.escape(id)}"]`);
+  // A receipt-only submission still needs a bank transaction reference to
+  // claim the payment once. No reference => no approval.
+  let manualReference='';
+  if(button?.dataset.referenceMissing==='1'){
+    const entered=prompt('Enter the bank transaction reference printed on this receipt. Required to prevent payment reuse:');
+    if(entered===null)return;
+    manualReference=entered.trim();
+    if(!/^[a-zA-Z0-9_-]{5,80}$/.test(manualReference)){
+      alert('Enter a valid transaction reference (5–80 letters/numbers). No ticket was approved.');
+      return;
+    }
+  }
+  if(!confirm('Approve this payment and permanently mark its transaction reference as used?'))return;
   if(button) button.disabled=true;
 
   try{
@@ -601,7 +613,7 @@ async function approve(id){
         'content-type':'application/json',
         'authorization':`Bearer ${token}`
       },
-      body:JSON.stringify({action:'approve',requestId:id,lotteryId:lot.id})
+      body:JSON.stringify({action:'approve',requestId:id,lotteryId:lot.id,manualReference})
     });
 
     const j=await r.json();
