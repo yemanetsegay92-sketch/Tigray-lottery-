@@ -47,6 +47,23 @@ test('missing returned receiving account produces unknown, not a false match', a
   assert.equal(result.receiverAccountReturned,false);
 });
 
+test('masked receiver is not incorrectly called a full mismatch or exact match', async () => {
+  const result = await verifyCheckEtPayment(base, options(mock(200, {
+    ...official, data:{...official.data,receipt:{...receipt,receiver_account:'1********6789'}}
+  })));
+  assert.equal(result.verified, true);
+  assert.equal(result.receiverAccountMatches, null);
+  assert.equal(result.receiverAccountStatus, 'masked_unverifiable');
+});
+
+test('a genuinely different fully specified receiver account is marked mismatch', async () => {
+  const result = await verifyCheckEtPayment(base, options(mock(200, {
+    ...official, data:{...official.data,receipt:{...receipt,receiver_account:'1000123499999'}}
+  })));
+  assert.equal(result.receiverAccountMatches, false);
+  assert.equal(result.receiverAccountStatus, 'mismatch');
+});
+
 test('provider duplicate is not silently treated as proof of ticket reuse', async () => {
   const result = await verifyCheckEtPayment(base, options(mock(200, {...official, duplicate:true})));
   assert.equal(result.providerDuplicate,true);
