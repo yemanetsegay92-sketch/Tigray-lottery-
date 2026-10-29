@@ -380,13 +380,17 @@ async function openPrivateReceipt(id,mime){
 function renderPending(items,hasMore=false){
   const availableCbe = cbeAccounts(lot);
   const verificationControls = item => {
-    if (!item.reference) return '<p class="muted">Check.et: Receipt-only request. No transaction reference available.</p>';
+    if (!item.reference && !item.proofPath) return '<p class="muted">Check.et: No reference or supported private receipt available.</p>';
     if (!availableCbe.length) return '<p class="muted">Check.et: Configure this lottery\'s real CBE payment account first.</p>';
     const id = esc(item.id);
     const opts = availableCbe.map(a=>`<option value="${a.index}">${esc(a.label)}</option>`).join('');
+    const buttons=[
+      item.reference ? `<button class="secondary" type="button" data-match-pending="${id}" data-match-method="reference">🔎 Verify reference</button>` : '',
+      item.proofPath ? `<button class="secondary" type="button" data-match-pending="${id}" data-match-method="receipt">📎 Verify ${item.proofMime==='application/pdf'?'PDF':'screenshot'} (test)</button>` : ''
+    ].join('');
     return `<div class="actions" style="align-items:flex-end"><label>CBE receiving account
       <select data-checket-account="${id}">${opts}</select></label>
-      <button class="secondary" type="button" data-match-pending="${id}">🔎 Verify CBE payment (read only)</button></div>
+      ${buttons}</div>
       <div data-checket-pending-result="${id}" aria-live="polite"></div>`;
   };
 
@@ -409,15 +413,18 @@ async function verifyPendingPayment(button) {
   const target = parent?.querySelector('[data-checket-pending-result]');
   if (!requestId || !target || !accountSelect || !lot) return;
   const selectedLotteryId = lot.id;
+  const method=button.dataset.matchMethod==='receipt'?'receipt':'reference';
   button.disabled = true;
-  target.textContent = 'Checking payment and matching to this pending ticket…';
+  target.textContent = method==='receipt'
+    ? 'Sending the private PDF/image to Check.et for a read-only test…'
+    : 'Checking reference and matching to the pending ticket…';
   try {
     const token = await auth.currentUser.getIdToken();
     const response = await fetch('/api/admin/approvals', {
       method:'POST',
       headers:{'content-type':'application/json',authorization:'Bearer '+token},
       body:JSON.stringify({action:'checket-match-pending',
-        requestId,lotteryId:selectedLotteryId,accountIndex:Number(accountSelect.value)})
+        requestId,lotteryId:selectedLotteryId,accountIndex:Number(accountSelect.value),verificationMethod:method})
     });
     const data = await response.json();
     if (!response.ok || !data.ok) throw new Error(data.error || 'Check.et verification failed.');
