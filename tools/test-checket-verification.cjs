@@ -108,3 +108,19 @@ test('subscription and rate limit errors have safe statuses', async () => {
     await assert.rejects(verifyCheckEtPayment(base,options(mock(status,{}))), err => err.statusCode === expected);
   }
 });
+
+test('CBE official first verification notes provider used full submitted account', async()=>{
+  const result=await verifyCheckEtPayment(base,options(mock(200,official)));
+  assert.equal(result.providerCbeAccountCheck,true);
+});
+test('duplicate Check.et response is not evidence the current account was checked again',async()=>{
+  const result=await verifyCheckEtPayment(base,options(mock(200,{...official,duplicate:true})));
+  assert.equal(result.providerCbeAccountCheck,false);
+});
+test('a masked receiver with wrong visible suffix is explicitly flagged',async()=>{
+  const result=await verifyCheckEtPayment(base,options(mock(200,{
+    ...official,data:{...official.data,receipt:{...receipt,receiver_account:'1********9999'}}
+  })));
+  assert.equal(result.receiverAccountMatches,null);
+  assert.equal(result.receiverAccountStatus,'masked_suffix_mismatch');
+});
