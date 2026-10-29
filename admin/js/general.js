@@ -30,7 +30,10 @@ $('closeSummary')?.addEventListener('click',()=>{$('summaryPanel').style.display
 $('contactForm')?.addEventListener('submit',saveContactSettings);
 $('whatsappNumber')?.addEventListener('input',updateContactPreview);
 $('addCreatePaymentAccount')?.addEventListener('click',addCreatePaymentAccount);
-$('checketMatchLottery')?.addEventListener('change',updateChecketMatchAccounts);
+$('checketMatchLottery')?.addEventListener('change',()=>{
+  updateChecketMatchAccounts();
+  void loadPendingChecketReceipts();
+});
 function updateChecketMatchAccounts(){
   const lotto = lots.find(x=>x.id===$('checketMatchLottery')?.value);
   const options = cbeAccounts(lotto);
@@ -41,6 +44,65 @@ function updateChecketMatchAccounts(){
     : '<option value="">No real CBE receiving account configured</option>';
   $('checketMatchButton').disabled = !options.length;
 }
+// Find existing pending receipts — the original file stays in private Storage.
+async function loadPendingChecketReceipts(){
+  const select=$('checketReceiptRequestId');
+  const button=$('checketReceiptButton');
+  const lotteryId=$('checketMatchLottery')?.value;
+  if(!select || !button)return;
+  button.disabled=true;
+  select.innerHTML='<option value="">Loading pending receipts…</option>';
+  if(!lotteryId){select.innerHTML='<option value="">Choose a lottery first</option>';return;}
+  try{
+    const results=await getDocs(query(collection(db,'ticketRequests'),
+      where('lotteryId','==',lotteryId),where('status','==','pending'),limit(50)));
+    if($('checketMatchLottery').value!==lotteryId)return;
+    const receipts=results.docs.filter(d=>Boolean(d.data().proofPath)&&
+      ['application/pdf','image/jpeg','image/png','image/webp'].includes(String(d.data().proofMime||'')));
+    select.innerHTML=receipts.length
+      ? '<option value="">Choose a pending PDF/image receipt</option>'+receipts.map(d=>{
+          const item=d.data();
+          const suffix=item.proofMime==='application/pdf'?'PDF':'Screenshot';
+          return `<option value="${esc(d.id)}">${esc(suffix)} · ${esc(Number(item.total||0))} ETB · ${esc(String(item.name||'Buyer').slice(0,35))} · ${esc(d.id.slice(0,8))}</option>`;
+        }).join('')
+      : '<option value="">No pending PDF/image receipts in the first 50 requests</option>';
+    button.disabled=!receipts.length || $('checketMatchButton').disabled;
+  }catch(error){
+    select.innerHTML='<option value="">Could not load pending receipts</option>';
+    $('checketReceiptResult').innerHTML='<div class="error">'+esc(error.message||'Receipt lookup failed.')+'</div>';
+  }
+}
+$('checketReceiptRequestId')?.addEventListener('change',()=>{
+  $('checketReceiptButton').disabled=!$('checketReceiptRequestId').value || $('checketMatchButton').disabled;
+});
+$('checketReceiptRefresh')?.addEventListener('click',loadPendingChecketReceipts);
+$('checketReceiptForm')?.addEventListener('submit',async event=>{
+  event.preventDefault();
+  const target=$('checketReceiptResult');
+  const button=$('checketReceiptButton');
+  const requestId=$('checketReceiptRequestId').value;
+  const lotteryId=$('checketMatchLottery').value;
+  const accountIndex=$('checketMatchAccount').value;
+  if(!requestId || accountIndex==='')return;
+  button.disabled=true;
+  target.textContent='Sending existing private receipt to Check.et (no OCR)…';
+  try{
+    const token=await auth.currentUser.getIdToken();
+    const response=await fetch('/api/admin/approvals',{
+      method:'POST',headers:{'content-type':'application/json',authorization:'Bearer '+token},
+      body:JSON.stringify({action:'checket-match-pending',lotteryId,requestId,
+        verificationMethod:'receipt',accountIndex:Number(accountIndex)})
+    });
+    const data=await response.json();
+    if(!response.ok || !data.ok) throw new Error(data.error||'The receipt could not be verified.');
+    target.innerHTML=renderChecketMatch(data);
+  }catch(error){
+    target.innerHTML='<div class="error">'+esc(error.message||'Receipt test failed.')+'</div>';
+  }finally{
+    button.disabled=!$('checketReceiptRequestId').value || $('checketMatchButton').disabled;
+  }
+});
+
 $('checketMatchForm')?.addEventListener('submit', async event => {
   event.preventDefault();
   const target = $('checketMatchResult');
@@ -199,7 +261,7 @@ async function renderAdminList(){
 
 async function renderLotteries(){
   const ls=await getDocs(collection(db,'lotteries'));lots=ls.docs.map(d=>({id:d.id,...d.data()}));$('statLotteries').textContent=lots.length;
-  const opts=lots.map(x=>`<option value="${esc(x.id)}">${esc(x.name)}</option>`).join('');$('adminLottery').innerHTML=opts;$('assignLottery').innerHTML=opts;if($('drawLotterySelect'))$('drawLotterySelect').innerHTML=opts;if($('checketMatchLottery')){$('checketMatchLottery').innerHTML=opts;updateChecketMatchAccounts();}
+  const opts=lots.map(x=>`<option value="${esc(x.id)}">${esc(x.name)}</option>`).join('');$('adminLottery').innerHTML=opts;$('assignLottery').innerHTML=opts;if($('drawLotterySelect'))$('drawLotterySelect').innerHTML=opts;if($('checketMatchLottery')){$('checketMatchLottery').innerHTML=opts;updateChecketMatchAccounts();void loadPendingChecketReceipts();}
   $('lotteries').innerHTML=lots.map(x=>`<div class="row"><b>${esc(x.name)}</b> <span class="badge ${esc(x.status)}">${esc(x.status)}</span><br><span class="muted">ID: ${esc(x.id)} · ${Number(x.price||0)} Birr · ${esc(x.min)}–${esc(x.max)} · Next: ${esc(x.nextTicketNumber??x.min)}</span><div class="actions"><button data-edit="${esc(x.id)}">Edit</button><button class="secondary" data-summary="${esc(x.id)}">Open Summary</button><button class="danger" data-delete="${esc(x.id)}">${x.cleanupInProgress?"Continue Cleanup":"Delete & Clear"}</button></div><div class="muted" data-cleanup-message="${esc(x.id)}">${esc(cleanupNotices.get(x.id) || (x.cleanupInProgress?'Cleanup already started: this lottery is closed. Click Continue Cleanup to resume.':'Click Delete & Clear to preview linked data; then type DELETE followed by the exact lottery ID to confirm.'))}</div></div>`).join('')||'<p class="muted">No lotteries.</p>';
   document.querySelectorAll('[data-edit]').forEach(b=>b.addEventListener('click',()=>editLottery(b.dataset.edit)));
   document.querySelectorAll('[data-delete]').forEach(b=>b.addEventListener('click',()=>removeLottery(b.dataset.delete)));
