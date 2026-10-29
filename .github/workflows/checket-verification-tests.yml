@@ -1,0 +1,29 @@
+name: Check.et read-only verification tests
+on:
+  pull_request:
+    paths:
+      - 'lib/checket-verify.js'
+      - 'tools/test-checket-verification.cjs'
+      - 'api/admin/approvals.js'
+      - '.github/workflows/checket-verification-tests.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9c8 # v4.2.2
+        with:
+          persist-credentials: false
+      - name: Verify available Node.js version
+        run: node --version
+      - name: Check JavaScript syntax
+        run: |
+          node --check lib/checket-verify.js
+          node --check api/admin/approvals.js
+          node --check tools/test-checket-verification.cjs
+      - name: Run mocked tests; no real Check.et calls or credentials
+        run: node --test tools/test-checket-verification.cjs
