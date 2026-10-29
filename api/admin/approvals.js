@@ -684,10 +684,17 @@ async function handleCheckEtPendingMatch(req, res, body) {
   }
   // This is a read-only hint, not a uniqueness guarantee. Strong canonical
   // transaction claiming must be added before any future auto-approval.
-  const sameRef = await db.collection('ticketRequests').where('reference','==',storedReference).limit(21).get();
+  const claimRef = paymentClaimRef(db,storedReference);
+  const [sameRef, existingClaim] = await Promise.all([
+    db.collection('ticketRequests').where('reference','==',storedReference).limit(21).get(),
+    claimRef ? claimRef.get() : Promise.resolve(null)
+  ]);
+  const otherDocs = sameRef.docs.filter(x=>x.id!==requestSnap.id);
   const duplicate = {
-    otherCount:sameRef.docs.filter(x=>x.id!==requestSnap.id).length,
-    truncated:sameRef.size===21
+    otherCount:otherDocs.length,
+    otherApprovedCount:otherDocs.filter(x=>x.data().status==='approved').length,
+    truncated:sameRef.size===21,
+    claimStatus:claimRef ? claimSnapshotStatus(existingClaim,requestSnap.id) : 'unavailable'
   };
   const { verifyCheckEtPayment } = require('../../lib/checket-verify');
   const { comparePaymentToRequest } = require('../../lib/checket-request-match');
@@ -703,7 +710,8 @@ async function handleCheckEtPendingMatch(req, res, body) {
     payment:{
       bank:verification.bank,status:verification.status,amount:verification.amount,currency:verification.currency,
       transactionDate:verification.transactionDate,payerName:verification.payerName,receiverName:verification.receiverName,
-      receiverAccountStatus:verification.receiverAccountStatus
+      receiverAccountStatus:verification.receiverAccountStatus,
+      providerCbeAccountCheck:verification.providerCbeAccountCheck
     },
     assessment
   });
