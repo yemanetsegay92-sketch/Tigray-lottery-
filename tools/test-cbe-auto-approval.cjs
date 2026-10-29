@@ -9,7 +9,7 @@ const purchase={status:'pending',lotteryId:'safe-lottery',reference:'FTTEST12345
 const lottery={status:'active',paymentAccounts:[{
   bank:'CBE',number:'1000123456789',holderName:'MAHLIET TSEGAY GIDEY'
 }]};
-const verification={bank:'cbe',verified:true,status:'completed',verificationMethod:'official',
+const verification={bank:'cbe',reportedBank:'cbe',verified:true,status:'completed',verificationMethod:'official',
   providerDuplicate:false,providerCbeAccountCheck:true,
   receiverAccountStatus:'masked_unverifiable',maskedReceiverSuffix:'6789',
   receiverName:'Mrs Mahliet Tsegay Gidey',currency:'ETB',amount:1000,
