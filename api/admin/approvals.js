@@ -54,7 +54,7 @@ function assertLotteryAccess(profile, lotteryId) {
   }
 }
 
-async function approveRequest(db, caller, profile, requestId, requestedLotteryId, manualReference = '') {
+async function approveRequest(db, caller, profile, requestId, requestedLotteryId, manualReference = '', autoGuard = null) {
   let result = null;
 
   await db.runTransaction(async tx => {
@@ -99,6 +99,29 @@ async function approveRequest(db, caller, profile, requestId, requestedLotteryId
     if (lottery.cleanupInProgress === true) throw new Error('Lottery cleanup is in progress. Approvals are disabled.');
     assertLotteryAccess(profile, lotteryId);
     if (claimRef) assertClaimFree(claimSnapshotStatus(claimSnap, requestId));
+    if(autoGuard){
+      const {enabledFor}=require('../../lib/cbe-auto-worker');
+      const {nameKey,cbeAccounts,timestampMs}=require('../../lib/cbe-auto-eligibility');
+      const [configured]=cbeAccounts(lottery);
+      const guardTime=Number(autoGuard.verifiedAt||0);
+      const createdAt=timestampMs(request.createdAt);
+      const paidAt=timestampMs(autoGuard.transactionDate);
+      const valid = enabledFor(lotteryId) && lottery.status==='active' &&
+        String(autoGuard.requestId)===requestId &&
+        String(autoGuard.lotteryId)===lotteryId &&
+        autoGuard.policy==='CBE_UNATTENDED_V1' &&
+        autoGuard.bankMethod==='official' &&
+        normalizePaymentReference(autoGuard.reference)===normalized &&
+        (!request.reference || normalizePaymentReference(request.reference)===normalized) &&
+        Number(autoGuard.expectedAmount)===Number(request.total) &&
+        configured && cbeAccounts(lottery).length===1 &&
+        String(configured.number).replace(/\\s/g,'')===String(autoGuard.account) &&
+        nameKey(configured.holderName)===nameKey(autoGuard.receiveName) &&
+        Number.isFinite(createdAt) && Number.isFinite(paidAt) &&
+        paidAt>=createdAt-30*60000 && paidAt<=createdAt+30*60000 &&
+        Date.now()-guardTime>=0 && Date.now()-guardTime<2*60000;
+      if(!valid)throw Object.assign(new Error('CBE auto approval guard did not pass; send to manual review.'),{statusCode:409});
+    }
 
     const min = Number(lottery.min);
     const max = Number(lottery.max);
@@ -182,7 +205,8 @@ async function approveRequest(db, caller, profile, requestId, requestedLotteryId
     }, { merge: true });
 
     tx.set(db.collection('auditLogs').doc(), {
-      action: 'approveRequest',
+      action: autoGuard ? 'approveRequestAutoCBE' : 'approveRequest',
+      verificationPolicy: autoGuard ? autoGuard.policy : null,
       lotteryId,
       requestId,
       adminId: caller.uid,
@@ -783,6 +807,27 @@ async function handleCheckEtVerification(req, res, body) {
   return res.status(200).json({ ok:true, ...result });
 }
 
+// Cron-only automatic CBE payment processor. No public caller and never from
+// Vercel Preview (which shares the production Firestore database).
+async function handleAutoCbeWorker(req,res){
+  res.setHeader('Cache-Control','no-store');
+  const {checkWorkerSecret,runBatch}=require('../../lib/cbe-auto-worker');
+  if(!checkWorkerSecret(req))return res.status(401).json({ok:false,error:'Unauthorized.'});
+  if(process.env.VERCEL_ENV!=='production' ||
+     process.env.LOTTERY_CBE_AUTO_APPROVAL_ENABLED!=='true' ||
+     process.env.LOTTERY_CBE_PAYMENT_CLAIMS_BACKFILLED!=='true') {
+    return res.status(403).json({ok:false,error:'CBE automatic approval is not enabled.'});
+  }
+  const db=adminDb();
+  const result=await runBatch(db,{
+    approve:async(requestId,lotteryId,reference,guard)=>{
+      await approveRequest(db,{uid:'system:checket-cbe'},{role:'generalAdmin'},
+        requestId,lotteryId,reference,guard);
+    }
+  });
+  return res.status(200).json({ok:true,...result});
+}
+
 module.exports = async (req, res) => {
   if (req.method === 'GET' && String(req.query?.receipt || '') === '1') {
     return servePaymentReceipt(req, res);
@@ -794,6 +839,7 @@ module.exports = async (req, res) => {
   try {
     const body = readBody(req);
     const action = String(body.action || '').trim().toLowerCase();
+    if (action === 'cbe-auto-worker') return await handleAutoCbeWorker(req, res);
     if (action === 'checket-match-pending') return await handleCheckEtPendingMatch(req, res, body);
     if (action === 'checket-verify') return await handleCheckEtVerification(req, res, body);
     if (action === 'lookup-reference') return await lookupReference(req, res, body);
