@@ -594,6 +594,19 @@ async function handleLotteryCleanup(req, res, body) {
   throw cleanupFailure('Unsupported cleanup action.');
 }
 
+// Preview-only manual verification: no Firestore mutations or ticket approval.
+async function handleCheckEtVerification(req, res, body) {
+  res.setHeader('Cache-Control', 'no-store');
+  const db = adminDb();
+  const { profile } = await authenticateAdmin(req, db);
+  if (profile.role !== 'generalAdmin') {
+    return res.status(403).json({ ok:false, error:'Only General Admin can test payment verification.' });
+  }
+  const { verifyCheckEtPayment } = require('../../lib/checket-verify');
+  const result = await verifyCheckEtPayment(body);
+  return res.status(200).json({ ok:true, ...result });
+}
+
 module.exports = async (req, res) => {
   if (req.method === 'GET' && String(req.query?.receipt || '') === '1') {
     return servePaymentReceipt(req, res);
@@ -605,6 +618,7 @@ module.exports = async (req, res) => {
   try {
     const body = readBody(req);
     const action = String(body.action || '').trim().toLowerCase();
+    if (action === 'checket-verify') return await handleCheckEtVerification(req, res, body);
     if (action === 'lookup-reference') return await lookupReference(req, res, body);
     if (action.startsWith('lottery-cleanup-')) return await handleLotteryCleanup(req, res, body);
     const requestId = String(body.requestId || '').trim();
