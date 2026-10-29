@@ -38,3 +38,16 @@ Transactions that fail midway do not consume a claim or issue partial tickets. C
 - The checkout and any older admin/deployment path that could issue tickets should be reviewed to ensure **all approvals route through the claim-aware transaction**.
 - A false/missing provider response, stale transfer, duplicate, unmatched amount/account or missing date always requires review.
 - Avoid repeatedly verifying the same receipt: Check.et free verifications may be limited.
+
+## PDF and screenshot verification (new Preview test)
+
+- Customer uploads still go **browser → private Firebase Storage**, unchanged. There is no second upload by the buyer.
+- On the General Admin Preview dashboard, select a lottery and configured CBE receiver, then **Test uploaded receipt** on an existing pending purchase. Lottery Admin also has **Verify PDF / screenshot (test)** beside a pending request.
+- The server checks its Firebase Auth/lottery permissions, reads the finalized `proofPath` from the stored purchase (never from a browser-selected URL), checks stored content type, max bytes (PDF 2 MiB; image 420 KiB), and file signature, and sends a multipart `receipt_file` field **directly from the server to Check.et**.
+- The full configured CBE account is sent as `account_number`. We do not perform OCR locally. Check.et documents direct PDF parsing; **image files may require `receipt_text`**, so we intentionally try the direct image input and show a safe error if unsupported.
+- Provider response is compared against the existing pending request's expected amount, date, bank, and configured account. The **bank-extracted transaction reference** is shown for manual reconciliation and checked against our payment claim ledger. No reference returned → still manual review.
+- No ticket status, claim, receipt or other Firestore data is changed by these test actions. No automatic approval is enabled.
+- Important: The original PDF/screenshot is transmitted to Check.et for verification and handled under its data processing policy. Before a public rollout, disclose this to buyers and confirm the provider's retention/privacy terms.
+- The untrusted file never travels from Storage through Vercel's CDN to a browser in this flow, though downloading it into a server function and forwarding it to Check.et can still incur Google Cloud egress and provider bandwidth.
+- We only unit-tested with synthetic PDF/image bytes and mocked provider responses. **The live PDF and screenshot API flows have NOT yet been verified with a customer's actual existing receipt.**
+
