@@ -3,6 +3,11 @@ on:
   pull_request:
     paths:
       - 'lib/checket-verify.js'
+      - 'lib/checket-request-match.js'
+      - 'tools/test-checket-request-match.cjs'
+      - 'admin/js/checketMatchUI.mjs'
+      - 'admin/js/general.js'
+      - 'admin/js/lottery.js'
       - 'tools/test-checket-verification.cjs'
       - 'api/admin/approvals.js'
       - '.github/workflows/checket-verification-tests.yml'
@@ -23,7 +28,10 @@ jobs:
       - name: Check JavaScript syntax
         run: |
           node --check lib/checket-verify.js
+          node --check lib/checket-request-match.js
+          node --check admin/js/checketMatchUI.mjs
+          node --check tools/test-checket-request-match.cjs
           node --check api/admin/approvals.js
           node --check tools/test-checket-verification.cjs
       - name: Run mocked tests; no real Check.et calls or credentials
-        run: node --test tools/test-checket-verification.cjs
+        run: node --test tools/test-checket-verification.cjs tools/test-checket-request-match.cjs
