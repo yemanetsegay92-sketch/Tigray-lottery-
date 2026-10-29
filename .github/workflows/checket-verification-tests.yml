@@ -4,6 +4,10 @@ on:
     paths:
       - 'lib/checket-verify.js'
       - 'lib/checket-request-match.js'
+      - 'lib/cbe-auto-eligibility.js'
+      - 'lib/cbe-auto-worker.js'
+      - 'tools/test-cbe-auto-approval.cjs'
+      - 'api/customer/create-request.js'
       - 'lib/payment-claims.js'
       - 'tools/test-payment-claims.cjs'
       - 'firestore.rules'
@@ -36,6 +40,10 @@ jobs:
           node --check lib/checket-private-receipt.js
           node --check tools/test-checket-private-receipts.cjs
           node --check lib/checket-request-match.js
+          node --check lib/cbe-auto-eligibility.js
+          node --check lib/cbe-auto-worker.js
+          node --check tools/test-cbe-auto-approval.cjs
+          node --check api/customer/create-request.js
           node --check lib/payment-claims.js
           node --check tools/test-payment-claims.cjs
           node --check admin/js/checketMatchUI.mjs
