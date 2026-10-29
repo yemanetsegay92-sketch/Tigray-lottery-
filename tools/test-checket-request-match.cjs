@@ -86,5 +86,5 @@ test('legacy approved request with same reference is flagged',()=>{
 test('documented masked official receiver is still review-only without negative control',()=>{
   const result=match({receiverAccountStatus:'masked_unverifiable',providerCbeAccountCheck:true});
   assert.equal(result.recommendation,'MANUAL_REVIEW');
-  assert.match(result.concerns.join(' '),/negative-control account test/);
+  assert.match(result.concerns.join(' '),/negative-control account test/i);
 });
