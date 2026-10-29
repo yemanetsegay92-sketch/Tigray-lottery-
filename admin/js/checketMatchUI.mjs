@@ -15,6 +15,10 @@ export function renderChecketMatch(data) {
   return `<div class="${matched?'success':'error'}">
     <strong>${esc(title)}</strong>
     <p>Pending request: ${esc(request.id || '')}</p>
+    <p>Verification input: ${esc(data.verificationInput==='receipt'?'Private PDF/image sent directly to Check.et':'Bank reference')}</p>
+    ${data.verificationInput==='receipt' ? `<p>Reference extracted by Check.et:
+      <strong>${esc(request.extractedReference||'Not returned')}</strong>
+      ${!request.reference?'(buyer did not enter one)':''}</p>` : ''}
     <p>Expected: <strong>${esc(expected)}</strong> · Bank reports: <strong>${amount}</strong></p>
     <p>Bank status: ${esc(payment.status||'unknown')} · Date: ${esc(payment.transactionDate||'not returned')}</p>
     <p>Sender: ${esc(payment.payerName||'not returned')}</p>
