@@ -20,7 +20,7 @@ function storageFor(buffer,mime='application/pdf',size=buffer.length){
       return {getMetadata:async()=>[{size,contentType:mime}],
         download:async()=>[buffer]};
     }};
-  }}};
+  }};
 }
 const key='chk_fake_only';
 test('private PDF read checks storage path, MIME, size and signature',async()=>{
