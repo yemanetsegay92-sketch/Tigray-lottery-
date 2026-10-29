@@ -30,6 +30,46 @@ $('contactForm')?.addEventListener('submit',saveContactSettings);
 $('whatsappNumber')?.addEventListener('input',updateContactPreview);
 $('addCreatePaymentAccount')?.addEventListener('click',addCreatePaymentAccount);
 
+// Read-only Check.et test; deliberately does not call approveRequest.
+$('checketForm')?.addEventListener('submit', async event => {
+  event.preventDefault();
+  const button = $('checketSubmit');
+  const result = $('checketResult');
+  button.disabled = true;
+  result.textContent = 'Checking with Check.et…';
+  try {
+    if (!auth.currentUser) throw new Error('Sign in as General Admin first.');
+    const bank = $('checketBank').value;
+    const transactionNumber = $('checketReference').value.trim();
+    const accountNumber = $('checketAccount').value.trim();
+    if (['cbe','boa','cbebirr'].includes(bank) && !accountNumber) throw new Error('Enter the account number for this bank.');
+    const token = await auth.currentUser.getIdToken();
+    const response = await fetch('/api/admin/approvals', {
+      method: 'POST',
+      headers: {'content-type':'application/json', authorization:'Bearer ' + token},
+      body: JSON.stringify({action:'checket-verify',bank,transactionNumber,accountNumber})
+    });
+    const data = await response.json();
+    if (!response.ok || !data.ok) throw new Error(data.error || 'Verification failed.');
+    const status = data.verified ? 'CONFIRMED BY PROVIDER' : 'NOT CONFIRMED';
+    const account = data.receiverAccountMatches === true ? 'Account matches entered number'
+      : data.receiverAccountMatches === false ? 'WARNING — receiving account mismatch'
+      : 'Receiver account not returned; independent account match unavailable';
+    const amount = data.amount === null ? 'Not returned' : Number(data.amount).toLocaleString('en-US') + ' ' + esc(data.currency || '');
+    result.innerHTML = `<div class="${data.verified?'success':'error'}"><strong>${esc(status)}</strong>
+      <p>Amount: ${amount} · Status: ${esc(data.status)} · Bank: ${esc(data.bank)}</p>
+      <p>Sender: ${esc(data.payerName || 'Not returned')}</p>
+      <p>Recipient: ${esc(data.receiverName || 'Not returned')}</p>
+      <p>${esc(account)}</p>
+      <p>Previously verified in Check.et branch: ${data.providerDuplicate?'Yes':'No'}</p>
+      <p><strong>Read-only result. No ticket or payment was approved.</strong></p></div>`;
+  } catch (error) {
+    result.innerHTML = `<div class="error">${esc(error.message || 'Check.et verification failed.')}</div>`;
+  } finally {
+    button.disabled = false;
+  }
+});
+
 onAuthStateChanged(auth,async u=>{
   if(!u){location.href='login.html';return;}
   try{
