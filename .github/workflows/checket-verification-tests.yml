@@ -12,6 +12,8 @@ on:
       - 'admin/js/general.js'
       - 'admin/js/lottery.js'
       - 'tools/test-checket-verification.cjs'
+      - 'tools/test-checket-private-receipts.cjs'
+      - 'lib/checket-private-receipt.js'
       - 'api/admin/approvals.js'
       - '.github/workflows/checket-verification-tests.yml'
   workflow_dispatch:
@@ -31,6 +33,8 @@ jobs:
       - name: Check JavaScript syntax
         run: |
           node --check lib/checket-verify.js
+          node --check lib/checket-private-receipt.js
+          node --check tools/test-checket-private-receipts.cjs
           node --check lib/checket-request-match.js
           node --check lib/payment-claims.js
           node --check tools/test-payment-claims.cjs
@@ -41,4 +45,4 @@ jobs:
           node --check api/admin/approvals.js
           node --check tools/test-checket-verification.cjs
       - name: Run mocked tests; no real Check.et calls or credentials
-        run: node --test tools/test-checket-verification.cjs tools/test-checket-request-match.cjs tools/test-payment-claims.cjs
+        run: node --test tools/test-checket-verification.cjs tools/test-checket-request-match.cjs tools/test-payment-claims.cjs tools/test-checket-private-receipts.cjs
