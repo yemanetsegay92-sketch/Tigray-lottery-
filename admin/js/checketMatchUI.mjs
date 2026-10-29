@@ -20,7 +20,14 @@ export function renderChecketMatch(data) {
     <p>Sender: ${esc(payment.payerName||'not returned')}</p>
     <p>Receiver: ${esc(payment.receiverName||'not returned')}</p>
     <p>Receiver account: ${esc(payment.receiverAccountStatus||'not_returned')}
-      (a masked account is NOT an exact match)</p>
+      (a masked account is NOT an independently confirmed full match)</p>
+    <p>CBE account verification by provider: ${checks.providerCbeAccountCheck
+      ? 'Check.et reports an official CBE confirmation using the full configured account.'
+      : 'Not established.'}</p>
+    <p><strong>Safety gate:</strong> Before unattended approvals, test that the same
+      transaction FAILS when the submitted full CBE account is incorrect.</p>
+    <p>Our permanent payment claim: ${esc(checks.referenceClaimStatus||'not_checked')}
+      · Prior approved requests using exact reference: ${esc(checks.otherApprovedRequestsWithReference??0)}</p>
     <p>Exact-reference occurrences in other ticket requests: ${esc(checks.otherRequestsWithExactReference??0)}
       (not a complete duplicate guarantee)</p>
     <p>Timing: ${esc(checks.dateStatus||'missing')}
