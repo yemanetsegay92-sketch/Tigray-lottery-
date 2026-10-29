@@ -28,8 +28,9 @@ export function renderChecketMatch(data) {
     <p>CBE account verification by provider: ${checks.providerCbeAccountCheck
       ? 'Check.et reports an official CBE confirmation using the full configured account.'
       : 'Not established.'}</p>
-    <p><strong>Safety gate:</strong> Before unattended approvals, test that the same
-      transaction FAILS when the submitted full CBE account is incorrect.</p>
+    <p><strong>Safety note:</strong> A masked account is not independently a full account match.
+      We have experimentally checked the provider using correct and incorrect CBE recipients;
+      production activation still requires independent security and historical-claims review.</p>
     <p>Our permanent payment claim: ${esc(checks.referenceClaimStatus||'not_checked')}
       · Prior approved requests using exact reference: ${esc(checks.otherApprovedRequestsWithReference??0)}</p>
     <p>Exact-reference occurrences in other ticket requests: ${esc(checks.otherRequestsWithExactReference??0)}
@@ -37,6 +38,14 @@ export function renderChecketMatch(data) {
     <p>Timing: ${esc(checks.dateStatus||'missing')}
       · Transaction reference: ${esc(checks.referenceMatch===true?'matches provider':checks.referenceMatch===false?'does not match':(data.verificationInput==='receipt' && request.extractedReference?'extracted from receipt (review)':'not independently returned'))}</p>
     ${messages.length?'<p><strong>Issues requiring attention:</strong></p><ul>'+messages.map(x=>'<li>'+esc(x)+'</li>').join('')+'</ul>':'<p>No mismatch found in available data. Verify the actual receiving account before approving.</p>'}
+    <hr>
+    <p><strong>CBE automatic-approval eligibility — PREVIEW SIMULATION</strong></p>
+    <p>${data.autoEligibility?.eligible
+      ? '✅ PASS: Payment meets the current strict automatic checks, but automation is disabled in Preview.'
+      : '🟡 HOLD: This purchase needs manual review or further configuration.'}</p>
+    ${Array.isArray(data.autoEligibility?.reasons) && data.autoEligibility.reasons.length
+      ? '<p>Automatic approval blocked by:</p><ul>'+data.autoEligibility.reasons.map(r=>'<li>'+esc(r)+'</li>').join('')+'</ul>'
+      : ''}
     <p><strong>READ-ONLY: No ticket approved. Manual approval is separate.</strong></p>
   </div>`;
 }
