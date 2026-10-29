@@ -692,14 +692,42 @@ async function handleCheckEtPendingMatch(req, res, body) {
   const purchase = requestSnap.data() || {};
   if (purchase.status !== 'pending') return res.status(409).json({ok:false,error:'Only pending requests can be checked.'});
   const storedReference = String(purchase.reference || '').trim();
-  if (!/^[a-zA-Z0-9_-]{5,80}$/.test(storedReference)) {
-    return res.status(400).json({ok:false,error:'This request has no supported CBE reference. Review its receipt manually.'});
+  const method = String(body.verificationMethod || 'reference').toLowerCase();
+  if (!['reference','receipt'].includes(method)) {
+    return res.status(400).json({ok:false,error:'Unsupported verification method.'});
   }
-  // This is a read-only hint, not a uniqueness guarantee. Strong canonical
-  // transaction claiming must be added before any future auto-approval.
-  const claimRef = paymentClaimRef(db,storedReference);
+  if (method === 'reference' && !/^[a-zA-Z0-9_-]{5,80}$/.test(storedReference)) {
+    return res.status(400).json({ok:false,error:'This request has no supported CBE reference. Select the receipt method if it has a PDF/image.'});
+  }
+  if (method === 'receipt' && !purchase.proofPath) {
+    return res.status(400).json({ok:false,error:'No private PDF or screenshot is attached to this request.'});
+  }
+  const { verifyCheckEtPayment } = require('../../lib/checket-verify');
+  const { comparePaymentToRequest } = require('../../lib/checket-request-match');
+  let receiptFile = null;
+  if (method === 'receipt') {
+    const {readFinalReceipt}=require('../../lib/checket-private-receipt');
+    // Only server-owned finalized GCS objects; never send customer URLs to Check.et.
+    receiptFile=await readFinalReceipt(purchase);
+  }
+  // Check.et receives the full configured receiving account, and a reference
+  // OR the authenticated private file. PDF goes directly to Check.et: no OCR.
+  // Images are an experiment; Check.et may respond 422 without receipt_text.
+  const verification = await verifyCheckEtPayment({
+    bank:'cbe', accountNumber:account,
+    ...(method === 'receipt' ? {receiptFile} : {transactionNumber:storedReference})
+  });
+  const providerReference = String(verification.reportedTransactionNumber || '').trim().toUpperCase();
+  const effectiveReference = method === 'receipt'
+    ? (providerReference || storedReference.toUpperCase()) : storedReference;
+  // This lookup is advisory (exact legacy Firestore reference only). Persistent
+  // global paymentClaims is the stronger future protection. Neither writes data.
+  const claimRef = /^[A-Z0-9_-]{5,80}$/.test(effectiveReference)
+    ? paymentClaimRef(db,effectiveReference) : null;
   const [sameRef, existingClaim] = await Promise.all([
-    db.collection('ticketRequests').where('reference','==',storedReference).limit(21).get(),
+    claimRef
+      ? db.collection('ticketRequests').where('reference','==',effectiveReference).limit(21).get()
+      : Promise.resolve({docs:[],size:0}),
     claimRef ? claimRef.get() : Promise.resolve(null)
   ]);
   const otherDocs = sameRef.docs.filter(x=>x.id!==requestSnap.id);
@@ -707,19 +735,31 @@ async function handleCheckEtPendingMatch(req, res, body) {
     otherCount:otherDocs.length,
     otherApprovedCount:otherDocs.filter(x=>x.data().status==='approved').length,
     truncated:sameRef.size===21,
-    claimStatus:claimRef ? claimSnapshotStatus(existingClaim,requestSnap.id) : 'unavailable'
+    claimStatus:claimRef ? claimSnapshotStatus(existingClaim,requestSnap.id) : 'reference_not_returned'
   };
-  const { verifyCheckEtPayment } = require('../../lib/checket-verify');
-  const { comparePaymentToRequest } = require('../../lib/checket-request-match');
-  const verification = await verifyCheckEtPayment({
-    bank:'cbe', transactionNumber:storedReference, accountNumber:account
-  });
+  // For receipt-only purchases, mark the bank-supplied reference as extracted,
+  // NOT as a customer reference match. Keep human review regardless.
   const assessment = comparePaymentToRequest(
     {...purchase,lotteryId}, verification, {id:lotteryId},duplicate
   );
+  if (method === 'receipt') {
+    assessment.checks.receiptInput = receiptFile.mime === 'application/pdf' ? 'pdf' : 'image';
+    assessment.checks.bankExtractedReference = providerReference.length > 0;
+    if (!storedReference) {
+      assessment.recommendation='MANUAL_REVIEW';
+      assessment.concerns.push(providerReference
+        ? 'Reference was extracted from a receipt, not entered by the buyer. Reconcile it before approval.'
+        : 'Check.et did not return a usable reference. Approval requires a verified reference.');
+    }
+    if (storedReference && providerReference && storedReference.toUpperCase() !== providerReference) {
+      assessment.recommendation='MANUAL_REVIEW';
+      assessment.concerns.push('The PDF/image reference differs from the customer-entered reference.');
+    }
+  }
   return res.status(200).json({
-    ok:true,readOnly:true,
-    request:{id:requestSnap.id,lotteryId,total:Number(purchase.total||0),reference:storedReference},
+    ok:true,readOnly:true,verificationInput:method,
+    request:{id:requestSnap.id,lotteryId,total:Number(purchase.total||0),
+      reference:storedReference,extractedReference:method==='receipt'?providerReference:''},
     payment:{
       bank:verification.bank,status:verification.status,amount:verification.amount,currency:verification.currency,
       transactionDate:verification.transactionDate,payerName:verification.payerName,receiverName:verification.receiverName,
