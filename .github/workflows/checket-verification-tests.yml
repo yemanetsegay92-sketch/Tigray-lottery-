@@ -30,6 +30,8 @@ jobs:
           node --check lib/checket-verify.js
           node --check lib/checket-request-match.js
           node --check admin/js/checketMatchUI.mjs
+          node --input-type=module --check < admin/js/general.js
+          node --input-type=module --check < admin/js/lottery.js
           node --check tools/test-checket-request-match.cjs
           node --check api/admin/approvals.js
           node --check tools/test-checket-verification.cjs
