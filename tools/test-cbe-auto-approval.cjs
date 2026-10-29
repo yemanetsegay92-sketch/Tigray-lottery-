@@ -3,6 +3,7 @@ const {test}=require('node:test');
 const assert=require('node:assert/strict');
 const {evaluateAutoPayment,nameKey}=require('../lib/cbe-auto-eligibility');
 const {enabledFor,checkWorkerSecret,inspectRequest,processOne}=require('../lib/cbe-auto-worker');
+const {cutoverMs,isAfterCutover}=require('../lib/cbe-auto-cutover');
 const created=new Date(Date.now()-10*60000).toISOString();
 const purchase={status:'pending',lotteryId:'safe-lottery',reference:'FTTEST12345',
   total:1000,quantity:1,createdAt:created};
@@ -17,7 +18,7 @@ const verification={bank:'cbe',reportedBank:'cbe',verified:true,status:'complete
   transactionDate:new Date(Date.now()-9*60000).toISOString()};
 const unused={claimStatus:'unused',otherCount:0,otherApprovedCount:0,truncated:false};
 const env={VERCEL_ENV:'production',LOTTERY_CBE_AUTO_APPROVAL_ENABLED:'true',
-  LOTTERY_CBE_PAYMENT_CLAIMS_BACKFILLED:'true',
+  LOTTERY_CBE_AUTO_APPROVAL_START_AT:new Date(Date.now()-40*60000).toISOString(),
   LOTTERY_CBE_AUTO_APPROVAL_LOTTERY_IDS:'safe-lottery',
   CHECK_ET_API_KEY:'not-real-provider-key',
   LOTTERY_CBE_AUTO_APPROVAL_CRON_SECRET:'A'.repeat(45)};
@@ -92,7 +93,7 @@ test('automation is disabled absent explicit production, backfill, key and allow
   assert.equal(enabledFor('safe-lottery',env),true);
   for(const overrides of [
     {VERCEL_ENV:'preview'}, {LOTTERY_CBE_AUTO_APPROVAL_ENABLED:'false'},
-    {LOTTERY_CBE_PAYMENT_CLAIMS_BACKFILLED:'false'},
+    {LOTTERY_CBE_AUTO_APPROVAL_START_AT:''},
     {LOTTERY_CBE_AUTO_APPROVAL_LOTTERY_IDS:'other-lottery'}, {CHECK_ET_API_KEY:''}
   ])assert.equal(enabledFor('safe-lottery',{...env,...overrides}),false);
 });
@@ -153,4 +154,33 @@ test('provider outages are retried with backoff without approving anything',asyn
   },approve:()=>{throw Error('must not approve');}});
   assert.equal(state,'retry');
   assert.equal(db.logs.at(-1).update.state,'pending');
+});
+
+test('historical test-only receipts are rejected by explicit cutover in both purchase and bank dates',()=>{
+  assert.ok(Number.isFinite(cutoverMs(env)));
+  assert.equal(isAfterCutover(purchase.createdAt,verification.transactionDate,env),true);
+  const late={...env,LOTTERY_CBE_AUTO_APPROVAL_START_AT:new Date(Date.now()-5*60000).toISOString()};
+  assert.equal(isAfterCutover(purchase.createdAt,verification.transactionDate,late),false);
+  assert.equal(isAfterCutover(new Date().toISOString(),
+    new Date(Date.now()-15*60000).toISOString(),late),false);
+});
+test('cutover has timezone and defaults fail-closed',()=>{
+  assert.equal(Number.isNaN(cutoverMs({...env,LOTTERY_CBE_AUTO_APPROVAL_START_AT:'2026-10-30T12:00'})),true);
+  assert.equal(Number.isNaN(cutoverMs({...env,LOTTERY_CBE_AUTO_APPROVAL_START_AT:'not-a-date'})),true);
+  assert.equal(enabledFor('safe-lottery',{...env,LOTTERY_CBE_AUTO_APPROVAL_START_AT:new Date(Date.now()+120000).toISOString()}),false);
+});
+test('a pre-cutover pending test purchase never triggers a provider call',async()=>{
+  const old={...purchase,createdAt:new Date(Date.now()-55*60000).toISOString()};
+  const db=fakeDb({p:old});
+  const result=await inspectRequest(db,'req-legacy',{env,
+    verify:()=>{throw Error('historical request should not use Check.et quota')}});
+  assert.equal(result.decision,'manual_review');
+  assert.deepEqual(result.reasons,['purchase_before_go_live_cutover']);
+});
+test('new purchase paid before cutover cannot approve, even with otherwise matching receipt',async()=>{
+  const db=fakeDb();
+  const oldBank={...verification,transactionDate:new Date(Date.now()-55*60000).toISOString()};
+  const result=await inspectRequest(db,'req-legacy-payment',{env,verify:async()=>oldBank});
+  assert.equal(result.decision,'manual_review');
+  assert.deepEqual(result.reasons,['purchase_or_bank_transfer_before_go_live_cutover']);
 });
