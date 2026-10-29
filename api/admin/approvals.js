@@ -115,7 +115,7 @@ async function approveRequest(db, caller, profile, requestId, requestedLotteryId
         (!request.reference || normalizePaymentReference(request.reference)===normalized) &&
         Number(autoGuard.expectedAmount)===Number(request.total) &&
         configured && cbeAccounts(lottery).length===1 &&
-        String(configured.number).replace(/\\s/g,'')===String(autoGuard.account) &&
+        String(configured.number).replace(/\s/g,'')===String(autoGuard.account) &&
         nameKey(configured.holderName)===nameKey(autoGuard.receiveName) &&
         Number.isFinite(createdAt) && Number.isFinite(paidAt) &&
         paidAt>=createdAt-30*60000 && paidAt<=createdAt+30*60000 &&
