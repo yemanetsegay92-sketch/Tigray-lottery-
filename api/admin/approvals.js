@@ -2,7 +2,7 @@ const crypto = require('crypto');
 const { adminDb, FieldValue } = require('../telegram/_lib');
 const { getAuth } = require('firebase-admin/auth');
 const { getStorage } = require('firebase-admin/storage');
-const { paymentClaimRef, claimSnapshotStatus, assertClaimFree, createPaymentClaim } = require('../../lib/payment-claims');
+const { paymentClaimRef, normalizePaymentReference, claimSnapshotStatus, assertClaimFree, createPaymentClaim } = require('../../lib/payment-claims');
 
 function readBearer(req) {
   const h = String(req.headers?.authorization || '');
@@ -54,7 +54,7 @@ function assertLotteryAccess(profile, lotteryId) {
   }
 }
 
-async function approveRequest(db, caller, profile, requestId, requestedLotteryId) {
+async function approveRequest(db, caller, profile, requestId, requestedLotteryId, manualReference = '') {
   let result = null;
 
   await db.runTransaction(async tx => {
@@ -74,8 +74,20 @@ async function approveRequest(db, caller, profile, requestId, requestedLotteryId
       throw new Error('This request has already been reviewed.');
     }
 
+    // For screenshot/PDF-only requests the admin must transcribe the verified
+    // bank transaction reference before approving. Without a reference it is
+    // impossible to guarantee that the same payment cannot be spent again.
+    const reference = String(request.reference || manualReference || '').trim();
+    const normalized = normalizePaymentReference(reference);
+    if (!/^[A-Z0-9_-]{5,80}$/.test(normalized)) {
+      throw Object.assign(new Error('Approval requires a bank transaction reference. For receipt-only purchases, enter the reference printed on the receipt.'),{statusCode:400});
+    }
+    if (request.reference && manualReference &&
+      normalizePaymentReference(request.reference) !== normalizePaymentReference(manualReference)) {
+      throw Object.assign(new Error('Cannot replace the original payment reference.'),{statusCode:400});
+    }
     const lotteryRef = db.collection('lotteries').doc(lotteryId);
-    const claimRef = paymentClaimRef(db, request.reference);
+    const claimRef = paymentClaimRef(db, reference);
     // All reads finish before any transaction writes. The claim is global across
     // lotteries and remains consumed after cancellation or lottery cleanup.
     const [lotterySnap, claimSnap] = await Promise.all([
@@ -139,7 +151,8 @@ async function approveRequest(db, caller, profile, requestId, requestedLotteryId
       reviewedAt: now,
       lotteryName: String(lottery.name || lotteryId),
       phoneHash,
-      paymentClaimProtection: hasPaymentClaim ? 'consumed_reference' : 'reference_missing_manual_only'
+      reference,
+      paymentClaimProtection: 'consumed_reference'
     });
 
     tx.update(lotteryRef, {
@@ -175,7 +188,7 @@ async function approveRequest(db, caller, profile, requestId, requestedLotteryId
       adminId: caller.uid,
       ticketNumbers,
       quantity,
-      paymentClaimProtection: hasPaymentClaim ? 'consumed_reference' : 'reference_missing_manual_only',
+      paymentClaimProtection: 'consumed_reference',
       createdAt: now
     });
 
@@ -184,7 +197,7 @@ async function approveRequest(db, caller, profile, requestId, requestedLotteryId
       lotteryName: String(lottery.name || lotteryId),
       name: String(request.name || ''),
       phone: String(request.phone || ''),
-      reference: String(request.reference || ''),
+      reference,
       quantity,
       total: Number(request.total || 0),
       phoneHash,
@@ -765,7 +778,8 @@ module.exports = async (req, res) => {
         caller,
         profile,
         requestId,
-        requestedLotteryId
+        requestedLotteryId,
+        String(body.manualReference || '').trim()
       );
 
       return res.status(200).json({
