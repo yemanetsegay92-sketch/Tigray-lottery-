@@ -2,6 +2,7 @@ const crypto = require('crypto');
 const { adminDb, FieldValue } = require('../telegram/_lib');
 const { getAuth } = require('firebase-admin/auth');
 const { getStorage } = require('firebase-admin/storage');
+const { paymentClaimRef, claimSnapshotStatus, assertClaimFree, createPaymentClaim } = require('../../lib/payment-claims');
 
 function readBearer(req) {
   const h = String(req.headers?.authorization || '');
@@ -74,13 +75,18 @@ async function approveRequest(db, caller, profile, requestId, requestedLotteryId
     }
 
     const lotteryRef = db.collection('lotteries').doc(lotteryId);
-    const lotterySnap = await tx.get(lotteryRef);
-
+    const claimRef = paymentClaimRef(db, request.reference);
+    // All reads finish before any transaction writes. The claim is global across
+    // lotteries and remains consumed after cancellation or lottery cleanup.
+    const [lotterySnap, claimSnap] = await Promise.all([
+      tx.get(lotteryRef), claimRef ? tx.get(claimRef) : Promise.resolve(null)
+    ]);
     if (!lotterySnap.exists) throw new Error('Lottery not found.');
 
     const lottery = lotterySnap.data() || {};
     if (lottery.cleanupInProgress === true) throw new Error('Lottery cleanup is in progress. Approvals are disabled.');
     assertLotteryAccess(profile, lotteryId);
+    if (claimRef) assertClaimFree(claimSnapshotStatus(claimSnap, requestId));
 
     const min = Number(lottery.min);
     const max = Number(lottery.max);
@@ -107,6 +113,12 @@ async function approveRequest(db, caller, profile, requestId, requestedLotteryId
     const phoneHash = String(request.phoneHash || '') || sha256(phone);
     const now = FieldValue.serverTimestamp();
 
+    // Atomic with ticket assignment: two concurrent purchases cannot spend the
+    // same normalized reference, including references extracted from proof uploads.
+    const hasPaymentClaim = createPaymentClaim(tx, claimRef, {
+      requestId, lotteryId, createdBy:caller.uid, at:now
+    });
+
     // The lottery counter is the sole allocator for new approvals.
     // tx.create prevents an unexpected stale-counter collision from overwriting a ticket.
     for (const number of ticketNumbers) {
@@ -126,7 +138,8 @@ async function approveRequest(db, caller, profile, requestId, requestedLotteryId
       reviewedBy: caller.uid,
       reviewedAt: now,
       lotteryName: String(lottery.name || lotteryId),
-      phoneHash
+      phoneHash,
+      paymentClaimProtection: hasPaymentClaim ? 'consumed_reference' : 'reference_missing_manual_only'
     });
 
     tx.update(lotteryRef, {
@@ -162,6 +175,7 @@ async function approveRequest(db, caller, profile, requestId, requestedLotteryId
       adminId: caller.uid,
       ticketNumbers,
       quantity,
+      paymentClaimProtection: hasPaymentClaim ? 'consumed_reference' : 'reference_missing_manual_only',
       createdAt: now
     });
 
@@ -174,6 +188,7 @@ async function approveRequest(db, caller, profile, requestId, requestedLotteryId
       quantity,
       total: Number(request.total || 0),
       phoneHash,
+      paymentClaimProtection: hasPaymentClaim ? 'consumed_reference' : 'reference_missing_manual_only',
       ticketNumbers
     };
   });
