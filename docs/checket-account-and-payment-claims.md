@@ -27,7 +27,7 @@ On an authorized **manual approval**, the trusted server:
 
 Transactions that fail midway do not consume a claim or issue partial tickets. Cancelling the approval **does not free the payment claim**, and the claim is not removed by ordinary lottery cleanup. It contains request ID, lottery ID, timestamp, admin ID and status, but not the raw bank reference or customer name.
 
-**Important:** No existing payment-claim records are created merely by Preview verification. Claims begin only when approvals are made through the updated approve endpoint. Existing approved tickets must be inventoried, duplicates resolved, and clean historical references **backfilled before enabling automatic approvals**. Do not run a large migration against production without a dry-run report and explicit approval.
+**Important:** No existing payment-claim records are created merely by Preview verification. Claims begin only when approvals are made through the updated approve endpoint. The owner has confirmed **all prior purchases and approvals are test data**. We can therefore start with a new strictly timestamped production cutover instead of migrating old test transactions. Both the ticket request creation time and the bank payment time must be on or after the configured launch date; the Firestore claim ledger remains mandatory for every new approval. Do not delete prior claims or allow old receipts to auto-approve.
 
 ## Other gates before production
 
@@ -59,28 +59,28 @@ Automatic approval is **not live**. The production worker is implemented but sta
 
 - `CHECK_ET_API_KEY` with permission to verify real payments (currently **Preview-only**).
 - `LOTTERY_CBE_AUTO_APPROVAL_ENABLED=true`.
-- `LOTTERY_CBE_PAYMENT_CLAIMS_BACKFILLED=true` **only after** approved historical receipts have been reconciled and clean transaction claims written.
+- `LOTTERY_CBE_AUTO_APPROVAL_START_AT`: a new **explicit** launch timestamp with time zone (e.g. `2026-11-02T10:00:00+03:00`). The timestamp MUST be set to the actual future activation date, not an earlier time. Only purchases **and** bank transfers occurring on/after this cutoff can qualify; previous test transactions are ineligible.
 - `LOTTERY_CBE_AUTO_APPROVAL_LOTTERY_IDS` containing the exact CBE-enabled lottery ID(s), comma-separated; start with exactly one reviewed lottery.
 - `LOTTERY_CBE_AUTO_APPROVAL_CRON_SECRET`, an unpredictable random secret **32+ bytes** used to authenticate the worker.
 
 A separately configured, external scheduler (for example existing Cloud Scheduler) must POST `{"action":"cbe-auto-worker"}` to the **production** `/api/admin/approvals` endpoint using `Authorization: Bearer <secret>`. No scheduler integration was configured in this draft PR. Vercel Preview always rejects worker approval, even though it connects to the same Firebase database.
 
-**No one should set the above production flags yet.** We have not migrated old approved references, deployed the updated security rules, executed real concurrent approval integration tests, or reviewed every alternate ticket-write path. Check.et free-plan quotas and commercial/API conditions must also be confirmed before rollout.
+**No one should set the above production flags yet.** We have not yet deployed the updated security rules, executed real concurrent approval integration tests, or reviewed every alternate ticket-write path. Check.et free-plan quotas and commercial/API conditions must also be confirmed before rollout.
 
 ### Workflow when correctly activated
 
 1. Checkout creates a `pending` ticket request as before, plus a `autoPaymentQueue/<requestId>` work item **only** for allowlisted production lotteries with exactly one configured valid CBE account and bank holder name.
-2. Scheduler calls the secret-authenticated batch worker on the existing approvals Vercel function. A Firestore lease prevents simultaneous workers from handling the same queue item.
+2. Scheduler calls the secret-authenticated batch worker on the existing approvals Vercel function. A Firestore lease prevents simultaneous workers from handling the same queue item. Pre-cutover purchases are held for manual review **without another Check.et call**.
 3. The worker sends either the bank reference OR the existing private PDF/image to Check.et with the **lottery's configured CBE receiving account**.
-4. Strict checks: `official` CBE verification; completed; provider checked the supplied receiving account; masked suffix matches; receipt receiver name matches configured holder; bank amount/currency exact; reference is returned and compatible with buyer-entered value; payment within 30 minutes of request; no prior Check.et branch verification ambiguity; no other request shares reference; ledger claim unused.
+4. Strict checks: both purchase and payment occurred on/after launch cutoff; `official` CBE verification; completed; provider checked the supplied receiving account; masked suffix matches; receipt receiver name matches configured holder; bank amount/currency exact; reference is returned and compatible with buyer-entered value; payment within 30 minutes of request; no prior Check.et branch verification ambiguity; no other request shares reference; ledger claim unused.
 5. The existing ticket-allocation transaction **rechecks current request and lottery**, verifies the time-limited server-side payment guard, creates the permanent hashed reference claim, allocates sequential ticket documents, updates purchase/public status and enqueues the **existing** buyer notification, all atomically.
 6. Any mismatch or missing evidence goes to `manual_review`. Temporary Check.et outages retry up to three times with backoff; uncertain approval results are never blindly retried.
 7. Buyer-notification delivery remains handled by the previously established background notification worker (not by Check.et).
 
 ### Production rollout checklist (NOT COMPLETED)
 
-- Produce a read-only historical audit of all previously approved requests; identify references missing from screenshot/PDF-only approvals, normalize known references, handle collisions and reconcile duplicates **before** backfilling `paymentClaims`.
-- Backfill claims once after human review, do not overwrite conflicting claims, and **retain** them across lottery deletion/cancellation.
+- The owner confirms all earlier purchases/transfers are test-only. Do **not** approve old test requests automatically or migrate test references as live business sales. Set a strict launch cutoff to the actual deployment time. Verify bank payment time and purchase creation time both occur afterward.
+- Start with an empty or otherwise reconciled ledger for new production payments; **never** clear the ledger once live. A reference claimed by an approved purchase must remain blocked across lottery deletions/cancellations.
 - Deploy revised Firestore rules. Ensure no outdated clients/admin scripts may update ticket status or mint ticket numbers directly.
 - Execute emulator/live-sandbox concurrency, idempotency, timing, wrong-account, wrong-amount, screenshot/PDF, outage and rate-limit tests. Do not reuse actual buyers' payments as test issuance without consent.
 - Validate Check.et API quotas, receipt handling/data processing, and support for commercial automatic ticket fulfillment.
