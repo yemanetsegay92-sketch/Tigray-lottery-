@@ -51,3 +51,42 @@ Transactions that fail midway do not consume a claim or issue partial tickets. C
 - The untrusted file never travels from Storage through Vercel's CDN to a browser in this flow, though downloading it into a server function and forwarding it to Check.et can still incur Google Cloud egress and provider bandwidth.
 - We only unit-tested with synthetic PDF/image bytes and mocked provider responses. **The live PDF and screenshot API flows have NOT yet been verified with a customer's actual existing receipt.**
 
+## Automatic CBE approvals (code added; DISABLED in every deployment)
+
+**Positive tests:** bank references, official PDF receipts and both PDF screenshots and USSD confirmation screenshots have returned Check.et official CBE payment data in Preview. This validates image reading without our own OCR for those test formats; not all banking apps/images are covered.
+
+Automatic approval is **not live**. The production worker is implemented but stays inaccessible unless ALL of the following independently controlled Vercel environment variables are set **after a security release review**:
+
+- `CHECK_ET_API_KEY` with permission to verify real payments (currently **Preview-only**).
+- `LOTTERY_CBE_AUTO_APPROVAL_ENABLED=true`.
+- `LOTTERY_CBE_PAYMENT_CLAIMS_BACKFILLED=true` **only after** approved historical receipts have been reconciled and clean transaction claims written.
+- `LOTTERY_CBE_AUTO_APPROVAL_LOTTERY_IDS` containing the exact CBE-enabled lottery ID(s), comma-separated; start with exactly one reviewed lottery.
+- `LOTTERY_CBE_AUTO_APPROVAL_CRON_SECRET`, an unpredictable random secret **32+ bytes** used to authenticate the worker.
+
+A separately configured, external scheduler (for example existing Cloud Scheduler) must POST `{"action":"cbe-auto-worker"}` to the **production** `/api/admin/approvals` endpoint using `Authorization: Bearer <secret>`. No scheduler integration was configured in this draft PR. Vercel Preview always rejects worker approval, even though it connects to the same Firebase database.
+
+**No one should set the above production flags yet.** We have not migrated old approved references, deployed the updated security rules, executed real concurrent approval integration tests, or reviewed every alternate ticket-write path. Check.et free-plan quotas and commercial/API conditions must also be confirmed before rollout.
+
+### Workflow when correctly activated
+
+1. Checkout creates a `pending` ticket request as before, plus a `autoPaymentQueue/<requestId>` work item **only** for allowlisted production lotteries with exactly one configured valid CBE account and bank holder name.
+2. Scheduler calls the secret-authenticated batch worker on the existing approvals Vercel function. A Firestore lease prevents simultaneous workers from handling the same queue item.
+3. The worker sends either the bank reference OR the existing private PDF/image to Check.et with the **lottery's configured CBE receiving account**.
+4. Strict checks: `official` CBE verification; completed; provider checked the supplied receiving account; masked suffix matches; receipt receiver name matches configured holder; bank amount/currency exact; reference is returned and compatible with buyer-entered value; payment within 30 minutes of request; no prior Check.et branch verification ambiguity; no other request shares reference; ledger claim unused.
+5. The existing ticket-allocation transaction **rechecks current request and lottery**, verifies the time-limited server-side payment guard, creates the permanent hashed reference claim, allocates sequential ticket documents, updates purchase/public status and enqueues the **existing** buyer notification, all atomically.
+6. Any mismatch or missing evidence goes to `manual_review`. Temporary Check.et outages retry up to three times with backoff; uncertain approval results are never blindly retried.
+7. Buyer-notification delivery remains handled by the previously established background notification worker (not by Check.et).
+
+### Production rollout checklist (NOT COMPLETED)
+
+- Produce a read-only historical audit of all previously approved requests; identify references missing from screenshot/PDF-only approvals, normalize known references, handle collisions and reconcile duplicates **before** backfilling `paymentClaims`.
+- Backfill claims once after human review, do not overwrite conflicting claims, and **retain** them across lottery deletion/cancellation.
+- Deploy revised Firestore rules. Ensure no outdated clients/admin scripts may update ticket status or mint ticket numbers directly.
+- Execute emulator/live-sandbox concurrency, idempotency, timing, wrong-account, wrong-amount, screenshot/PDF, outage and rate-limit tests. Do not reuse actual buyers' payments as test issuance without consent.
+- Validate Check.et API quotas, receipt handling/data processing, and support for commercial automatic ticket fulfillment.
+- Configure a separate **production** Check.et key, secret, allowlist and cron scheduler only after approval.
+- Start with one lottery and audit all automated approvals and rejections before scaling.
+
+### Preview simulation
+
+The General Admin `Match pending ticket` and `Test uploaded receipt` panels now show **CBE automatic-approval eligibility — PREVIEW SIMULATION** with policy blockers. A positive result is still read-only; it never issues tickets in Preview.
