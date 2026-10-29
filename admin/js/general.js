@@ -51,12 +51,19 @@ $('checketForm')?.addEventListener('submit', async event => {
     });
     const data = await response.json();
     if (!response.ok || !data.ok) throw new Error(data.error || 'Verification failed.');
-    const status = data.verified ? 'CONFIRMED BY PROVIDER' : 'NOT CONFIRMED';
-    const account = data.receiverAccountMatches === true ? 'Account matches entered number'
-      : data.receiverAccountMatches === false ? 'WARNING — receiving account mismatch'
+    const exactMatch = data.verified && data.receiverAccountMatches === true;
+    const status = exactMatch ? 'PROVIDER CONFIRMED — RECEIVER ACCOUNT MATCHES'
+      : data.verified ? 'PAYMENT FOUND — RECEIVING ACCOUNT NOT CONFIRMED'
+      : 'PAYMENT NOT CONFIRMED';
+    const account = data.receiverAccountStatus === 'exact_match'
+      ? 'Full receiving account matches the number entered'
+      : data.receiverAccountStatus === 'mismatch'
+      ? 'WARNING — returned full receiving account differs. STOP and investigate.'
+      : data.receiverAccountStatus === 'masked_unverifiable'
+      ? 'Bank returned a MASKED receiver account. Full account match cannot be confirmed.'
       : 'Receiver account not returned; independent account match unavailable';
     const amount = data.amount === null ? 'Not returned' : Number(data.amount).toLocaleString('en-US') + ' ' + esc(data.currency || '');
-    result.innerHTML = `<div class="${data.verified?'success':'error'}"><strong>${esc(status)}</strong>
+    result.innerHTML = `<div class="${exactMatch?'success':'error'}"><strong>${esc(status)}</strong>
       <p>Amount: ${amount} · Status: ${esc(data.status)} · Bank: ${esc(data.bank)}</p>
       <p>Sender: ${esc(data.payerName || 'Not returned')}</p>
       <p>Recipient: ${esc(data.receiverName || 'Not returned')}</p>
