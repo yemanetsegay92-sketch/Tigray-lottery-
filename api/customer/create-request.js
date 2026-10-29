@@ -164,6 +164,20 @@ module.exports = async (req, res) => {
           requestId, lotteryId, createdAt: FieldValue.serverTimestamp()
         });
         tx.create(requestRef, requestData);
+        // A CBE request is queued only when the site owner has explicitly
+        // enabled production automation for THIS lottery, and historical
+        // payment references have been reconciled. Preview never queues.
+        const {enabledFor}=require('../../lib/cbe-auto-worker');
+        const {cbeAccounts}=require('../../lib/cbe-auto-eligibility');
+        const cbe=cbeAccounts(currentLottery.data());
+        if(enabledFor(lotteryId) && cbe.length===1 &&
+          String(cbe[0].holderName||'').trim()) {
+          tx.create(db.collection('autoPaymentQueue').doc(requestId),{
+            lotteryId,requestId,state:'pending',attempts:0,
+            nextAttemptAt:FieldValue.serverTimestamp(),
+            createdAt:FieldValue.serverTimestamp()
+          });
+        }
         tx.create(publicRef, {
           lotteryId, lotteryName: String(lottery.name || lotteryId),
           phoneLast4: phone.slice(-4), quantity, total, status: 'pending',
