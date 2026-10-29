@@ -1,4 +1,5 @@
 import { expandApprovedTicketRows, ticketRowsToCsv, ticketRowsToTsv } from './ticketRows.mjs';
+import {renderChecketMatch, cbeAccounts} from './checketMatchUI.mjs';
 import { db, auth, createSecondaryAuth } from '../../firebase.js';
 import { onAuthStateChanged, signOut, createUserWithEmailAndPassword, updateProfile, signOut as authSignOut } from 'https://www.gstatic.com/firebasejs/12.2.1/firebase-auth.js';
 import { collection, getDocs, doc, getDoc, addDoc, updateDoc, setDoc, serverTimestamp, query, where, limit, getCountFromServer, arrayUnion } from 'https://www.gstatic.com/firebasejs/12.2.1/firebase-firestore.js';
@@ -29,6 +30,42 @@ $('closeSummary')?.addEventListener('click',()=>{$('summaryPanel').style.display
 $('contactForm')?.addEventListener('submit',saveContactSettings);
 $('whatsappNumber')?.addEventListener('input',updateContactPreview);
 $('addCreatePaymentAccount')?.addEventListener('click',addCreatePaymentAccount);
+$('checketMatchLottery')?.addEventListener('change',updateChecketMatchAccounts);
+function updateChecketMatchAccounts(){
+  const lotto = lots.find(x=>x.id===$('checketMatchLottery')?.value);
+  const options = cbeAccounts(lotto);
+  const select = $('checketMatchAccount');
+  if(!select)return;
+  select.innerHTML = options.length
+    ? options.map(x=>`<option value="${x.index}">${esc(x.label)}</option>`).join('')
+    : '<option value="">No real CBE receiving account configured</option>';
+  $('checketMatchButton').disabled = !options.length;
+}
+$('checketMatchForm')?.addEventListener('submit', async event => {
+  event.preventDefault();
+  const target = $('checketMatchResult');
+  const button = $('checketMatchButton');
+  const lotteryId = $('checketMatchLottery').value;
+  const reference = $('checketMatchReference').value.trim();
+  const accountIndex = $('checketMatchAccount').value;
+  button.disabled = true;
+  target.textContent = 'Finding pending ticket and verifying CBE payment…';
+  try {
+    const token = await auth.currentUser.getIdToken();
+    const response = await fetch('/api/admin/approvals', {
+      method:'POST',
+      headers:{'content-type':'application/json',authorization:'Bearer '+token},
+      body:JSON.stringify({action:'checket-match-pending',lotteryId,reference,accountIndex:Number(accountIndex)})
+    });
+    const data = await response.json();
+    if(!response.ok||!data.ok)throw new Error(data.error||'Could not match pending payment.');
+    target.innerHTML = renderChecketMatch(data);
+  }catch(error){
+    target.innerHTML = '<div class="error">'+esc(error.message||'Verification unavailable.')+'</div>';
+  }finally{button.disabled=false;}
+});
+
+
 
 // Read-only Check.et test; deliberately does not call approveRequest.
 $('checketForm')?.addEventListener('submit', async event => {
@@ -162,7 +199,7 @@ async function renderAdminList(){
 
 async function renderLotteries(){
   const ls=await getDocs(collection(db,'lotteries'));lots=ls.docs.map(d=>({id:d.id,...d.data()}));$('statLotteries').textContent=lots.length;
-  const opts=lots.map(x=>`<option value="${esc(x.id)}">${esc(x.name)}</option>`).join('');$('adminLottery').innerHTML=opts;$('assignLottery').innerHTML=opts;if($('drawLotterySelect'))$('drawLotterySelect').innerHTML=opts;
+  const opts=lots.map(x=>`<option value="${esc(x.id)}">${esc(x.name)}</option>`).join('');$('adminLottery').innerHTML=opts;$('assignLottery').innerHTML=opts;if($('drawLotterySelect'))$('drawLotterySelect').innerHTML=opts;if($('checketMatchLottery')){$('checketMatchLottery').innerHTML=opts;updateChecketMatchAccounts();}
   $('lotteries').innerHTML=lots.map(x=>`<div class="row"><b>${esc(x.name)}</b> <span class="badge ${esc(x.status)}">${esc(x.status)}</span><br><span class="muted">ID: ${esc(x.id)} · ${Number(x.price||0)} Birr · ${esc(x.min)}–${esc(x.max)} · Next: ${esc(x.nextTicketNumber??x.min)}</span><div class="actions"><button data-edit="${esc(x.id)}">Edit</button><button class="secondary" data-summary="${esc(x.id)}">Open Summary</button><button class="danger" data-delete="${esc(x.id)}">${x.cleanupInProgress?"Continue Cleanup":"Delete & Clear"}</button></div><div class="muted" data-cleanup-message="${esc(x.id)}">${esc(cleanupNotices.get(x.id) || (x.cleanupInProgress?'Cleanup already started: this lottery is closed. Click Continue Cleanup to resume.':'Click Delete & Clear to preview linked data; then type DELETE followed by the exact lottery ID to confirm.'))}</div></div>`).join('')||'<p class="muted">No lotteries.</p>';
   document.querySelectorAll('[data-edit]').forEach(b=>b.addEventListener('click',()=>editLottery(b.dataset.edit)));
   document.querySelectorAll('[data-delete]').forEach(b=>b.addEventListener('click',()=>removeLottery(b.dataset.delete)));
