@@ -88,3 +88,11 @@ test('documented masked official receiver is still review-only without negative 
   assert.equal(result.recommendation,'MANUAL_REVIEW');
   assert.match(result.concerns.join(' '),/negative-control account test/i);
 });
+
+test('PDF-only purchase with provider-extracted reference remains manual review without false missing-reference warning',()=>{
+  const result=match({}, {...purchase,reference:''});
+  assert.equal(result.recommendation,'MANUAL_REVIEW');
+  assert.equal(result.checks.referenceMatch,null);
+  assert.match(result.concerns.join(' '),/extracted a bank reference/i);
+  assert.doesNotMatch(result.concerns.join(' '),/did not return its own transaction reference/i);
+});
