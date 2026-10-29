@@ -17,8 +17,16 @@ service cloud.firestore {
       // Customer ticket requests are created only by the Vercel API.
       allow create: if false;
       allow read: if isGeneral() || (isLotteryAdmin() && resource.data.lotteryId in profile().lotteryIds);
-      allow update: if isGeneral() || (isLotteryAdmin() && resource.data.lotteryId in profile().lotteryIds);
-      allow delete: if false;
+      // Approval, cancellation, and rejection are performed through the
+      // server transaction that also consumes paymentClaims. Client updates
+      // could bypass the one-payment/one-approval guarantee.
+      allow update, delete: if false;
+    }
+
+    // Immutable replay-prevention ledger; only trusted Firebase Admin SDK may
+    // read/write it. Do not expose private payment references in the browser.
+    match /paymentClaims/{claimId} {
+      allow read, write: if false;
     }
 
     match /publicStatus/{phoneHash}/requests/{requestId} {
