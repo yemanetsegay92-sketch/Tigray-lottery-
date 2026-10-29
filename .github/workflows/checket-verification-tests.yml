@@ -53,4 +53,4 @@ jobs:
           node --check api/admin/approvals.js
           node --check tools/test-checket-verification.cjs
       - name: Run mocked tests; no real Check.et calls or credentials
-        run: node --test tools/test-checket-verification.cjs tools/test-checket-request-match.cjs tools/test-payment-claims.cjs tools/test-checket-private-receipts.cjs
+        run: node --test tools/test-checket-verification.cjs tools/test-checket-request-match.cjs tools/test-payment-claims.cjs tools/test-checket-private-receipts.cjs tools/test-cbe-auto-approval.cjs
