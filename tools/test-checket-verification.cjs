@@ -16,7 +16,7 @@ const base = { bank:'cbe', transactionNumber:'FTTEST12345', accountNumber:'10001
 const receipt = { status:'completed', amount:1280, currency:'ETB',
   payer_name:'Test Sender', receiver_name:'Test Receiver', receiver_account:'1000123456789'};
 const official = { success:true, exists:true, duplicate:false,
-  data:{ transaction_number:'FTTEST12345', verification_method:'official', receipt } };
+  data:{ bank:'cbe',transaction_number:'FTTEST12345', verification_method:'official', receipt } };
 const options = fetchImpl => ({apiKey:'chk_test_only', fetchImpl});
 
 test('successful verification is read-only and reports matching account', async () => {
