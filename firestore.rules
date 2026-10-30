@@ -1,71 +1,262 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
+    // ===============================================================
+    // Assumed data model
+    // ===============================================================
+    // lotteries/{lotteryId}: public lottery catalogue and payment accounts.
+    //   Required: name, description, price, min, max, status, createdAt,
+    //   adminIds, nextTicketNumber, awards, paymentAccounts.
+    // users/{uid}: private admin profile. May contain email and Telegram IDs.
+    // settings/site: public customer-contact settings.
+    // auditLogs/{id}: append-only, size-limited admin activity records.
+    // ticketRequests/{id}: private purchase/payment details; server writes only.
+    // tickets/{id}: issued ticket allocation; server writes only.
+    // publicStatus/{phoneHash}/requests/{id}: public lookup result; server writes only.
+    // paymentClaims/{hash}: immutable payment replay ledger; server only.
+    // autoPaymentQueue/{id}, receiptUploadClaims/{id},
+    // buyerNotificationQueue/{id}, telegramAdminLinks/{id}: server only.
+
+    // ===============================================================
+    // Authentication and authorization helpers
+    // ===============================================================
     function signed(){ return request.auth != null; }
     function profile(){ return get(/databases/$(database)/documents/users/$(request.auth.uid)).data; }
     function isGeneral(){ return signed() && profile().role == 'generalAdmin'; }
     function isLotteryAdmin(){ return signed() && profile().role == 'lotteryAdmin'; }
-    function managesLottery(id){ return isGeneral() || (isLotteryAdmin() && id in profile().lotteryIds); }
+    function managesLottery(id){
+      return isGeneral() ||
+        (isLotteryAdmin() && profile().lotteryIds is list && id in profile().lotteryIds);
+    }
+
+    // ===============================================================
+    // Reusable schema validators
+    // ===============================================================
+    function optionalString(data, field, minLength, maxLength) {
+      return !(field in data) ||
+        (data[field] is string && data[field].size() >= minLength &&
+          data[field].size() <= maxLength);
+    }
+    function optionalTimestamp(data, field) {
+      return !(field in data) || data[field] is timestamp;
+    }
+    function optionalBool(data, field) {
+      return !(field in data) || data[field] is bool;
+    }
+    function stringAt(values, index, maxLength) {
+      return values.size() <= index ||
+        (values[index] is string && values[index].size() > 0 &&
+          values[index].size() <= maxLength);
+    }
+    function validStringList(values, minItems, maxItems, maxLength) {
+      return values is list && values.size() >= minItems && values.size() <= maxItems &&
+        stringAt(values, 0, maxLength) && stringAt(values, 1, maxLength) &&
+        stringAt(values, 2, maxLength) && stringAt(values, 3, maxLength) &&
+        stringAt(values, 4, maxLength) && stringAt(values, 5, maxLength) &&
+        stringAt(values, 6, maxLength) && stringAt(values, 7, maxLength) &&
+        stringAt(values, 8, maxLength) && stringAt(values, 9, maxLength);
+    }
+    function validPaymentAccount(account) {
+      return account is map &&
+        account.keys().hasAll(['bank', 'number']) &&
+        account.keys().hasOnly(['bank', 'number', 'holderName']) &&
+        account.bank is string && account.bank.size() > 0 && account.bank.size() <= 80 &&
+        account.number is string && account.number.size() >= 4 && account.number.size() <= 40 &&
+        optionalString(account, 'holderName', 0, 150);
+    }
+    function paymentAccountAt(accounts, index) {
+      return accounts.size() <= index || validPaymentAccount(accounts[index]);
+    }
+    function validPaymentAccounts(accounts) {
+      return accounts is list && accounts.size() >= 1 && accounts.size() <= 5 &&
+        paymentAccountAt(accounts, 0) && paymentAccountAt(accounts, 1) &&
+        paymentAccountAt(accounts, 2) && paymentAccountAt(accounts, 3) &&
+        paymentAccountAt(accounts, 4);
+    }
+    function digitAt(values, index) {
+      return values.size() <= index ||
+        (values[index] is int && values[index] >= 0 && values[index] <= 9);
+    }
+    function validDrawDigits(values) {
+      return values is list && values.size() >= 1 && values.size() <= 10 &&
+        digitAt(values, 0) && digitAt(values, 1) && digitAt(values, 2) &&
+        digitAt(values, 3) && digitAt(values, 4) && digitAt(values, 5) &&
+        digitAt(values, 6) && digitAt(values, 7) && digitAt(values, 8) &&
+        digitAt(values, 9);
+    }
+
+    // ===============================================================
+    // Domain validators (used on every browser create/update)
+    // ===============================================================
+    function hasValidLotterySchema(data) {
+      return data.keys().hasAll([
+          'name', 'price', 'min', 'max', 'status', 'description', 'createdAt',
+          'adminIds', 'nextTicketNumber'
+        ]) &&
+        data.keys().hasOnly([
+          'name', 'price', 'min', 'max', 'status', 'description', 'createdAt',
+          'adminIds', 'nextTicketNumber', 'awards', 'paymentAccounts',
+          'awardsUpdatedAt', 'awardsUpdatedBy', 'drawnNumber', 'drawDigits',
+          'drawnAt', 'drawnBy', 'cleanupInProgress', 'cleanupPhase',
+          'cleanupStartedBy', 'cleanupStartedAt'
+        ]) &&
+        data.name is string && data.name.size() > 0 && data.name.size() <= 120 &&
+        data.description is string && data.description.size() <= 1000 &&
+        data.price is number && data.price > 0 && data.price <= 1000000 &&
+        data.min is int && data.max is int && data.min >= 0 &&
+        data.max >= data.min && data.max <= 999999999 &&
+        data.nextTicketNumber is int && data.nextTicketNumber >= data.min &&
+        data.nextTicketNumber <= data.max + 1 &&
+        data.status in ['active', 'upcoming', 'closed', 'drawn', 'hidden'] &&
+        data.createdAt is timestamp &&
+        validStringList(data.adminIds, 0, 10, 128) &&
+        (!('awards' in data) || validStringList(data.awards, 1, 10, 200)) &&
+        (!('paymentAccounts' in data) || validPaymentAccounts(data.paymentAccounts)) &&
+        optionalTimestamp(data, 'awardsUpdatedAt') &&
+        optionalString(data, 'awardsUpdatedBy', 1, 128) &&
+        optionalString(data, 'drawnNumber', 1, 20) &&
+        (!('drawDigits' in data) || validDrawDigits(data.drawDigits)) &&
+        optionalTimestamp(data, 'drawnAt') && optionalString(data, 'drawnBy', 1, 128) &&
+        optionalBool(data, 'cleanupInProgress') &&
+        optionalString(data, 'cleanupPhase', 1, 40) &&
+        optionalString(data, 'cleanupStartedBy', 1, 128) &&
+        optionalTimestamp(data, 'cleanupStartedAt');
+    }
+    function isValidLotteryCreate(data) {
+      return hasValidLotterySchema(data) &&
+        data.keys().hasAll(['awards', 'paymentAccounts']);
+    }
+    function isValidLotteryUpdate() {
+      return hasValidLotterySchema(request.resource.data) &&
+        // Seven pre-schema production lotteries may remain legacy-shaped, but
+        // once either protected field exists it can never be removed again.
+        (!('awards' in resource.data) || 'awards' in request.resource.data) &&
+        (!('paymentAccounts' in resource.data) ||
+          'paymentAccounts' in request.resource.data);
+    }
+    function lotteryAdminUpdateOnly() {
+      return request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+        'name', 'price', 'status', 'description', 'awards',
+        'awardsUpdatedAt', 'awardsUpdatedBy', 'paymentAccounts'
+      ]);
+    }
+    function isValidUser(data) {
+      return data.keys().hasAll(['role']) &&
+        data.keys().hasOnly([
+          'role', 'lotteryIds', 'displayName', 'email', 'createdAt',
+          'telegramChatId', 'telegramUserId', 'telegramUsername',
+          'telegramFirstName', 'telegramBot', 'telegramConnectedAt'
+        ]) &&
+        data.role in ['generalAdmin', 'lotteryAdmin', 'buyer'] &&
+        (!('lotteryIds' in data) || validStringList(data.lotteryIds, 0, 10, 128)) &&
+        optionalString(data, 'displayName', 1, 120) &&
+        optionalString(data, 'email', 3, 254) &&
+        optionalTimestamp(data, 'createdAt') &&
+        optionalString(data, 'telegramChatId', 1, 64) &&
+        optionalString(data, 'telegramUserId', 1, 64) &&
+        optionalString(data, 'telegramUsername', 0, 64) &&
+        optionalString(data, 'telegramFirstName', 0, 120) &&
+        optionalString(data, 'telegramBot', 1, 32) &&
+        optionalTimestamp(data, 'telegramConnectedAt');
+    }
+    function isValidSite(data) {
+      return data.keys().hasOnly(['whatsappNumber', 'updatedAt', 'updatedBy', 'paymentAccounts']) &&
+        optionalString(data, 'whatsappNumber', 9, 15) &&
+        optionalTimestamp(data, 'updatedAt') &&
+        optionalString(data, 'updatedBy', 1, 128) &&
+        (!('paymentAccounts' in data) || validPaymentAccounts(data.paymentAccounts));
+    }
+    function isValidClientAudit(data) {
+      return data.keys().hasAll(['action', 'adminId', 'createdAt']) &&
+        data.keys().hasOnly([
+          'action', 'adminId', 'createdAt', 'lotteryId', 'targetUserId',
+          'targetEmail', 'paymentAccountBanks', 'awards', 'whatsappNumberLast4',
+          'drawnNumber'
+        ]) &&
+        data.action in [
+          'createLottery', 'createLotteryAdmin', 'assignLottery', 'editLottery',
+          'updateLotteryAwards', 'updateLotteryPaymentAccounts',
+          'updateCustomerContact', 'resetLotteryAdminPasswordUI', 'saveDrawResult'
+        ] &&
+        data.adminId == request.auth.uid && data.createdAt == request.time &&
+        optionalString(data, 'lotteryId', 1, 128) &&
+        optionalString(data, 'targetUserId', 1, 128) &&
+        optionalString(data, 'targetEmail', 3, 254) &&
+        (!('paymentAccountBanks' in data) ||
+          validStringList(data.paymentAccountBanks, 1, 5, 80)) &&
+        (!('awards' in data) || validStringList(data.awards, 1, 10, 200)) &&
+        optionalString(data, 'whatsappNumberLast4', 4, 4) &&
+        optionalString(data, 'drawnNumber', 1, 20);
+    }
 
     match /lotteries/{lotteryId} {
+      // Public catalogue/payment instructions are an explicit product requirement.
       allow read: if true;
-      allow create: if isGeneral();
-      allow update, delete: if managesLottery(lotteryId);
+      allow create: if isGeneral() && isValidLotteryCreate(request.resource.data);
+      allow update: if isValidLotteryUpdate() &&
+        (isGeneral() || (managesLottery(lotteryId) && lotteryAdminUpdateOnly()));
+      // Deletion is performed only by the resumable Admin SDK cleanup path.
+      allow delete: if false;
     }
 
     match /ticketRequests/{requestId} {
-      // Customer ticket requests are created only by the Vercel API.
-      allow create: if false;
-      allow read: if isGeneral() || (isLotteryAdmin() && resource.data.lotteryId in profile().lotteryIds);
-      // Approval, cancellation, and rejection are performed through the
-      // server transaction that also consumes paymentClaims. Client updates
-      // could bypass the one-payment/one-approval guarantee.
-      allow update, delete: if false;
+      allow create, update, delete: if false;
+      allow read: if isGeneral() ||
+        (isLotteryAdmin() && resource.data.lotteryId in profile().lotteryIds);
     }
 
-    // Immutable replay-prevention ledger; only trusted Firebase Admin SDK may
-    // read/write it. Do not expose private payment references in the browser.
     match /paymentClaims/{claimId} {
       allow read, write: if false;
     }
 
     match /publicStatus/{phoneHash}/requests/{requestId} {
+      // Public status lookup is an explicit product requirement. Writes remain server-only.
       allow read: if true;
-      // Only the trusted Vercel ticket approval transaction may alter buyer
-      // status. Browser updates could otherwise forge an "approved" badge
-      // without consuming the payment claim or issuing a real ticket.
       allow create, update, delete: if false;
     }
 
     match /tickets/{ticketId} {
-      // Ticket documents are created only by the Vercel API.
-      allow create: if false;
-      allow read: if isGeneral()
-        || (isLotteryAdmin() && resource.data.lotteryId in profile().lotteryIds);
-      allow update, delete: if false;
+      allow create, update, delete: if false;
+      allow read: if isGeneral() ||
+        (isLotteryAdmin() && resource.data.lotteryId in profile().lotteryIds);
     }
-
-    // =====================================================
-    // PUBLIC SITE SETTINGS
-    // =====================================================
 
     match /settings/{settingId} {
       allow read: if settingId == 'site';
-      allow create, update, delete: if isGeneral();
+      allow create, update: if settingId == 'site' && isGeneral() &&
+        isValidSite(request.resource.data);
+      allow delete: if false;
     }
 
-
     match /auditLogs/{logId} {
-      allow create: if signed() && (isGeneral() || isLotteryAdmin());
-      allow read: if isGeneral() || (isLotteryAdmin() && resource.data.lotteryId in profile().lotteryIds);
+      allow create: if (isGeneral() || isLotteryAdmin()) &&
+        isValidClientAudit(request.resource.data) &&
+        (isGeneral() || ('lotteryId' in request.resource.data &&
+          managesLottery(request.resource.data.lotteryId)));
+      allow read: if isGeneral() ||
+        (isLotteryAdmin() && resource.data.lotteryId in profile().lotteryIds);
       allow update, delete: if false;
     }
 
     match /users/{userId} {
       allow read: if signed() && (request.auth.uid == userId || isGeneral());
-      allow create: if isGeneral();
-      allow update, delete: if isGeneral();
+      allow create: if isGeneral() && isValidUser(request.resource.data) &&
+        request.resource.data.role == 'lotteryAdmin' &&
+        request.resource.data.keys().hasAll(['lotteryIds', 'displayName', 'email', 'createdAt']);
+      allow update: if isGeneral() && isValidUser(request.resource.data) &&
+        request.resource.data.role == resource.data.role &&
+        (!('email' in resource.data) || request.resource.data.email == resource.data.email) &&
+        (!('createdAt' in resource.data) || request.resource.data.createdAt == resource.data.createdAt);
+      allow delete: if isGeneral() && userId != request.auth.uid;
+    }
+
+    match /autoPaymentQueue/{id} { allow read, write: if false; }
+    match /receiptUploadClaims/{id} { allow read, write: if false; }
+    match /buyerNotificationQueue/{id} { allow read, write: if false; }
+    match /telegramAdminLinks/{id} { allow read, write: if false; }
+
+    match /{document=**} {
+      allow read, write: if false;
     }
   }
 }
-

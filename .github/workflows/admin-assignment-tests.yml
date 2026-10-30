@@ -1,0 +1,23 @@
+name: General Admin assignment checks
+on:
+  pull_request:
+    paths:
+      - 'admin/general.html'
+      - 'admin/js/general.js'
+      - 'admin/admin.css'
+      - 'tools/test-admin-assignment.cjs'
+      - '.github/workflows/admin-assignment-tests.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - name: Check General Admin JS syntax
+        run: node --input-type=module --check < admin/js/general.js
+      - name: Run assignment binding checks
+        run: node --test tools/test-admin-assignment.cjs

@@ -1,6 +1,6 @@
 # CBE receiving-account verification and one-payment/one-ticket-approval ledger (staged)
 
-This PR is **PREVIEW ONLY** and does **not** enable automatic payments or automatic ticket approval.
+This PR contains the production worker, but release gates keep automatic ticket approval **disabled** until the reviewed production configuration is intentionally activated.
 
 ## CBE receiving account — two distinct claims
 
@@ -27,13 +27,13 @@ On an authorized **manual approval**, the trusted server:
 
 Transactions that fail midway do not consume a claim or issue partial tickets. Cancelling the approval **does not free the payment claim**, and the claim is not removed by ordinary lottery cleanup. It contains request ID, lottery ID, timestamp, admin ID and status, but not the raw bank reference or customer name.
 
-**Important:** No existing payment-claim records are created merely by Preview verification. Claims begin only when approvals are made through the updated approve endpoint. The owner has confirmed **all prior purchases and approvals are test data**. We can therefore start with a new strictly timestamped production cutover instead of migrating old test transactions. Both the ticket request creation time and the bank payment time must be on or after the configured launch date; the Firestore claim ledger remains mandatory for every new approval. Do not delete prior claims or allow old receipts to auto-approve.
+**Important:** No existing payment-claim records are created merely by Preview verification. Claims begin only when approvals are made through the updated approve endpoint. A current 100 ETB payment predates this cutover and remains pending; it must not be automatically approved. Start with a new strictly timestamped production cutover instead of migrating old transactions. Both the ticket request creation time and the bank payment time must be on or after the configured launch date; the Firestore claim ledger remains mandatory for every new approval. Do not delete prior claims or allow old receipts to auto-approve.
 
 ## Other gates before production
 
-- The repository Firestore rules now forbid **client-side ticketRequests update** and explicitly deny client reads/writes to paymentClaims. These rules are **not deployed** by merging this PR; deploy and test the rules separately before considering the ledger production enforced.
+- The production Firestore rules now forbid **client-side ticketRequests update** and explicitly deny client reads/writes to paymentClaims. Ruleset `9393a31d-6bd8-44bf-b388-39beb7d2fb5e` was released to the confirmed `tigiray-lottery` project on October 30, 2026 and verified byte-for-byte against this file.
 - A small number of orders have no bank reference until a staff member reads a receipt; they cannot safely be approved on this new flow without a reference.
-- Keep `CHECK_ET_API_KEY` in Vercel Preview only until the read-only integration is accepted.
+- The Check.et key may be stored in Vercel Preview and Production, but it cannot activate the worker by itself.
 - No automatic approval is enabled; CBE matches remain advisory only.
 - The checkout and any older admin/deployment path that could issue tickets should be reviewed to ensure **all approvals route through the claim-aware transaction**.
 - A false/missing provider response, stale transfer, duplicate, unmatched amount/account or missing date always requires review.
@@ -57,34 +57,35 @@ Transactions that fail midway do not consume a claim or issue partial tickets. C
 
 Automatic approval is **not live**. The production worker is implemented but stays inaccessible unless ALL of the following independently controlled Vercel environment variables are set **after a security release review**:
 
-- `CHECK_ET_API_KEY` with permission to verify real payments (currently **Preview-only**).
+- `CHECK_ET_API_KEY` with permission to verify real payments. It is now stored for Preview and Production, but the key alone cannot queue or approve anything.
 - `LOTTERY_CBE_AUTO_APPROVAL_ENABLED=true`.
 - `LOTTERY_CBE_AUTO_APPROVAL_START_AT`: a new **explicit** launch timestamp with time zone (e.g. `2026-11-02T10:00:00+03:00`). The timestamp MUST be set to the actual future activation date, not an earlier time. Only purchases **and** bank transfers occurring on/after this cutoff can qualify; previous test transactions are ineligible.
 - `LOTTERY_CBE_AUTO_APPROVAL_LOTTERY_IDS` containing the exact CBE-enabled lottery ID(s), comma-separated; start with exactly one reviewed lottery.
+- `LOTTERY_CBE_AUTO_APPROVAL_ACCOUNT_BINDINGS`: a sensitive JSON object binding each allowlisted lottery ID to its full reviewed CBE account number. The current Firestore account must match this production-only value, so a browser admin cannot redirect unattended verification by editing the lottery document.
 - `LOTTERY_CBE_AUTO_APPROVAL_CRON_SECRET`, an unpredictable random secret **32+ bytes** used to authenticate the worker.
 
-A separately configured, external scheduler (for example existing Cloud Scheduler) must POST `{"action":"cbe-auto-worker"}` to the **production** `/api/admin/approvals` endpoint using `Authorization: Bearer <secret>`. No scheduler integration was configured in this draft PR. Vercel Preview always rejects worker approval, even though it connects to the same Firebase database.
+The opt-in GitHub Actions scheduler in this PR posts `{"action":"cbe-auto-worker"}` to the **production** `/api/admin/approvals` endpoint using `Authorization: Bearer <secret>`. It remains inert unless the matching repository secret exists and `LOTTERY_CBE_CRON_ENABLED=true`. Vercel Preview always rejects worker approval, even though it connects to the same Firebase database.
 
-**No one should set the above production flags yet.** We have not yet deployed the updated security rules, executed real concurrent approval integration tests, or reviewed every alternate ticket-write path. Check.et free-plan quotas and commercial/API conditions must also be confirmed before rollout.
+Keep `LOTTERY_CBE_AUTO_APPROVAL_ENABLED=false`, omit the activation timestamp, and keep the scheduler variable false until the production rules release and post-deploy verification are complete. Check.et quotas and commercial/API conditions must also be confirmed before rollout.
 
 ### Workflow when correctly activated
 
 1. Checkout creates a `pending` ticket request as before, plus a `autoPaymentQueue/<requestId>` work item **only** for allowlisted production lotteries with exactly one configured valid CBE account and bank holder name.
 2. Scheduler calls the secret-authenticated batch worker on the existing approvals Vercel function. A Firestore lease prevents simultaneous workers from handling the same queue item. Pre-cutover purchases are held for manual review **without another Check.et call**.
-3. The worker sends either the bank reference OR the existing private PDF/image to Check.et with the **lottery's configured CBE receiving account**.
+3. The worker requires the lottery's CBE account to equal the **production-only account binding**, then sends either the bank reference OR the existing private PDF/image to Check.et with that account.
 4. Strict checks: both purchase and payment occurred on/after launch cutoff; `official` CBE verification; completed; provider checked the supplied receiving account; masked suffix matches; receipt receiver name matches configured holder; bank amount/currency exact; reference is returned and compatible with buyer-entered value; payment within 30 minutes of request; no prior Check.et branch verification ambiguity; no other request shares reference; ledger claim unused.
 5. The existing ticket-allocation transaction **rechecks current request and lottery**, verifies the time-limited server-side payment guard, creates the permanent hashed reference claim, allocates sequential ticket documents, updates purchase/public status and enqueues the **existing** buyer notification, all atomically.
 6. Any mismatch or missing evidence goes to `manual_review`. Temporary Check.et outages retry up to three times with backoff; uncertain approval results are never blindly retried.
 7. Buyer-notification delivery remains handled by the previously established background notification worker (not by Check.et).
 
-### Production rollout checklist (NOT COMPLETED)
+### Production rollout checklist (staged)
 
-- The owner confirms all earlier purchases/transfers are test-only. Do **not** approve old test requests automatically or migrate test references as live business sales. Set a strict launch cutoff to the actual deployment time. Verify bank payment time and purchase creation time both occur afterward.
+- The current 100 ETB payment predates cutover and must remain pending for manual handling. Do **not** approve it or any other old request automatically. Set a strict launch cutoff to the actual future activation time and require both bank payment time and purchase creation time to occur afterward.
 - Start with an empty or otherwise reconciled ledger for new production payments; **never** clear the ledger once live. A reference claimed by an approved purchase must remain blocked across lottery deletions/cancellations.
-- Deploy revised Firestore rules. Ensure no outdated clients/admin scripts may update ticket status or mint ticket numbers directly.
-- **COMPLETED in isolated Firestore emulator:** 5 real Firestore Admin SDK integration tests, including 2 simultaneous approvals spending a single bank reference, 2 simultaneous distinct reference approvals with unique sequential ticket numbers, receipt-only approved reference, invalid receiving account/amount, and missing persisted evidence. These ran against a demo project with no bank API and passed, separately from mocked tests. **Still needed:** verify production Firestore rules deployment and test full customer-to-worker-to-notification flow. Do not reuse actual buyers' payments as test issuance without consent.
+- **COMPLETED:** deployed and verified the revised Firestore rules on `tigiray-lottery`; all browser approval/status/ticket writes are denied and server paths were reviewed.
+- **COMPLETED in isolated Firestore emulator:** 5 real Firestore Admin SDK integration tests plus 7 browser Security Rules tests. They cover concurrent reuse of one bank reference, distinct sequential approvals, receipt-only references, evidence tampering, schema pollution, role escalation, forged public approvals, and browser access to private queues. They run only against `demo-tigray-lottery-auto`, with no bank API or production writes. **Still needed:** verify the production rules release and test the disabled production endpoint. Do not reuse actual buyers' payments as test issuance without consent.
 - Validate Check.et API quotas, receipt handling/data processing, and support for commercial automatic ticket fulfillment.
-- Configure a separate **production** Check.et key, secret, allowlist and cron scheduler only after approval.
+- The production Check.et key is present. Prepare the secret, verified allowlist/account binding and scheduler in the disabled state; activate them only after explicit cutover confirmation.
 - Start with one lottery and audit all automated approvals and rejections before scaling.
 
 ### Preview simulation
@@ -105,9 +106,9 @@ The snapshot is allowed for 30 minutes for recovery and becomes ineligible after
 
 ### Actual Firestore emulator concurrency coverage
 
-`.github/workflows/cbe-firestore-emulator-tests.yml` runs `tools/test-cbe-firestore-emulator.cjs` with pinned Firebase CLI/SDK and `demo-tigray-lottery-auto` using `firebase.emulator.json`. The original `approveRequest` function is made accessible to this script *only* when `FIRESTORE_EMULATOR_HOST` is present. The suite passed all 5 integration tests on October 30, 2026. It proves that Firestore serializes our payment-claim and ticket-number transactions under concurrent requests. It does **not** prove that production security rules have been deployed or that the real Check.et worker has completed an end-to-end payment.
+`.github/workflows/cbe-firestore-emulator-tests.yml` runs `tools/test-cbe-firestore-emulator.cjs` with pinned Firebase CLI/SDK and `demo-tigray-lottery-auto` using `firebase.emulator.json`. The original `approveRequest` function is made accessible to this script *only* when `FIRESTORE_EMULATOR_HOST` is present. The suite passed all 5 integration tests plus 7 browser Security Rules tests on October 30, 2026. It proves that Firestore serializes our payment-claim and ticket-number transactions under concurrent requests. Production rules were separately deployed and compared to the tested file; the suite still does **not** spend money or prove a real Check.et automatic issuance flow.
 
 ### Prepared opt-in scheduler (not running)
 
-`.github/workflows/cbe-auto-approval-worker.yml` will call the **production** `https://tigraylottery.com/api/admin/approvals` endpoint every 5 minutes only after the PR is merged into the default branch and GitHub Actions repository variable `LOTTERY_CBE_CRON_ENABLED=true` is intentionally configured. GitHub Actions secret `LOTTERY_CBE_AUTO_APPROVAL_CRON_SECRET` must match the **production Vercel environment** value. Neither value is provisioned in this PR. The production Vercel API additionally requires `LOTTERY_CBE_AUTO_APPROVAL_ENABLED=true`, a future cutover, a reviewed lottery allowlist, and a production Check.et key. Do NOT activate these until production Firestore rules and end-to-end concurrency/idempotency tests have been validated.
+`.github/workflows/cbe-auto-approval-worker.yml` will call the **production** `https://tigraylottery.com/api/admin/approvals` endpoint every 5 minutes only after the PR is merged into the default branch and GitHub Actions repository variable `LOTTERY_CBE_CRON_ENABLED=true` is intentionally configured. GitHub Actions secret `LOTTERY_CBE_AUTO_APPROVAL_CRON_SECRET` must match the **production Vercel environment** value. The verified production lottery document is `7gQMGpSqRAa2wkmpuYp9` (lowercase `g`, not the earlier `q`). The production Vercel API additionally requires `LOTTERY_CBE_AUTO_APPROVAL_ENABLED=true`, a future cutover, that exact one-lottery allowlist, the matching production-only receiving-account binding, and a production Check.et key. Keep the enable flag and scheduler variable false and omit the cutover timestamp until explicit activation confirmation.
 

@@ -42,3 +42,6 @@ body.modal-open{overflow:hidden}
 .span2{grid-column:1/-1}.create-payment-section{padding:12px 14px;border:1px solid var(--line);border-radius:14px;background:#fbfcfe}.subsection-title{font-weight:950;color:var(--navy);margin-bottom:3px}.small-note{font-size:.84rem;margin:0 0 10px}.create-payment-row{grid-template-columns:1fr 1.1fr 1.1fr auto}.payment-account-edit-row input{margin-top:7px}
 @media(max-width:800px){.create-payment-row{grid-template-columns:1fr 1fr}.create-payment-row .small-btn{grid-column:1/-1}}
 @media(max-width:600px){.create-payment-row{grid-template-columns:1fr}.create-payment-row .small-btn{grid-column:auto;width:100%}}
+
+/* Keep the existing-admin selector readable on narrow mobile screens. */
+@media(max-width:620px){#assignForm .grid2{grid-template-columns:1fr}#assignLotteryBtn{width:100%}}

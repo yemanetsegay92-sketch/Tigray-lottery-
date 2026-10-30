@@ -31,6 +31,11 @@ Object.assign(process.env,{
   VERCEL_ENV:'production',LOTTERY_CBE_AUTO_APPROVAL_ENABLED:'true',
   LOTTERY_CBE_AUTO_APPROVAL_START_AT:cutoff,
   LOTTERY_CBE_AUTO_APPROVAL_LOTTERY_IDS:'emul-same,emul-different,emul-proof,emul-forged,emul-missing',
+  LOTTERY_CBE_AUTO_APPROVAL_ACCOUNT_BINDINGS:JSON.stringify({
+    'emul-same':account,'emul-different':account,'emul-proof':account,
+    'emul-forged':account,'emul-missing':account
+  }),
+  LOTTERY_CBE_AUTO_APPROVAL_CRON_SECRET:'A'.repeat(45),
   CHECK_ET_API_KEY:'FAKE_NON_NETWORK_KEY'
 });
 const verified=(ref)=>({

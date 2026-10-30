@@ -2,7 +2,7 @@
 const {test}=require('node:test');
 const assert=require('node:assert/strict');
 const {evaluateAutoPayment,nameKey}=require('../lib/cbe-auto-eligibility');
-const {enabledFor,checkWorkerSecret,inspectRequest,processOne}=require('../lib/cbe-auto-worker');
+const {productionAccountFor,enabledFor,checkWorkerSecret,inspectRequest,processOne}=require('../lib/cbe-auto-worker');
 const {cutoverMs,isAfterCutover}=require('../lib/cbe-auto-cutover');
 const created=new Date(Date.now()-10*60000).toISOString();
 const purchase={status:'pending',lotteryId:'safe-lottery',reference:'FTTEST12345',
@@ -20,6 +20,7 @@ const unused={claimStatus:'unused',otherCount:0,otherApprovedCount:0,truncated:f
 const env={VERCEL_ENV:'production',LOTTERY_CBE_AUTO_APPROVAL_ENABLED:'true',
   LOTTERY_CBE_AUTO_APPROVAL_START_AT:new Date(Date.now()-40*60000).toISOString(),
   LOTTERY_CBE_AUTO_APPROVAL_LOTTERY_IDS:'safe-lottery',
+  LOTTERY_CBE_AUTO_APPROVAL_ACCOUNT_BINDINGS:JSON.stringify({'safe-lottery':'1000123456789'}),
   CHECK_ET_API_KEY:'not-real-provider-key',
   LOTTERY_CBE_AUTO_APPROVAL_CRON_SECRET:'A'.repeat(45)};
 function assess(v={},p=purchase,l=lottery,d=unused){
@@ -109,11 +110,24 @@ test('claim consumed or another pending purchase with reference blocks auto appr
 });
 test('automation is disabled absent explicit production, backfill, key and allowlist gates',()=>{
   assert.equal(enabledFor('safe-lottery',env),true);
+  assert.equal(productionAccountFor('safe-lottery',env),'1000123456789');
   for(const overrides of [
     {VERCEL_ENV:'preview'}, {LOTTERY_CBE_AUTO_APPROVAL_ENABLED:'false'},
     {LOTTERY_CBE_AUTO_APPROVAL_START_AT:''},
-    {LOTTERY_CBE_AUTO_APPROVAL_LOTTERY_IDS:'other-lottery'}, {CHECK_ET_API_KEY:''}
+    {LOTTERY_CBE_AUTO_APPROVAL_LOTTERY_IDS:'other-lottery'}, {CHECK_ET_API_KEY:''},
+    {LOTTERY_CBE_AUTO_APPROVAL_ACCOUNT_BINDINGS:''},
+    {LOTTERY_CBE_AUTO_APPROVAL_ACCOUNT_BINDINGS:'not-json'},
+    {LOTTERY_CBE_AUTO_APPROVAL_ACCOUNT_BINDINGS:JSON.stringify({'safe-lottery':'invalid'})},
+    {LOTTERY_CBE_AUTO_APPROVAL_CRON_SECRET:'short'}
   ])assert.equal(enabledFor('safe-lottery',{...env,...overrides}),false);
+});
+test('configured Firestore receiver must equal the production-only account binding',async()=>{
+  const changed={...lottery,paymentAccounts:[{...lottery.paymentAccounts[0],number:'1000999999999'}]};
+  const db=fakeDb({l:changed});
+  const result=await inspectRequest(db,'req-bound',{env,
+    verify:()=>{throw Error('must not contact Check.et for an unbound receiving account')}});
+  assert.equal(result.decision,'manual_review');
+  assert.deepEqual(result.reasons,['purchase_lottery_or_receiver_not_eligible']);
 });
 test('cron requires constant-time matching secret and cannot run with missing secret',()=>{
   assert.equal(checkWorkerSecret({headers:{authorization:'Bearer '+env.LOTTERY_CBE_AUTO_APPROVAL_CRON_SECRET}},env),true);

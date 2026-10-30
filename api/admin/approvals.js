@@ -103,7 +103,7 @@ async function approveRequest(db, caller, profile, requestId, requestedLotteryId
     if (claimRef) assertClaimFree(claimSnapshotStatus(claimSnap, requestId));
     if(autoGuard){
       const {isAfterCutover,cutoverMs}=require('../../lib/cbe-auto-cutover');
-      const {enabledFor}=require('../../lib/cbe-auto-worker');
+      const {enabledFor,productionAccountFor}=require('../../lib/cbe-auto-worker');
       const {nameKey,cbeAccounts,timestampMs}=require('../../lib/cbe-auto-eligibility');
       const [configured]=cbeAccounts(lottery);
       const {checkSavedEvidence,MAX_AGE_MS}=require('../../lib/cbe-verification-evidence');
@@ -142,6 +142,7 @@ async function approveRequest(db, caller, profile, requestId, requestedLotteryId
             String(autoGuard.account).endsWith(String(stored.maskedReceiverSuffix)))) &&
         configured && cbeAccounts(lottery).length===1 &&
         String(configured.number).replace(/\s/g,'')===String(autoGuard.account) &&
+        productionAccountFor(lotteryId)===String(autoGuard.account) &&
         nameKey(configured.holderName)===nameKey(autoGuard.receiveName) &&
         Number.isFinite(createdAt) && Number.isFinite(paidAt) &&
         paidAt>=createdAt-30*60000 && paidAt<=createdAt+30*60000 &&
@@ -830,6 +831,9 @@ async function handleCheckEtPendingMatch(req, res, body) {
 // Preview-only manual verification: no Firestore mutations or ticket approval.
 async function handleCheckEtVerification(req, res, body) {
   res.setHeader('Cache-Control', 'no-store');
+  if (process.env.VERCEL_ENV !== 'preview') {
+    return res.status(403).json({ ok:false, error:'Manual Check.et verification tests are available only on a Vercel Preview deployment.' });
+  }
   const db = adminDb();
   const { profile } = await authenticateAdmin(req, db);
   if (profile.role !== 'generalAdmin') {
