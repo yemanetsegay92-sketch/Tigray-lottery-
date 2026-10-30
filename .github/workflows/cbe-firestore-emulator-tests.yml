@@ -1,0 +1,45 @@
+name: CBE automatic approval real Firestore emulator tests
+
+on:
+  pull_request:
+    paths:
+      - 'api/admin/approvals.js'
+      - 'lib/cbe-auto-cutover.js'
+      - 'lib/cbe-auto-eligibility.js'
+      - 'lib/cbe-auto-worker.js'
+      - 'lib/cbe-verification-evidence.js'
+      - 'lib/payment-claims.js'
+      - 'firestore.rules'
+      - 'firebase.emulator.json'
+      - 'tools/test-cbe-firestore-emulator.cjs'
+      - '.github/workflows/cbe-firestore-emulator-tests.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      GCLOUD_PROJECT: demo-tigray-lottery-auto
+      CI: 'true'
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - name: Setup Node.js for isolated local emulator
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: '24'
+      - name: Confirm Java runtime available for emulator
+        run: java -version
+      - name: Install reviewed pinned Firebase dependencies (no secrets)
+        run: npm install --no-save --package-lock=false --ignore-scripts firebase-admin@13.5.0 firebase-tools@15.34.1
+      - name: Execute actual Firestore concurrent bank approval transactions
+        run: |
+          npx firebase --config firebase.emulator.json \
+            --project demo-tigray-lottery-auto \
+            emulators:exec --only firestore \
+            'node --test tools/test-cbe-firestore-emulator.cjs'
