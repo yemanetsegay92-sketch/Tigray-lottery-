@@ -12,6 +12,7 @@ on:
       - 'firestore.rules'
       - 'firebase.emulator.json'
       - 'tools/test-cbe-firestore-emulator.cjs'
+      - 'tools/test-cbe-firestore-rules.cjs'
       - '.github/workflows/cbe-firestore-emulator-tests.yml'
   workflow_dispatch:
 
@@ -36,10 +37,10 @@ jobs:
       - name: Confirm Java runtime available for emulator
         run: java -version
       - name: Install reviewed pinned Firebase dependencies (no secrets)
-        run: npm install --no-save --package-lock=false --ignore-scripts firebase-admin@13.5.0 firebase-tools@15.34.1
+        run: npm install --no-save --package-lock=false --ignore-scripts firebase-admin@13.5.0 firebase-tools@15.34.1 firebase@12.2.1 @firebase/rules-unit-testing@5.0.0
       - name: Execute actual Firestore concurrent bank approval transactions
         run: |
           npx firebase --config firebase.emulator.json \
             --project demo-tigray-lottery-auto \
             emulators:exec --only firestore \
-            'node --test tools/test-cbe-firestore-emulator.cjs'
+            'node --test tools/test-cbe-firestore-emulator.cjs tools/test-cbe-firestore-rules.cjs'
