@@ -25,22 +25,40 @@ const env={VERCEL_ENV:'production',LOTTERY_CBE_AUTO_APPROVAL_ENABLED:'true',
 function assess(v={},p=purchase,l=lottery,d=unused){
   return evaluateAutoPayment({purchase:p,lottery:l,verification:{...verification,...v},duplicate:d});
 }
-function fakeDb({p=purchase,l=lottery,claim=false,other=[]}={}){
+function fakeDb({p=purchase,l=lottery,claim=false,other=[],queueState='processing',attempts=1}={}){
   const logs=[];
+  const queue=new Map();
+  const requests=new Map();
+  const copyRequest=Object.assign({},p);
+  const getQueue=id=>{
+    if(!queue.has(id))queue.set(id,{attempts,state:queueState});
+    return queue.get(id);
+  };
   return {
-    logs,
+    logs,queue,requests,
+    runTransaction:async fn=>fn({
+      get:async ref=>ref.get(),
+      update:(ref,changes)=>ref.update(changes),
+      create:(ref,changes)=>ref.update(changes)
+    }),
     collection(name){
       return {
         doc(id){
           return {
+            id,
             async get(){
-              if(name==='ticketRequests')return {id,exists:!!p,data:()=>p};
+              if(name==='ticketRequests')return {id,exists:!!p,data:()=>requests.get(id)||copyRequest};
               if(name==='lotteries')return {id,exists:!!l,data:()=>l};
               if(name==='paymentClaims')return {id,exists:!!claim,data:()=>({requestId:'different'})};
-              if(name==='autoPaymentQueue')return {id,exists:true,data:()=>({attempts:1})};
+              if(name==='autoPaymentQueue')return {id,exists:true,data:()=>getQueue(id)};
               throw Error('unexpected collection '+name);
             },
-            async update(update){logs.push({name,id,update})}
+            update(changes){
+              logs.push({name,id,update:changes});
+              if(name==='autoPaymentQueue')Object.assign(getQueue(id),changes);
+              if(name==='ticketRequests')Object.assign(copyRequest,changes);
+              return Promise.resolve();
+            }
           };
         },
         where(field,op,value){
@@ -124,6 +142,54 @@ test('inspector uses previously stored private image/PDF only when buyer omitted
   assert.equal(downloaded,1);
   assert.equal(result.decision,'eligible');
 });
+test('a saved successful bank result is reused with zero repeat Check.et calls',async()=>{
+  const db=fakeDb();let calls=0;
+  let result=await inspectRequest(db,'req-cached',{env,verify:async()=>{calls++;return verification;}});
+  assert.equal(result.decision,'eligible');
+  assert.equal(calls,1);
+  const evidence=db.queue.get('req-cached').verifiedEvidence;
+  assert.equal(evidence.payment.reportedTransactionNumber,'FTTEST12345');
+  assert.equal(evidence.payment.providerCbeAccountCheck,true);
+  assert.equal(evidence.payment.verified,true);
+  result=await inspectRequest(db,'req-cached',{env,verify:async()=>{
+    throw Error('Check.et must NEVER be called twice');
+  }});
+  assert.equal(result.decision,'eligible');
+  assert.equal(calls,1);
+  assert.equal(result.immutableGuard.verifiedAt,evidence.verifiedAt.getTime());
+});
+test('a provider error after the durable attempt marker cannot cause a duplicate verification',async()=>{
+  const db=fakeDb();let calls=0;
+  const first=await inspectRequest(db,'req-failed',{env,verify:async()=>{
+    calls++;throw Object.assign(new Error('Check.et might already have verified'),{statusCode:503});
+  }});
+  assert.equal(first.decision,'manual_review');
+  const second=await inspectRequest(db,'req-failed',{env,verify:async()=>{
+    calls++;throw Error('repeat must not happen');
+  }});
+  assert.equal(second.decision,'manual_review');
+  assert.equal(calls,1);
+  assert.ok(second.reasons.includes('verification_cache_attempted_without_saved_response'));
+});
+test('a changed purchase invalidates saved receipt evidence and never calls Check.et again',async()=>{
+  const db=fakeDb();
+  const first=await inspectRequest(db,'req-changed',{env,verify:async()=>verification});
+  assert.equal(first.decision,'eligible');
+  db.requests.set('req-changed',{...purchase,total:1001});
+  const second=await inspectRequest(db,'req-changed',{env,verify:async()=>{
+    throw Error('must not repeat');
+  }});
+  assert.equal(second.decision,'manual_review');
+  assert.ok(second.reasons.includes('verification_cache_changed'));
+});
+test('an already-approved request is reconciled without another provider call',async()=>{
+  const db=fakeDb({p:{...purchase,status:'approved'}});
+  const state=await processOne(db,'req-approved',{env,verify:()=>{
+    throw Error('already approved: must not reverify');
+  },approve:()=>{throw Error('must not assign a second ticket')}});
+  assert.equal(state,'approved');
+  assert.equal(db.queue.get('req-approved').state,'approved');
+});
 test('no production env gate means verification is never attempted',async()=>{
   const db=fakeDb();
   const result=await inspectRequest(db,'req-3',{env:{...env,VERCEL_ENV:'preview'},
@@ -147,13 +213,13 @@ test('amount mismatch results in manual review, no issuance callback invoked',as
   assert.equal(state,'manual_review');
   assert.equal(db.logs.at(-1).update.state,'manual_review');
 });
-test('provider outages are retried with backoff without approving anything',async()=>{
+test('uncertain Check.et responses go to manual review, never blindly reverify',async()=>{
   const db=fakeDb();
   const state=await processOne(db,'req-1',{env,verify:async()=>{
     throw Object.assign(new Error('network timeout'),{statusCode:503});
   },approve:()=>{throw Error('must not approve');}});
-  assert.equal(state,'retry');
-  assert.equal(db.logs.at(-1).update.state,'pending');
+  assert.equal(state,'manual_review');
+  assert.equal(db.logs.at(-1).update.state,'manual_review');
 });
 
 test('historical test-only receipts are rejected by explicit cutover in both purchase and bank dates',()=>{
