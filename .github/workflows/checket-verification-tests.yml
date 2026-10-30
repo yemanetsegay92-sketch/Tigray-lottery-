@@ -7,6 +7,8 @@ on:
       - 'lib/cbe-auto-eligibility.js'
       - 'lib/cbe-auto-worker.js'
       - 'lib/cbe-verification-evidence.js'
+      - 'tools/test-cbe-verification-evidence.cjs'
+      - '.github/workflows/cbe-auto-approval-worker.yml'
       - 'lib/cbe-auto-cutover.js'
       - 'tools/test-cbe-auto-approval.cjs'
       - 'api/customer/create-request.js'
@@ -45,6 +47,7 @@ jobs:
           node --check lib/cbe-auto-eligibility.js
           node --check lib/cbe-auto-worker.js
           node --check lib/cbe-verification-evidence.js
+          node --check tools/test-cbe-verification-evidence.cjs
           node --check lib/cbe-auto-cutover.js
           node --check tools/test-cbe-auto-approval.cjs
           node --check api/customer/create-request.js
