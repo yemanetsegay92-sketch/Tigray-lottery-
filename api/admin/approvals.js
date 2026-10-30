@@ -845,11 +845,11 @@ async function handleCheckEtVerification(req, res, body) {
   return res.status(200).json({ ok:true, ...result });
 }
 
-// Cron-only automatic CBE payment processor. No public caller and never from
-// Vercel Preview (which shares the production Firestore database).
-async function handleAutoCbeWorker(req,res){
+// Secret-authenticated CBE processor for scheduled recovery AND Firebase
+// events. No browser caller and never from Vercel Preview.
+async function handleAutoCbeWorker(req,res,body={}){
   res.setHeader('Cache-Control','no-store');
-  const {checkWorkerSecret,runBatch}=require('../../lib/cbe-auto-worker');
+  const {checkWorkerSecret,runBatch,runQueueItem}=require('../../lib/cbe-auto-worker');
   if(!checkWorkerSecret(req))return res.status(401).json({ok:false,error:'Unauthorized.'});
   const {cutoverMs}=require('../../lib/cbe-auto-cutover');
   if(process.env.VERCEL_ENV!=='production' ||
