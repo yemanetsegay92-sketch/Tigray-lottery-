@@ -31,10 +31,10 @@ service cloud.firestore {
 
     match /publicStatus/{phoneHash}/requests/{requestId} {
       allow read: if true;
-      // Public status documents are created only by the Vercel API.
-      allow create: if false;
-      allow update: if isGeneral() || (isLotteryAdmin() && resource.data.lotteryId in profile().lotteryIds);
-      allow delete: if false;
+      // Only the trusted Vercel ticket approval transaction may alter buyer
+      // status. Browser updates could otherwise forge an "approved" badge
+      // without consuming the payment claim or issuing a real ticket.
+      allow create, update, delete: if false;
     }
 
     match /tickets/{ticketId} {
