@@ -1,7 +1,7 @@
 import { expandApprovedTicketRows, ticketRowsToCsv, ticketRowsToTsv } from './ticketRows.mjs';
 import { db, auth, createSecondaryAuth } from '../../firebase.js';
 import { onAuthStateChanged, signOut, createUserWithEmailAndPassword, updateProfile, signOut as authSignOut } from 'https://www.gstatic.com/firebasejs/12.2.1/firebase-auth.js';
-import { collection, getDocs, doc, getDoc, addDoc, updateDoc, setDoc, serverTimestamp, query, where, limit, getCountFromServer, arrayUnion } from 'https://www.gstatic.com/firebasejs/12.2.1/firebase-firestore.js';
+import { collection, getDocs, doc, getDoc, addDoc, updateDoc, setDoc, writeBatch, serverTimestamp, query, where, limit, getCountFromServer, arrayUnion } from 'https://www.gstatic.com/firebasejs/12.2.1/firebase-firestore.js';
 
 const $=id=>document.getElementById(id);
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -93,24 +93,64 @@ $('adminForm').addEventListener('submit',async e=>{
   }catch(err){console.error(err);const msg=err?.code==='auth/email-already-in-use'?'This email already exists in Firebase Authentication. Use “Assign another lottery” if this is an existing Lottery Admin.':(err?.code==='permission-denied'?'Firestore permission denied while saving the admin profile. Make sure the General Admin profile exists and the V6 rules are published.':(err.message||'Could not create lottery admin.'));await setAdminMessage(msg,false)}finally{btn.disabled=false;}
 });
 
+// Explicit admin selection avoids silent "no match" caused by email typos,
+// and the inline live region reports progress/errors beside the clicked button.
 $('assignForm').addEventListener('submit',async e=>{
-  e.preventDefault();const btn=e.target.querySelector('button');btn.disabled=true;
+  e.preventDefault();
+  const btn=$('assignLotteryBtn'),msg=$('assignMessage');
+  const adminSelect=$('assignAdminSelect'),lotterySelect=$('assignLottery');
+  btn.disabled=true;adminSelect.disabled=true;lotterySelect.disabled=true;
+  const buttonText=btn.textContent;btn.textContent='Assigning…';
+  msg.innerHTML='<div class="success">Checking admin and lottery assignment…</div>';
   try{
-    const email=$('assignEmail').value.trim().toLowerCase(),lotteryId=$('assignLottery').value;
-    if(!email||!lotteryId)throw new Error('Enter the admin email and choose a lottery.');
-    const admin=await findAdminByEmail(email);if(!admin)throw new Error('No Lottery Admin profile was found for this email. Create the admin account first.');
-    const ids=Array.isArray(admin.lotteryIds)?admin.lotteryIds:[];if(ids.includes(lotteryId))throw new Error('This admin is already assigned to that lottery.');
-    await updateDoc(doc(db,'users',admin.id),{lotteryIds:arrayUnion(lotteryId)});await addDoc(collection(db,'auditLogs'),{action:'assignLottery',lotteryId,adminId:auth.currentUser.uid,targetUserId:admin.id,createdAt:serverTimestamp()});e.target.reset();await renderAdminList();await setAdminMessage('Lottery assigned successfully. This admin can now manage both lotteries.',true);
-  }catch(err){console.error(err);await setAdminMessage(err.message||'Could not assign lottery.',false)}finally{btn.disabled=false;}
+    const adminId=adminSelect.value,lotteryId=lotterySelect.value;
+    if(!adminId||!lotteryId)throw new Error('Choose an existing Lottery Admin and a lottery.');
+    if(!lots.some(l=>l.id===lotteryId))throw new Error('Lottery not found. Refresh the page and try again.');
+    const profileSnap=await getDoc(doc(db,'users',adminId));
+    if(!profileSnap.exists()||profileSnap.data().role!=='lotteryAdmin')
+      throw new Error('The selected user is not a Lottery Admin. Refresh the page.');
+    const admin=profileSnap.data();
+    const ids=Array.isArray(admin.lotteryIds)?admin.lotteryIds:[];
+    if(ids.includes(lotteryId))throw new Error('This admin is already assigned to that lottery.');
+    if(!auth.currentUser)throw new Error('Your admin session has expired. Sign in again.');
+    // Write the role assignment and its audit record together: otherwise the
+    // first write could succeed while the log fails and look like no response.
+    const batch=writeBatch(db);
+    batch.update(doc(db,'users',adminId),{lotteryIds:arrayUnion(lotteryId)});
+    batch.set(doc(collection(db,'auditLogs')),{action:'assignLottery',lotteryId,
+      adminId:auth.currentUser.uid,targetUserId:adminId,createdAt:serverTimestamp()});
+    await batch.commit();
+    const label=lots.find(l=>l.id===lotteryId)?.name||lotteryId;
+    msg.innerHTML='<div class="success">✓ '+esc(admin.displayName||admin.email||'Lottery Admin')+
+      ' can now manage '+esc(label)+'.</div>';
+    await renderAdminList();
+  }catch(err){
+    console.error('Assign Lottery failed:',err);
+    const explanation=err?.code==='permission-denied'
+      ? 'Firebase permission denied. Confirm you are signed in as General Admin.'
+      : (err?.message||'Could not assign the lottery.');
+    msg.innerHTML='<div class="error">'+esc(explanation)+'</div>';
+  }finally{
+    btn.disabled=false;adminSelect.disabled=false;lotterySelect.disabled=false;
+    btn.textContent=buttonText;
+  }
 });
 
 async function renderAdminList(){
-  const host=$('adminList');
+  const host=$('adminList'),select=$('assignAdminSelect');
   try{
     const qs=await getDocs(query(collection(db,'users'),where('role','==','lotteryAdmin'))),rows=qs.docs.map(d=>({id:d.id,...d.data()}));
     $('statAdmins').textContent=rows.length;
-    host.innerHTML=rows.length?`<table><thead><tr><th>Admin</th><th>Email</th><th>Assigned lotteries</th></tr></thead><tbody>${rows.map(a=>`<tr><td>${esc(a.displayName||'')}</td><td>${esc(a.email||'')}</td><td>${(a.lotteryIds||[]).map(id=>{const l=lots.find(x=>x.id===id);return esc(l?l.name:id)}).join(', ')}</td></tr>`).join('')}</tbody></table>`:'<p class="muted">No lottery admins yet.</p>';
-  }catch(e){host.innerHTML=`<div class="error">${esc(e.message||'Could not load lottery admins.')}</div>`;}
+    const previouslySelected=select.value;
+    select.innerHTML='<option value="">'+(rows.length?'Choose an existing Lottery Admin…':'No lottery admins found — create one above')+'</option>'+
+      rows.map(a=>'<option value="'+esc(a.id)+'">'+esc((a.displayName||a.email||'Lottery Admin')+' · '+(a.email||a.id))+'</option>').join('');
+    if(rows.some(a=>a.id===previouslySelected))select.value=previouslySelected;
+    host.innerHTML=rows.length?`<table><thead><tr><th>Admin</th><th>Email</th><th>Assigned lotteries</th></tr></thead><tbody>${rows.map(a=>`<tr><td>${esc(a.displayName||'')}</td><td>${esc(a.email||'')}</td><td>${(a.lotteryIds||[]).map(id=>{const l=lots.find(x=>x.id===id);return esc(l?l.name:id)}).join(', ')}</td></tr>`).join('')}</tbody></table>`:'<p class="muted">No lottery admins yet. Create one using the form above, then assign additional lotteries here.</p>';
+  }catch(e){
+    select.innerHTML='<option value="">Could not load existing admins</option>';
+    host.innerHTML=`<div class="error">${esc(e.message||'Could not load lottery admins.')}</div>`;
+    $('assignMessage').innerHTML='<div class="error">Could not load available Lottery Admins. Refresh the page or check permissions.</div>';
+  }
 }
 
 async function renderLotteries(){
