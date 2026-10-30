@@ -90,3 +90,20 @@ A separately configured, external scheduler (for example existing Cloud Schedule
 ### Preview simulation
 
 The General Admin `Match pending ticket` and `Test uploaded receipt` panels now show **CBE automatic-approval eligibility — PREVIEW SIMULATION** with policy blockers. A positive result is still read-only; it never issues tickets in Preview.
+
+### Provider-verified payment recovery (staged)
+
+Every production automatic verification will now:
+1. Atomically mark the queued request **verification attempted** BEFORE calling Check.et (so a crash cannot automatically repeat the provider call).
+2. Call Check.et with the correct CBE receiving account and validate the official response.
+3. Persist a **private, server-owned, order-bound verification snapshot** in the `autoPaymentQueue/<requestId>` document BEFORE assigning any tickets. It stores the verified reference, amount, currency, date, receiving account check, and a hash binding the original purchase and receiving account. It does **not** store the PDF/image bytes, API key, or the full receiving account separately.
+4. In the ticket-issuing Firestore transaction, recheck the stored snapshot, current order status and amount, configured account, fingerprint, cutoff, ledger claim, and expiry before allocating tickets.
+5. If a ticket assignment fails but the purchase remains pending, retry ONLY using the cached verification and atomic claim. If tickets were assigned but the response was lost, the recovery worker sees the approved order and marks its queue done.
+6. If the provider call itself was attempted but the function crashed before saving its result, send to manual reconciliation rather than calling Check.et again. There is no safe way to reconstruct a lost third-party response without an authorized provider lookup/idempotency facility.
+
+The snapshot is allowed for 30 minutes for recovery and becomes ineligible after expiry. Preview stays read-only, and no production environment flags have been enabled.
+
+### Prepared opt-in scheduler (not running)
+
+`.github/workflows/cbe-auto-approval-worker.yml` will call the **production** `https://tigraylottery.com/api/admin/approvals` endpoint every 5 minutes only after the PR is merged into the default branch and GitHub Actions repository variable `LOTTERY_CBE_CRON_ENABLED=true` is intentionally configured. GitHub Actions secret `LOTTERY_CBE_AUTO_APPROVAL_CRON_SECRET` must match the **production Vercel environment** value. Neither value is provisioned in this PR. The production Vercel API additionally requires `LOTTERY_CBE_AUTO_APPROVAL_ENABLED=true`, a future cutover, a reviewed lottery allowlist, and a production Check.et key. Do NOT activate these until production Firestore rules and end-to-end concurrency/idempotency tests have been validated.
+
