@@ -8,6 +8,7 @@ const {getFirestore,Timestamp}=require('firebase-admin/firestore');
 const {makePaymentClaimId}=require('../lib/payment-claims');
 const {paymentFingerprint,verifiedSubset}=require('../lib/cbe-verification-evidence');
 const {cutoverMs}=require('../lib/cbe-auto-cutover');
+const {leaseQueueItem}=require('../lib/cbe-auto-worker');
 
 if(!process.env.FIRESTORE_EMULATOR_HOST ||
    !/^demo-/.test(String(process.env.GCLOUD_PROJECT||''))){
@@ -145,4 +146,18 @@ test('missing persisted evidence must not approve or consume claim',async()=>{
   await assert.rejects(run('missing-a',lot,ref),/guard did not pass/);
   assert.equal((await rows('tickets',lot)).length,0);
   assert.equal((await db.collection('paymentClaims').doc(makePaymentClaimId(ref)).get()).exists,false);
+});
+
+test('duplicate Firestore event delivery leases a queue record only once',async()=>{
+  const id='event-lease-only-test';
+  const ref=db.collection('autoPaymentQueue').doc(id);
+  await ref.set({requestId:id,state:'pending',attempts:0,createdAt:new Date()});
+  const replies=await Promise.all([
+    leaseQueueItem(db,{id}),
+    leaseQueueItem(db,{id})
+  ]);
+  assert.equal(replies.filter(Boolean).length,1);
+  const record=(await ref.get()).data();
+  assert.equal(record.attempts,1);
+  assert.equal(record.state,'processing');
 });

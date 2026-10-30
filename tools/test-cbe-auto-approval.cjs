@@ -2,7 +2,7 @@
 const {test}=require('node:test');
 const assert=require('node:assert/strict');
 const {evaluateAutoPayment,nameKey}=require('../lib/cbe-auto-eligibility');
-const {productionAccountFor,enabledFor,checkWorkerSecret,inspectRequest,processOne}=require('../lib/cbe-auto-worker');
+const {productionAccountFor,enabledFor,checkWorkerSecret,inspectRequest,processOne,runQueueItem}=require('../lib/cbe-auto-worker');
 const {cutoverMs,isAfterCutover}=require('../lib/cbe-auto-cutover');
 const {approvalModeFor,usesAutomaticApproval}=require('../lib/lottery-approval-mode');
 const created=new Date(Date.now()-10*60000).toISOString();
@@ -277,4 +277,32 @@ test('new purchase paid before cutover cannot approve, even with otherwise match
   const result=await inspectRequest(db,'req-legacy-payment',{env,verify:async()=>oldBank});
   assert.equal(result.decision,'manual_review');
   assert.deepEqual(result.reasons,['purchase_or_bank_transfer_before_go_live_cutover']);
+});
+
+test('event dispatch leases one exact request, approves once, and ignores repeat delivery',async()=>{
+  const id='a'.repeat(40);
+  const db=fakeDb({queueState:'pending',attempts:0});
+  let approvals=0;
+  const options={env,verify:async()=>verification,approve:async()=>{approvals++;}};
+  const first=await runQueueItem(db,id,options);
+  assert.deepEqual(first,{processed:1,approved:1,manual_review:0,retry:0});
+  assert.equal(approvals,1);
+  assert.equal(db.queue.get(id).attempts,1);
+  const repeated=await runQueueItem(db,id,{...options,verify:async()=>{
+    throw new Error('Repeated event must not contact bank provider');
+  }});
+  assert.equal(repeated.processed,0);
+  assert.equal(approvals,1);
+});
+test('event dispatch fails closed for preview or malformed queue IDs',async()=>{
+  const db=fakeDb({queueState:'pending',attempts:0});
+  const callback=()=>{throw new Error('must not verify or approve')};
+  const invalid=await runQueueItem(db,'wrong-id',{env,verify:callback,approve:callback});
+  assert.equal(invalid.processed,0);
+  const disabled=await runQueueItem(db,'b'.repeat(40),{
+    env:{...env,VERCEL_ENV:'preview'},verify:callback,approve:callback
+  });
+  assert.equal(disabled.processed,0);
+  assert.equal(disabled.disabled,true);
+  assert.equal(db.logs.length,0);
 });

@@ -845,11 +845,11 @@ async function handleCheckEtVerification(req, res, body) {
   return res.status(200).json({ ok:true, ...result });
 }
 
-// Cron-only automatic CBE payment processor. No public caller and never from
-// Vercel Preview (which shares the production Firestore database).
-async function handleAutoCbeWorker(req,res){
+// Secret-authenticated CBE processor for scheduled recovery AND Firebase
+// events. No browser caller and never from Vercel Preview.
+async function handleAutoCbeWorker(req,res,body={}){
   res.setHeader('Cache-Control','no-store');
-  const {checkWorkerSecret,runBatch}=require('../../lib/cbe-auto-worker');
+  const {checkWorkerSecret,runBatch,runQueueItem}=require('../../lib/cbe-auto-worker');
   if(!checkWorkerSecret(req))return res.status(401).json({ok:false,error:'Unauthorized.'});
   const {cutoverMs}=require('../../lib/cbe-auto-cutover');
   if(process.env.VERCEL_ENV!=='production' ||
@@ -857,13 +857,21 @@ async function handleAutoCbeWorker(req,res){
      !Number.isFinite(cutoverMs()) || Date.now()<cutoverMs()) {
     return res.status(403).json({ok:false,error:'CBE automatic approval is not enabled.'});
   }
+  const targeted=String(body.action||'').trim().toLowerCase()==='cbe-auto-worker-one';
+  const requestId=String(body.requestId||'').trim();
+  if(targeted && !/^[a-f0-9]{40}$/.test(requestId)){
+    return res.status(400).json({ok:false,error:'Invalid queue request ID.'});
+  }
   const db=adminDb();
-  const result=await runBatch(db,{
+  const options={
     approve:async(requestId,lotteryId,reference,guard)=>{
       await approveRequest(db,{uid:'system:checket-cbe'},{role:'generalAdmin'},
         requestId,lotteryId,reference,guard);
     }
-  });
+  };
+  const result=targeted
+    ? await runQueueItem(db,requestId,options)
+    : await runBatch(db,options);
   return res.status(200).json({ok:true,...result});
 }
 
@@ -878,7 +886,7 @@ module.exports = async (req, res) => {
   try {
     const body = readBody(req);
     const action = String(body.action || '').trim().toLowerCase();
-    if (action === 'cbe-auto-worker') return await handleAutoCbeWorker(req, res);
+    if (action === 'cbe-auto-worker' || action === 'cbe-auto-worker-one') return await handleAutoCbeWorker(req, res, body);
     if (action === 'checket-match-pending') return await handleCheckEtPendingMatch(req, res, body);
     if (action === 'checket-verify') return await handleCheckEtVerification(req, res, body);
     if (action === 'lookup-reference') return await lookupReference(req, res, body);
