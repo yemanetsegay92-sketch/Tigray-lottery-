@@ -82,7 +82,7 @@ A separately configured, external scheduler (for example existing Cloud Schedule
 - The owner confirms all earlier purchases/transfers are test-only. Do **not** approve old test requests automatically or migrate test references as live business sales. Set a strict launch cutoff to the actual deployment time. Verify bank payment time and purchase creation time both occur afterward.
 - Start with an empty or otherwise reconciled ledger for new production payments; **never** clear the ledger once live. A reference claimed by an approved purchase must remain blocked across lottery deletions/cancellations.
 - Deploy revised Firestore rules. Ensure no outdated clients/admin scripts may update ticket status or mint ticket numbers directly.
-- Execute emulator/live-sandbox concurrency, idempotency, timing, wrong-account, wrong-amount, screenshot/PDF, outage and rate-limit tests. Do not reuse actual buyers' payments as test issuance without consent.
+- **COMPLETED in isolated Firestore emulator:** 5 real Firestore Admin SDK integration tests, including 2 simultaneous approvals spending a single bank reference, 2 simultaneous distinct reference approvals with unique sequential ticket numbers, receipt-only approved reference, invalid receiving account/amount, and missing persisted evidence. These ran against a demo project with no bank API and passed, separately from mocked tests. **Still needed:** verify production Firestore rules deployment and test full customer-to-worker-to-notification flow. Do not reuse actual buyers' payments as test issuance without consent.
 - Validate Check.et API quotas, receipt handling/data processing, and support for commercial automatic ticket fulfillment.
 - Configure a separate **production** Check.et key, secret, allowlist and cron scheduler only after approval.
 - Start with one lottery and audit all automated approvals and rejections before scaling.
@@ -102,6 +102,10 @@ Every production automatic verification will now:
 6. If the provider call itself was attempted but the function crashed before saving its result, send to manual reconciliation rather than calling Check.et again. There is no safe way to reconstruct a lost third-party response without an authorized provider lookup/idempotency facility.
 
 The snapshot is allowed for 30 minutes for recovery and becomes ineligible after expiry. Preview stays read-only, and no production environment flags have been enabled.
+
+### Actual Firestore emulator concurrency coverage
+
+`.github/workflows/cbe-firestore-emulator-tests.yml` runs `tools/test-cbe-firestore-emulator.cjs` with pinned Firebase CLI/SDK and `demo-tigray-lottery-auto` using `firebase.emulator.json`. The original `approveRequest` function is made accessible to this script *only* when `FIRESTORE_EMULATOR_HOST` is present. The suite passed all 5 integration tests on October 30, 2026. It proves that Firestore serializes our payment-claim and ticket-number transactions under concurrent requests. It does **not** prove that production security rules have been deployed or that the real Check.et worker has completed an end-to-end payment.
 
 ### Prepared opt-in scheduler (not running)
 
