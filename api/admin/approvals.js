@@ -136,6 +136,10 @@ async function approveRequest(db, caller, profile, requestId, requestedLotteryId
         stored.transactionDate===autoGuard.transactionDate &&
         stored.receiverName===autoGuard.receiveName &&
         stored.currency==='ETB' && Number(stored.amount)===Number(request.total) &&
+        ['exact_match','masked_unverifiable'].includes(stored.receiverAccountStatus) &&
+        (stored.receiverAccountStatus!=='masked_unverifiable' ||
+          (/^\d{4,8}$/.test(String(stored.maskedReceiverSuffix||'')) &&
+            String(autoGuard.account).endsWith(String(stored.maskedReceiverSuffix)))) &&
         configured && cbeAccounts(lottery).length===1 &&
         String(configured.number).replace(/\s/g,'')===String(autoGuard.account) &&
         nameKey(configured.holderName)===nameKey(autoGuard.receiveName) &&
