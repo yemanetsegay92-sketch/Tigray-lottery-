@@ -124,3 +124,23 @@ test('a masked receiver with wrong visible suffix is explicitly flagged',async()
   assert.equal(result.receiverAccountMatches,null);
   assert.equal(result.receiverAccountStatus,'masked_suffix_mismatch');
 });
+
+test('previously verified/conflicting references return an explicit safe 409, never verified', async()=>{
+  await assert.rejects(verifyCheckEtPayment(base,options(mock(409,{message:'sensitive reference 123'}))),
+    err=>err.statusCode===409 && err.providerHttpStatus===409 &&
+      /conflict/.test(err.message) && !err.message.includes('123'));
+});
+test('provider 403 shows permission/billing problem instead of unexpected response', async()=>{
+  await assert.rejects(verifyCheckEtPayment(base,options(mock(403,{message:'PRIVATE bank info'}))),
+    err=>err.statusCode===503 && err.providerHttpStatus===403 &&
+      /denied/.test(err.message) && !err.message.includes('PRIVATE'));
+});
+test('unexpected provider status has numeric diagnostic but never leaks response JSON', async()=>{
+  await assert.rejects(verifyCheckEtPayment(base,options(mock(418,{receipt:'secret buyer name'}))),
+    err=>err.statusCode===502 && err.providerHttpStatus===418 &&
+      /provider HTTP 418/.test(err.message) && !err.message.includes('secret'));
+});
+test('provider queue response 202 is not mistaken for a confirmed payment', async()=>{
+  await assert.rejects(verifyCheckEtPayment(base,options(mock(202,{success:true,exists:true}))),
+    err=>err.statusCode===502 && err.providerHttpStatus===202);
+});
