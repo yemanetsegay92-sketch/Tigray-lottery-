@@ -31,7 +31,7 @@ Transactions that fail midway do not consume a claim or issue partial tickets. C
 
 ## Other gates before production
 
-- The production Firestore rules now forbid **client-side ticketRequests update** and explicitly deny client reads/writes to paymentClaims. Ruleset `9393a31d-6bd8-44bf-b388-39beb7d2fb5e` was released to the confirmed `tigiray-lottery` project on October 30, 2026 and verified byte-for-byte against this file.
+- The production Firestore rules now forbid **client-side ticketRequests update** and explicitly deny client reads/writes to paymentClaims. Ruleset `87ce1cc1-e180-4994-83b4-d2f2639dcbd5` was released to the confirmed `tigiray-lottery` project on October 30, 2026 and verified byte-for-byte against this file.
 - A small number of orders have no bank reference until a staff member reads a receipt; they cannot safely be approved on this new flow without a reference.
 - The Check.et key may be stored in Vercel Preview and Production, but it cannot activate the worker by itself.
 - No automatic approval is enabled; CBE matches remain advisory only.
