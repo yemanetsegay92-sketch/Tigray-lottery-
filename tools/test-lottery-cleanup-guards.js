@@ -80,6 +80,7 @@ const sandbox = {
   module:{exports:{}}, Buffer,console,process:{env:{}},
   require(spec) {
     if (spec==='crypto') return require('node:crypto');
+    if (spec==='../../lib/payment-claims') return require('../lib/payment-claims');
     if (spec==='../telegram/_lib') return {adminDb:()=>fakeDb,FieldValue:{
       serverTimestamp:()=>new Date(),arrayRemove:value=>({remove:value})
     }};

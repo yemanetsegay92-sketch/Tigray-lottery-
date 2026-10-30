@@ -1,0 +1,63 @@
+name: Check.et read-only verification tests
+on:
+  pull_request:
+    paths:
+      - 'lib/checket-verify.js'
+      - 'lib/checket-request-match.js'
+      - 'lib/cbe-auto-eligibility.js'
+      - 'lib/cbe-auto-worker.js'
+      - 'lib/cbe-verification-evidence.js'
+      - 'tools/test-cbe-verification-evidence.cjs'
+      - '.github/workflows/cbe-auto-approval-worker.yml'
+      - 'lib/cbe-auto-cutover.js'
+      - 'tools/test-cbe-auto-approval.cjs'
+      - 'api/customer/create-request.js'
+      - 'lib/payment-claims.js'
+      - 'tools/test-payment-claims.cjs'
+      - 'firestore.rules'
+      - 'tools/test-checket-request-match.cjs'
+      - 'admin/js/checketMatchUI.mjs'
+      - 'admin/js/general.js'
+      - 'admin/js/lottery.js'
+      - 'tools/test-checket-verification.cjs'
+      - 'tools/test-checket-private-receipts.cjs'
+      - 'lib/checket-private-receipt.js'
+      - 'api/admin/approvals.js'
+      - '.github/workflows/checket-verification-tests.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - name: Verify available Node.js version
+        run: node --version
+      - name: Check JavaScript syntax
+        run: |
+          node --check lib/checket-verify.js
+          node --check lib/checket-private-receipt.js
+          node --check tools/test-checket-private-receipts.cjs
+          node --check lib/checket-request-match.js
+          node --check lib/cbe-auto-eligibility.js
+          node --check lib/cbe-auto-worker.js
+          node --check lib/cbe-verification-evidence.js
+          node --check tools/test-cbe-verification-evidence.cjs
+          node --check lib/cbe-auto-cutover.js
+          node --check tools/test-cbe-auto-approval.cjs
+          node --check api/customer/create-request.js
+          node --check lib/payment-claims.js
+          node --check tools/test-payment-claims.cjs
+          node --check admin/js/checketMatchUI.mjs
+          node --input-type=module --check < admin/js/general.js
+          node --input-type=module --check < admin/js/lottery.js
+          node --check tools/test-checket-request-match.cjs
+          node --check api/admin/approvals.js
+          node --check tools/test-checket-verification.cjs
+      - name: Run mocked tests; no real Check.et calls or credentials
+        run: node --test tools/test-checket-verification.cjs tools/test-checket-request-match.cjs tools/test-payment-claims.cjs tools/test-checket-private-receipts.cjs tools/test-cbe-auto-approval.cjs tools/test-cbe-verification-evidence.cjs

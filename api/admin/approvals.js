@@ -2,6 +2,7 @@ const crypto = require('crypto');
 const { adminDb, FieldValue } = require('../telegram/_lib');
 const { getAuth } = require('firebase-admin/auth');
 const { getStorage } = require('firebase-admin/storage');
+const { paymentClaimRef, normalizePaymentReference, claimSnapshotStatus, assertClaimFree, createPaymentClaim } = require('../../lib/payment-claims');
 
 function readBearer(req) {
   const h = String(req.headers?.authorization || '');
@@ -53,7 +54,7 @@ function assertLotteryAccess(profile, lotteryId) {
   }
 }
 
-async function approveRequest(db, caller, profile, requestId, requestedLotteryId) {
+async function approveRequest(db, caller, profile, requestId, requestedLotteryId, manualReference = '', autoGuard = null) {
   let result = null;
 
   await db.runTransaction(async tx => {
@@ -73,14 +74,81 @@ async function approveRequest(db, caller, profile, requestId, requestedLotteryId
       throw new Error('This request has already been reviewed.');
     }
 
+    // For screenshot/PDF-only requests the admin must transcribe the verified
+    // bank transaction reference before approving. Without a reference it is
+    // impossible to guarantee that the same payment cannot be spent again.
+    const reference = String(request.reference || manualReference || '').trim();
+    const normalized = normalizePaymentReference(reference);
+    if (!/^[A-Z0-9_-]{5,80}$/.test(normalized)) {
+      throw Object.assign(new Error('Approval requires a bank transaction reference. For receipt-only purchases, enter the reference printed on the receipt.'),{statusCode:400});
+    }
+    if (request.reference && manualReference &&
+      normalizePaymentReference(request.reference) !== normalizePaymentReference(manualReference)) {
+      throw Object.assign(new Error('Cannot replace the original payment reference.'),{statusCode:400});
+    }
     const lotteryRef = db.collection('lotteries').doc(lotteryId);
-    const lotterySnap = await tx.get(lotteryRef);
-
+    const claimRef = paymentClaimRef(db, reference);
+    const queueRef=autoGuard ? db.collection('autoPaymentQueue').doc(requestId) : null;
+    // Read order, lottery, claim, and durably verified bank evidence before
+    // any writes. The receipt snapshot must belong to this precise purchase.
+    const [lotterySnap, claimSnap, queueSnap] = await Promise.all([
+      tx.get(lotteryRef), claimRef ? tx.get(claimRef) : Promise.resolve(null),
+      queueRef ? tx.get(queueRef) : Promise.resolve(null)
+    ]);
     if (!lotterySnap.exists) throw new Error('Lottery not found.');
 
     const lottery = lotterySnap.data() || {};
     if (lottery.cleanupInProgress === true) throw new Error('Lottery cleanup is in progress. Approvals are disabled.');
     assertLotteryAccess(profile, lotteryId);
+    if (claimRef) assertClaimFree(claimSnapshotStatus(claimSnap, requestId));
+    if(autoGuard){
+      const {isAfterCutover,cutoverMs}=require('../../lib/cbe-auto-cutover');
+      const {enabledFor,productionAccountFor}=require('../../lib/cbe-auto-worker');
+      const {nameKey,cbeAccounts,timestampMs}=require('../../lib/cbe-auto-eligibility');
+      const [configured]=cbeAccounts(lottery);
+      const {checkSavedEvidence,MAX_AGE_MS}=require('../../lib/cbe-verification-evidence');
+      const bankEvidence=queueSnap?.exists && configured
+        ? checkSavedEvidence(queueSnap.data()?.verifiedEvidence,
+            requestId,request,String(configured.number).replace(/\s/g,''))
+        : {status:'missing_queue'};
+      const stored=bankEvidence.payment||{};
+      const guardTime=Number(autoGuard.verifiedAt||0);
+      const createdAt=timestampMs(request.createdAt);
+      const paidAt=timestampMs(autoGuard.transactionDate);
+      const valid = enabledFor(lotteryId) && lottery.status==='active' &&
+        String(autoGuard.requestId)===requestId &&
+        String(autoGuard.lotteryId)===lotteryId &&
+        autoGuard.policy==='CBE_UNATTENDED_V1' &&
+        autoGuard.bankMethod==='official' &&
+        Number(autoGuard.cutoffMs)===cutoverMs() &&
+        isAfterCutover(request.createdAt,autoGuard.transactionDate) &&
+        normalizePaymentReference(autoGuard.reference)===normalized &&
+        (!request.reference || normalizePaymentReference(request.reference)===normalized) &&
+        Number(autoGuard.expectedAmount)===Number(request.total) &&
+        bankEvidence.status==='usable' && queueSnap?.data()?.state==='processing' &&
+        bankEvidence.fingerprint===autoGuard.fingerprint &&
+        bankEvidence.verifiedAt===guardTime &&
+        stored.verified===true && stored.providerDuplicate===false &&
+        stored.providerCbeAccountCheck===true &&
+        stored.bank==='cbe' && stored.reportedBank==='cbe' &&
+        stored.verificationMethod==='official' && stored.status==='completed' &&
+        normalizePaymentReference(stored.reportedTransactionNumber)===normalized &&
+        stored.transactionDate===autoGuard.transactionDate &&
+        stored.receiverName===autoGuard.receiveName &&
+        stored.currency==='ETB' && Number(stored.amount)===Number(request.total) &&
+        ['exact_match','masked_unverifiable'].includes(stored.receiverAccountStatus) &&
+        (stored.receiverAccountStatus!=='masked_unverifiable' ||
+          (/^\d{4,8}$/.test(String(stored.maskedReceiverSuffix||'')) &&
+            String(autoGuard.account).endsWith(String(stored.maskedReceiverSuffix)))) &&
+        configured && cbeAccounts(lottery).length===1 &&
+        String(configured.number).replace(/\s/g,'')===String(autoGuard.account) &&
+        productionAccountFor(lotteryId)===String(autoGuard.account) &&
+        nameKey(configured.holderName)===nameKey(autoGuard.receiveName) &&
+        Number.isFinite(createdAt) && Number.isFinite(paidAt) &&
+        paidAt>=createdAt-30*60000 && paidAt<=createdAt+30*60000 &&
+        Date.now()-guardTime>=0 && Date.now()-guardTime<MAX_AGE_MS;
+      if(!valid)throw Object.assign(new Error('CBE auto approval guard did not pass; send to manual review.'),{statusCode:409});
+    }
 
     const min = Number(lottery.min);
     const max = Number(lottery.max);
@@ -107,6 +175,12 @@ async function approveRequest(db, caller, profile, requestId, requestedLotteryId
     const phoneHash = String(request.phoneHash || '') || sha256(phone);
     const now = FieldValue.serverTimestamp();
 
+    // Atomic with ticket assignment: two concurrent purchases cannot spend the
+    // same normalized reference, including references extracted from proof uploads.
+    const hasPaymentClaim = createPaymentClaim(tx, claimRef, {
+      requestId, lotteryId, createdBy:caller.uid, at:now
+    });
+
     // The lottery counter is the sole allocator for new approvals.
     // tx.create prevents an unexpected stale-counter collision from overwriting a ticket.
     for (const number of ticketNumbers) {
@@ -126,7 +200,9 @@ async function approveRequest(db, caller, profile, requestId, requestedLotteryId
       reviewedBy: caller.uid,
       reviewedAt: now,
       lotteryName: String(lottery.name || lotteryId),
-      phoneHash
+      phoneHash,
+      reference,
+      paymentClaimProtection: 'consumed_reference'
     });
 
     tx.update(lotteryRef, {
@@ -156,12 +232,14 @@ async function approveRequest(db, caller, profile, requestId, requestedLotteryId
     }, { merge: true });
 
     tx.set(db.collection('auditLogs').doc(), {
-      action: 'approveRequest',
+      action: autoGuard ? 'approveRequestAutoCBE' : 'approveRequest',
+      verificationPolicy: autoGuard ? autoGuard.policy : null,
       lotteryId,
       requestId,
       adminId: caller.uid,
       ticketNumbers,
       quantity,
+      paymentClaimProtection: 'consumed_reference',
       createdAt: now
     });
 
@@ -170,10 +248,11 @@ async function approveRequest(db, caller, profile, requestId, requestedLotteryId
       lotteryName: String(lottery.name || lotteryId),
       name: String(request.name || ''),
       phone: String(request.phone || ''),
-      reference: String(request.reference || ''),
+      reference,
       quantity,
       total: Number(request.total || 0),
       phoneHash,
+      paymentClaimProtection: hasPaymentClaim ? 'consumed_reference' : 'reference_missing_manual_only',
       ticketNumbers
     };
   });
@@ -594,6 +673,199 @@ async function handleLotteryCleanup(req, res, body) {
   throw cleanupFailure('Unsupported cleanup action.');
 }
 
+// Preview-only match to a REAL pending purchase. All account and purchase details
+// come from Firestore; the browser cannot substitute a receiving account/amount.
+async function handleCheckEtPendingMatch(req, res, body) {
+  res.setHeader('Cache-Control','no-store');
+  if (process.env.VERCEL_ENV !== 'preview') {
+    return res.status(403).json({ok:false,error:'Payment matching tests are available only on a Vercel Preview deployment.'});
+  }
+  const db = adminDb();
+  const { profile } = await authenticateAdmin(req, db);
+  const lotteryId = String(body.lotteryId || '').trim();
+  if (!/^[a-zA-Z0-9_-]{1,128}$/.test(lotteryId)) {
+    return res.status(400).json({ok:false,error:'Select a valid lottery.'});
+  }
+  if (profile.role === 'lotteryAdmin' &&
+    !Array.isArray(profile.lotteryIds || []) ) {
+    return res.status(403).json({ok:false,error:'No assigned lotteries.'});
+  }
+  if (profile.role === 'lotteryAdmin' && !(profile.lotteryIds || []).includes(lotteryId)) {
+    return res.status(403).json({ok:false,error:'You are not assigned to this lottery.'});
+  }
+  const lotterySnap = await db.collection('lotteries').doc(lotteryId).get();
+  if (!lotterySnap.exists) return res.status(404).json({ok:false,error:'Lottery not found.'});
+  const lottery = lotterySnap.data() || {};
+  if (lottery.cleanupInProgress) return res.status(409).json({ok:false,error:'This lottery is being deleted.'});
+  const accounts = Array.isArray(lottery.paymentAccounts) ? lottery.paymentAccounts : [];
+  const cbeIndexes = accounts.map((a,i)=>({a,i})).filter(({a})=>/^(cbe|commercial bank of ethiopia)$/i.test(String(a.bank || '').trim()));
+  if (!cbeIndexes.length) return res.status(400).json({ok:false,error:'Configure a real CBE receiving account for this lottery before testing.'});
+  const index = body.accountIndex === undefined || body.accountIndex === null || body.accountIndex === ''
+    ? (cbeIndexes.length === 1 ? cbeIndexes[0].i : -1)
+    : Number(body.accountIndex);
+  if (!Number.isInteger(index) || index < 0 || index >= accounts.length ||
+    !cbeIndexes.some(x=>x.i===index)) {
+    return res.status(400).json({ok:false,error:'Select one of this lottery\'s configured CBE receiving accounts.'});
+  }
+  const account = String(accounts[index].number || '').replace(/\s+/g,'');
+  if (!/^\d{8,30}$/.test(account) || account === '1000000000000') {
+    return res.status(400).json({ok:false,error:'Replace the sample/missing CBE account with a real account in Payment Accounts.'});
+  }
+
+  let requestSnap;
+  const requestId = String(body.requestId || '').trim();
+  if (requestId) {
+    if (!/^[a-zA-Z0-9_-]{1,128}$/.test(requestId)) return res.status(400).json({ok:false,error:'Invalid request ID.'});
+    requestSnap = await db.collection('ticketRequests').doc(requestId).get();
+  } else {
+    const reference = String(body.reference || '').trim();
+    if (!/^[a-zA-Z0-9_-]{5,80}$/.test(reference)) {
+      return res.status(400).json({ok:false,error:'Enter the exact reference from a pending ticket.'});
+    }
+    const canonicalId = sha256('REF:' + reference.toUpperCase()).slice(0,40);
+    const direct = await db.collection('ticketRequests').doc(canonicalId).get();
+    if (direct.exists && direct.data().lotteryId === lotteryId &&
+        String(direct.data().reference || '').trim().toUpperCase() === reference.toUpperCase()) {
+      requestSnap = direct;
+    } else {
+      const queryMatches = await db.collection('ticketRequests').where('reference','==',reference).limit(21).get();
+      const matches = queryMatches.docs.filter(d=>d.data().lotteryId===lotteryId);
+      if (queryMatches.size >= 21) return res.status(409).json({ok:false,error:'Too many requests share this reference. Use the request ID.'});
+      if (matches.length !== 1) return res.status(matches.length?409:404).json({
+        ok:false,error:matches.length?'Reference is ambiguous. Use the request ID.':'No matching ticket request found in this lottery.'
+      });
+      requestSnap = matches[0];
+    }
+  }
+  if (!requestSnap?.exists || requestSnap.data().lotteryId !== lotteryId) {
+    return res.status(404).json({ok:false,error:'Pending ticket request not found in the selected lottery.'});
+  }
+  const purchase = requestSnap.data() || {};
+  if (purchase.status !== 'pending') return res.status(409).json({ok:false,error:'Only pending requests can be checked.'});
+  const storedReference = String(purchase.reference || '').trim();
+  const method = String(body.verificationMethod || 'reference').toLowerCase();
+  if (!['reference','receipt'].includes(method)) {
+    return res.status(400).json({ok:false,error:'Unsupported verification method.'});
+  }
+  if (method === 'reference' && !/^[a-zA-Z0-9_-]{5,80}$/.test(storedReference)) {
+    return res.status(400).json({ok:false,error:'This request has no supported CBE reference. Select the receipt method if it has a PDF/image.'});
+  }
+  if (method === 'receipt' && !purchase.proofPath) {
+    return res.status(400).json({ok:false,error:'No private PDF or screenshot is attached to this request.'});
+  }
+  const { verifyCheckEtPayment } = require('../../lib/checket-verify');
+  const { comparePaymentToRequest } = require('../../lib/checket-request-match');
+  let receiptFile = null;
+  if (method === 'receipt') {
+    const {readFinalReceipt}=require('../../lib/checket-private-receipt');
+    // Only server-owned finalized GCS objects; never send customer URLs to Check.et.
+    receiptFile=await readFinalReceipt(purchase);
+  }
+  // Check.et receives the full configured receiving account, and a reference
+  // OR the authenticated private file. PDF goes directly to Check.et: no OCR.
+  // Images are an experiment; Check.et may respond 422 without receipt_text.
+  const verification = await verifyCheckEtPayment({
+    bank:'cbe', accountNumber:account,
+    ...(method === 'receipt' ? {receiptFile} : {transactionNumber:storedReference})
+  });
+  const providerReference = String(verification.reportedTransactionNumber || '').trim().toUpperCase();
+  const effectiveReference = method === 'receipt'
+    ? (providerReference || storedReference.toUpperCase()) : storedReference;
+  // This lookup is advisory (exact legacy Firestore reference only). Persistent
+  // global paymentClaims is the stronger future protection. Neither writes data.
+  const claimRef = /^[A-Z0-9_-]{5,80}$/.test(effectiveReference)
+    ? paymentClaimRef(db,effectiveReference) : null;
+  const [sameRef, existingClaim] = await Promise.all([
+    claimRef
+      ? db.collection('ticketRequests').where('reference','==',effectiveReference).limit(21).get()
+      : Promise.resolve({docs:[],size:0}),
+    claimRef ? claimRef.get() : Promise.resolve(null)
+  ]);
+  const otherDocs = sameRef.docs.filter(x=>x.id!==requestSnap.id);
+  const duplicate = {
+    otherCount:otherDocs.length,
+    otherApprovedCount:otherDocs.filter(x=>x.data().status==='approved').length,
+    truncated:sameRef.size===21,
+    claimStatus:claimRef ? claimSnapshotStatus(existingClaim,requestSnap.id) : 'reference_not_returned'
+  };
+  // For receipt-only purchases, mark the bank-supplied reference as extracted,
+  // NOT as a customer reference match. Keep human review regardless.
+  const assessment = comparePaymentToRequest(
+    {...purchase,lotteryId}, verification, {id:lotteryId},duplicate
+  );
+  if (method === 'receipt') {
+    assessment.checks.receiptInput = receiptFile.mime === 'application/pdf' ? 'pdf' : 'image';
+    assessment.checks.bankExtractedReference = providerReference.length > 0;
+    if (!storedReference) {
+      assessment.recommendation='MANUAL_REVIEW';
+      assessment.concerns.push(providerReference
+        ? 'Reference was extracted from a receipt, not entered by the buyer. Reconcile it before approval.'
+        : 'Check.et did not return a usable reference. Approval requires a verified reference.');
+    }
+    if (storedReference && providerReference && storedReference.toUpperCase() !== providerReference) {
+      assessment.recommendation='MANUAL_REVIEW';
+      assessment.concerns.push('The PDF/image reference differs from the customer-entered reference.');
+    }
+  }
+  const {evaluateAutoPayment}=require('../../lib/cbe-auto-eligibility');
+  // Informative only: Preview uses the same production Firestore but will NEVER
+  // change tickets based on this eligibility report.
+  const autoEligibility=evaluateAutoPayment({
+    purchase,lottery,verification,duplicate
+  });
+  return res.status(200).json({
+    ok:true,readOnly:true,verificationInput:method,
+    autoEligibility,
+    request:{id:requestSnap.id,lotteryId,total:Number(purchase.total||0),
+      reference:storedReference,extractedReference:method==='receipt'?providerReference:''},
+    payment:{
+      bank:verification.bank,status:verification.status,amount:verification.amount,currency:verification.currency,
+      transactionDate:verification.transactionDate,payerName:verification.payerName,receiverName:verification.receiverName,
+      receiverAccountStatus:verification.receiverAccountStatus,
+      providerCbeAccountCheck:verification.providerCbeAccountCheck
+    },
+    assessment
+  });
+}
+
+// Preview-only manual verification: no Firestore mutations or ticket approval.
+async function handleCheckEtVerification(req, res, body) {
+  res.setHeader('Cache-Control', 'no-store');
+  if (process.env.VERCEL_ENV !== 'preview') {
+    return res.status(403).json({ ok:false, error:'Manual Check.et verification tests are available only on a Vercel Preview deployment.' });
+  }
+  const db = adminDb();
+  const { profile } = await authenticateAdmin(req, db);
+  if (profile.role !== 'generalAdmin') {
+    return res.status(403).json({ ok:false, error:'Only General Admin can test payment verification.' });
+  }
+  const { verifyCheckEtPayment } = require('../../lib/checket-verify');
+  const result = await verifyCheckEtPayment(body);
+  return res.status(200).json({ ok:true, ...result });
+}
+
+// Cron-only automatic CBE payment processor. No public caller and never from
+// Vercel Preview (which shares the production Firestore database).
+async function handleAutoCbeWorker(req,res){
+  res.setHeader('Cache-Control','no-store');
+  const {checkWorkerSecret,runBatch}=require('../../lib/cbe-auto-worker');
+  if(!checkWorkerSecret(req))return res.status(401).json({ok:false,error:'Unauthorized.'});
+  const {cutoverMs}=require('../../lib/cbe-auto-cutover');
+  if(process.env.VERCEL_ENV!=='production' ||
+     process.env.LOTTERY_CBE_AUTO_APPROVAL_ENABLED!=='true' ||
+     !Number.isFinite(cutoverMs()) || Date.now()<cutoverMs()) {
+    return res.status(403).json({ok:false,error:'CBE automatic approval is not enabled.'});
+  }
+  const db=adminDb();
+  const result=await runBatch(db,{
+    approve:async(requestId,lotteryId,reference,guard)=>{
+      await approveRequest(db,{uid:'system:checket-cbe'},{role:'generalAdmin'},
+        requestId,lotteryId,reference,guard);
+    }
+  });
+  return res.status(200).json({ok:true,...result});
+}
+
 module.exports = async (req, res) => {
   if (req.method === 'GET' && String(req.query?.receipt || '') === '1') {
     return servePaymentReceipt(req, res);
@@ -605,6 +877,9 @@ module.exports = async (req, res) => {
   try {
     const body = readBody(req);
     const action = String(body.action || '').trim().toLowerCase();
+    if (action === 'cbe-auto-worker') return await handleAutoCbeWorker(req, res);
+    if (action === 'checket-match-pending') return await handleCheckEtPendingMatch(req, res, body);
+    if (action === 'checket-verify') return await handleCheckEtVerification(req, res, body);
     if (action === 'lookup-reference') return await lookupReference(req, res, body);
     if (action.startsWith('lottery-cleanup-')) return await handleLotteryCleanup(req, res, body);
     const requestId = String(body.requestId || '').trim();
@@ -627,7 +902,8 @@ module.exports = async (req, res) => {
         caller,
         profile,
         requestId,
-        requestedLotteryId
+        requestedLotteryId,
+        String(body.manualReference || '').trim()
       );
 
       return res.status(200).json({
@@ -708,3 +984,7 @@ module.exports = async (req, res) => {
     });
   }
 };
+
+// Expose the same production transaction function only to Firebase emulator tests.
+// Never add an unauthenticated HTTP action for this helper.
+if (process.env.FIRESTORE_EMULATOR_HOST) module.exports._approveRequestForEmulator = approveRequest;

@@ -3,6 +3,32 @@
 <main class="admin-wrap"><div id="message"></div>
 <section class="panel hero-admin"><div><div class="eyebrow-admin">CONTROL CENTER</div><h1>Tigray Lottery management</h1><p class="muted">Manage lotteries, administrators, reports, and the final draw.</p></div></section>
 <section class="stats"><div class="stat"><span>Lotteries</span><b id="statLotteries">—</b></div><div class="stat"><span>Lottery admins</span><b id="statAdmins">—</b></div><div class="stat"><span>Approved tickets</span><b id="statTickets">—</b></div><div class="stat"><span>Approved value</span><b id="statRevenue">—</b></div></section>
+<section class="panel" id="checketPanel">
+<div class="section-title"><div><h2>Check.et payment verification — test only</h2>
+<p class="muted">General Admin only. Manually check a real transaction using your Check.et API key. This does NOT approve tickets, save a payment, or change any lottery data.</p></div></div>
+<form id="checketForm"><div class="grid2">
+<label>Bank<select id="checketBank" required><option value="cbe">CBE</option><option value="boa">Bank of Abyssinia</option><option value="dashen">Dashen</option><option value="awash">Awash</option><option value="telebirr">Telebirr</option><option value="zemen">Zemen</option><option value="cbebirr">CBE Birr</option><option value="mpesa">M-Pesa</option><option value="sinqee">Siinqee</option><option value="amhara">Amhara Bank</option></select></label>
+<label>Transaction reference<input id="checketReference" type="text" minlength="5" maxlength="80" autocomplete="off" required placeholder="Bank transaction reference"></label>
+<label class="span2">Receiving account number (required for CBE/BOA)<input id="checketAccount" type="text" inputmode="numeric" pattern="[0-9]{8,30}" autocomplete="off" placeholder="Enter the receiving account used for this payment"></label></div>
+<button id="checketSubmit" type="submit">Verify with Check.et</button></form>
+<div id="checketResult" aria-live="polite"></div><hr><h3>Match an EXISTING pending ticket (Preview only)</h3>
+<p class="muted">No new lottery or ticket purchase is needed. Select an existing lottery, and enter the exact CBE reference from a pending request. The configured CBE account and expected amount come from Firestore; no tickets will be approved.</p>
+<form id="checketMatchForm"><div class="grid2">
+<label>Existing lottery<select id="checketMatchLottery" required></select></label>
+<label>Reference on pending ticket<input id="checketMatchReference" type="text" minlength="5" maxlength="80" autocomplete="off" required placeholder="Exact bank transaction reference"></label>
+<label class="span2">Configured CBE receiving account<select id="checketMatchAccount" required></select></label>
+</div><button type="submit" id="checketMatchButton">Match pending ticket — read only</button></form>
+<div id="checketMatchResult" aria-live="polite"></div><hr>
+<h3>Verify an existing PDF or screenshot (Preview only)</h3>
+<p class="muted">Uses the selected lottery and configured CBE account above. Choose a pending purchase with a private receipt already saved in Firebase Storage. PDF is sent directly to Check.et; screenshots are tested without OCR first. The original receipt stays in Firebase. Nothing is approved.</p>
+<form id="checketReceiptForm">
+<label>Pending purchase with PDF/image receipt
+<select id="checketReceiptRequestId" required><option value="">Choose lottery above</option></select></label>
+<div class="actions"><button type="button" class="secondary" id="checketReceiptRefresh">↻ Find pending receipts</button>
+<button type="submit" id="checketReceiptButton" disabled>Test uploaded receipt — read only</button></div>
+</form><div id="checketReceiptResult" aria-live="polite"></div>
+
+<p class="muted small-note">Check.et's “duplicate” flag means previously verified in the Check.et branch; it does not prove whether a ticket was issued. Automatic approval stays disabled.</p></section>
 <section class="panel"><div class="section-title"><div><h2>Create lottery</h2><p class="muted">Set the ticket price, number range, status, and published winner awards.</p></div></div><form id="createForm"><div class="grid2"><label>Name<input id="name" required placeholder="Lottery 001"></label><label>Ticket Price (Birr)<input id="price" type="number" min="1" required></label><label>Minimum Number<input id="min" type="number" required value="100000"></label><label>Maximum Number<input id="max" type="number" required value="999999"></label><label>Status<select id="status"><option value="active">Active</option><option value="upcoming">Upcoming</option><option value="closed">Closed</option></select></label><label>Description<input id="description" placeholder="Optional short description"></label><label class="span2">Winner Awards (one per line)<textarea id="awards" rows="4" placeholder="1st prize – 100,000 Birr
 2nd prize – 50,000 Birr
 3rd prize – 25,000 Birr"></textarea></label><div class="span2 create-payment-section"><div class="subsection-title">Payment Accounts</div><p class="muted small-note">Each lottery has its own payment accounts. A new lottery starts with CBE and a sample account number.</p><div id="createPaymentAccountsEditor"></div><button type="button" class="secondary small-btn" id="addCreatePaymentAccount">+ Add bank account</button></div></div><button type="submit">Create Lottery</button></form></section>

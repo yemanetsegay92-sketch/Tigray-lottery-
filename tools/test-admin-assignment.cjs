@@ -28,7 +28,9 @@ test('assignments use the selected existing admin ID, server reads and an atomic
   assert.match(js,/batch\.set\(doc\(collection\(db,'auditLogs'\)\)/);
   assert.match(js,/await batch\.commit\(\)/);
 });
-test('General Admin can update user profiles and create audit records via rules',()=>{
-  assert.match(rules,/match \/users\/\{userId\} \{[\s\S]*?allow update, delete: if isGeneral\(\)/);
-  assert.match(rules,/match \/auditLogs\/\{logId\} \{[\s\S]*?allow create: if signed\(\)/);
+test('General Admin assignment writes keep schema, role, and audit identity protections',()=>{
+  assert.match(rules,/match \/users\/\{userId\} \{[\s\S]*?allow update: if isGeneral\(\) && isValidUser\(request\.resource\.data\)/);
+  assert.match(rules,/request\.resource\.data\.role == resource\.data\.role/);
+  assert.match(rules,/match \/auditLogs\/\{logId\} \{[\s\S]*?isValidClientAudit\(request\.resource\.data\)/);
+  assert.match(rules,/data\.adminId == request\.auth\.uid/);
 });
