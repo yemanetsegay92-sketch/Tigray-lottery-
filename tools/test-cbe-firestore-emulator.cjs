@@ -69,7 +69,7 @@ async function run(id,lotteryId,ref,extraGuard={}){
   const guard={
     requestId:id,lotteryId,reference:ref,account,
     expectedAmount:request.total,transactionDate:bankTime,
-    verifiedAt:now,fingerprint:ev.fingerprint,
+    verifiedAt:now,fingerprint:ev?.fingerprint||'evidence-missing',
     cutoffMs:cutoverMs(),policy:'CBE_UNATTENDED_V1',
     bankMethod:'official',receiveName:holder,...extraGuard
   };
@@ -137,7 +137,7 @@ test('missing persisted evidence must not approve or consume claim',async()=>{
   const lot='emul-missing',ref='FTEMULATORMISSING19';
   await setup(lot,[['missing-a',ref]]);
   await db.collection('autoPaymentQueue').doc('missing-a').update({verifiedEvidence:null});
-  await assert.rejects(run('missing-a',lot,ref),/Cannot read properties|fingerprint/);
+  await assert.rejects(run('missing-a',lot,ref),/guard did not pass/);
   assert.equal((await rows('tickets',lot)).length,0);
   assert.equal((await db.collection('paymentClaims').doc(makePaymentClaimId(ref)).get()).exists,false);
 });
