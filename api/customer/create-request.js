@@ -2,6 +2,7 @@ const crypto = require('crypto');
 const { getStorage } = require('firebase-admin/storage');
 const { BUCKET: PRIVATE_BUCKET, TYPES, POLICY_TTL_MS, FINISH_TTL_MS, signToken, receiptPath, verifyToken, validateStagedFile, sha256: proofHash } = require('./_receipt-upload');
 const { adminDb, validateTelegramInitData, FieldValue } = require('../telegram/_lib');
+const { usesAutomaticApproval } = require('../../lib/lottery-approval-mode');
 
 const BUCKET = 'tigiray-lottery.firebasestorage.app';
 
@@ -170,7 +171,7 @@ module.exports = async (req, res) => {
         const {enabledFor}=require('../../lib/cbe-auto-worker');
         const {cbeAccounts}=require('../../lib/cbe-auto-eligibility');
         const cbe=cbeAccounts(currentLottery.data());
-        if(enabledFor(lotteryId) && cbe.length===1 &&
+        if(usesAutomaticApproval(currentLottery.data()) && enabledFor(lotteryId) && cbe.length===1 &&
           String(cbe[0].holderName||'').trim()) {
           tx.create(db.collection('autoPaymentQueue').doc(requestId),{
             lotteryId,requestId,state:'pending',attempts:0,

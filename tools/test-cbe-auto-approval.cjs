@@ -4,10 +4,11 @@ const assert=require('node:assert/strict');
 const {evaluateAutoPayment,nameKey}=require('../lib/cbe-auto-eligibility');
 const {productionAccountFor,enabledFor,checkWorkerSecret,inspectRequest,processOne}=require('../lib/cbe-auto-worker');
 const {cutoverMs,isAfterCutover}=require('../lib/cbe-auto-cutover');
+const {approvalModeFor,usesAutomaticApproval}=require('../lib/lottery-approval-mode');
 const created=new Date(Date.now()-10*60000).toISOString();
 const purchase={status:'pending',lotteryId:'safe-lottery',reference:'FTTEST12345',
   total:1000,quantity:1,createdAt:created};
-const lottery={status:'active',paymentAccounts:[{
+const lottery={status:'active',approvalMode:'automatic',paymentAccounts:[{
   bank:'CBE',number:'1000123456789',holderName:'MAHLIET TSEGAY GIDEY'
 }]};
 const verification={bank:'cbe',reportedBank:'cbe',verified:true,status:'completed',verificationMethod:'official',
@@ -120,6 +121,19 @@ test('automation is disabled absent explicit production, backfill, key and allow
     {LOTTERY_CBE_AUTO_APPROVAL_ACCOUNT_BINDINGS:JSON.stringify({'safe-lottery':'invalid'})},
     {LOTTERY_CBE_AUTO_APPROVAL_CRON_SECRET:'short'}
   ])assert.equal(enabledFor('safe-lottery',{...env,...overrides}),false);
+});
+test('legacy or explicitly manual lotteries always resolve to manual approval',async()=>{
+  assert.equal(approvalModeFor({}), 'manual');
+  assert.equal(usesAutomaticApproval({approvalMode:'manual'}), false);
+  assert.equal(usesAutomaticApproval({approvalMode:'automatic'}), true);
+  for(const manualLottery of [{...lottery,approvalMode:'manual'},
+    Object.fromEntries(Object.entries(lottery).filter(([key])=>key!=='approvalMode'))]){
+    const db=fakeDb({l:manualLottery});
+    const result=await inspectRequest(db,'req-manual',{env,
+      verify:()=>{throw Error('manual lottery must never contact Check.et')}});
+    assert.equal(result.decision,'manual_review');
+    assert.deepEqual(result.reasons,['lottery_uses_manual_approval']);
+  }
 });
 test('configured Firestore receiver must equal the production-only account binding',async()=>{
   const changed={...lottery,paymentAccounts:[{...lottery.paymentAccounts[0],number:'1000999999999'}]};

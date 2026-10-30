@@ -5,8 +5,8 @@ service cloud.firestore {
     // Assumed data model
     // ===============================================================
     // lotteries/{lotteryId}: public lottery catalogue and payment accounts.
-    //   Required: name, description, price, min, max, status, createdAt,
-    //   adminIds, nextTicketNumber, awards, paymentAccounts.
+    //   New creates require immutable approvalMode (manual/automatic).
+    //   Legacy documents without approvalMode remain permanently manual.
     // users/{uid}: private admin profile. May contain email and Telegram IDs.
     // settings/site: public customer-contact settings.
     // auditLogs/{id}: append-only, size-limited admin activity records.
@@ -95,7 +95,7 @@ service cloud.firestore {
         ]) &&
         data.keys().hasOnly([
           'name', 'price', 'min', 'max', 'status', 'description', 'createdAt',
-          'adminIds', 'nextTicketNumber', 'awards', 'paymentAccounts',
+          'adminIds', 'nextTicketNumber', 'awards', 'paymentAccounts', 'approvalMode',
           'awardsUpdatedAt', 'awardsUpdatedBy', 'drawnNumber', 'drawDigits',
           'drawnAt', 'drawnBy', 'cleanupInProgress', 'cleanupPhase',
           'cleanupStartedBy', 'cleanupStartedAt'
@@ -108,6 +108,7 @@ service cloud.firestore {
         data.nextTicketNumber is int && data.nextTicketNumber >= data.min &&
         data.nextTicketNumber <= data.max + 1 &&
         data.status in ['active', 'upcoming', 'closed', 'drawn', 'hidden'] &&
+        (!('approvalMode' in data) || data.approvalMode in ['manual', 'automatic']) &&
         data.createdAt is timestamp &&
         validStringList(data.adminIds, 0, 10, 128) &&
         (!('awards' in data) || validStringList(data.awards, 1, 10, 200)) &&
@@ -124,7 +125,7 @@ service cloud.firestore {
     }
     function isValidLotteryCreate(data) {
       return hasValidLotterySchema(data) &&
-        data.keys().hasAll(['awards', 'paymentAccounts']);
+        data.keys().hasAll(['awards', 'paymentAccounts', 'approvalMode']);
     }
     function isValidLotteryUpdate() {
       return hasValidLotterySchema(request.resource.data) &&
@@ -132,12 +133,25 @@ service cloud.firestore {
         // once either protected field exists it can never be removed again.
         (!('awards' in resource.data) || 'awards' in request.resource.data) &&
         (!('paymentAccounts' in resource.data) ||
-          'paymentAccounts' in request.resource.data);
+          'paymentAccounts' in request.resource.data) &&
+        // This creation-time choice is immutable. A legacy document with no
+        // mode therefore stays manual and cannot be upgraded in the browser.
+        (('approvalMode' in resource.data &&
+            request.resource.data.approvalMode == resource.data.approvalMode) ||
+          (!('approvalMode' in resource.data) &&
+            !('approvalMode' in request.resource.data)));
     }
     function lotteryAdminUpdateOnly() {
       return request.resource.data.diff(resource.data).affectedKeys().hasOnly([
         'name', 'price', 'status', 'description', 'awards',
         'awardsUpdatedAt', 'awardsUpdatedBy', 'paymentAccounts'
+      ]);
+    }
+    function generalAdminUpdateOnly() {
+      return request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+        'name', 'price', 'status', 'description', 'awards',
+        'awardsUpdatedAt', 'awardsUpdatedBy', 'paymentAccounts',
+        'drawnNumber', 'drawDigits', 'drawnAt', 'drawnBy'
       ]);
     }
     function isValidUser(data) {
@@ -171,7 +185,7 @@ service cloud.firestore {
         data.keys().hasOnly([
           'action', 'adminId', 'createdAt', 'lotteryId', 'targetUserId',
           'targetEmail', 'paymentAccountBanks', 'awards', 'whatsappNumberLast4',
-          'drawnNumber'
+          'drawnNumber', 'approvalMode'
         ]) &&
         data.action in [
           'createLottery', 'createLotteryAdmin', 'assignLottery', 'editLottery',
@@ -186,7 +200,8 @@ service cloud.firestore {
           validStringList(data.paymentAccountBanks, 1, 5, 80)) &&
         (!('awards' in data) || validStringList(data.awards, 1, 10, 200)) &&
         optionalString(data, 'whatsappNumberLast4', 4, 4) &&
-        optionalString(data, 'drawnNumber', 1, 20);
+        optionalString(data, 'drawnNumber', 1, 20) &&
+        (!('approvalMode' in data) || data.approvalMode in ['manual', 'automatic']);
     }
 
     match /lotteries/{lotteryId} {
@@ -194,7 +209,8 @@ service cloud.firestore {
       allow read: if true;
       allow create: if isGeneral() && isValidLotteryCreate(request.resource.data);
       allow update: if isValidLotteryUpdate() &&
-        (isGeneral() || (managesLottery(lotteryId) && lotteryAdminUpdateOnly()));
+        ((isGeneral() && generalAdminUpdateOnly()) ||
+          (isLotteryAdmin() && managesLottery(lotteryId) && lotteryAdminUpdateOnly()));
       // Deletion is performed only by the resumable Admin SDK cleanup path.
       allow delete: if false;
     }
