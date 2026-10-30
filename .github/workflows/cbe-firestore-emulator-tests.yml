@@ -7,6 +7,7 @@ on:
       - 'lib/cbe-auto-cutover.js'
       - 'lib/cbe-auto-eligibility.js'
       - 'lib/cbe-auto-worker.js'
+      - 'lib/lottery-approval-mode.js'
       - 'lib/cbe-verification-evidence.js'
       - 'lib/payment-claims.js'
       - 'firestore.rules'

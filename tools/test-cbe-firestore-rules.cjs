@@ -5,7 +5,7 @@ const { test, before, after } = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const { initializeTestEnvironment, assertFails, assertSucceeds } = require('@firebase/rules-unit-testing');
-const { doc, getDoc, setDoc, updateDoc, deleteDoc, deleteField } = require('firebase/firestore');
+const { collection, doc, getDoc, setDoc, updateDoc, deleteDoc, deleteField, serverTimestamp, writeBatch } = require('firebase/firestore');
 if(!process.env.FIRESTORE_EMULATOR_HOST ||
    !/^demo-/.test(String(process.env.GCLOUD_PROJECT||''))) {
   throw new Error('Security Rules tests require isolated demo- Firestore emulator.');
@@ -13,7 +13,7 @@ if(!process.env.FIRESTORE_EMULATOR_HOST ||
 let testEnv, general, assigned, unassigned, anonymous;
 function validLottery(overrides={}){
   return {name:'Synthetic lottery',description:'',price:100,min:1,max:999,
-    status:'active',createdAt:new Date(),adminIds:[],nextTicketNumber:1,
+    status:'active',approvalMode:'manual',createdAt:new Date(),adminIds:[],nextTicketNumber:1,
     awards:['First Prize'],paymentAccounts:[{bank:'CBE',number:'1000123456789',holderName:'Test Holder'}],
     ...overrides};
 }
@@ -78,6 +78,21 @@ test('only general admin can assign users and create lotteries',async()=>{
   await assertFails(setDoc(doc(anonymous.firestore(),'users','fake-admin'),{role:'generalAdmin'}));
   await assertFails(setDoc(doc(general.firestore(),'lotteries','invalid-lot'),{status:'active',price:100}));
   await assertSucceeds(setDoc(doc(general.firestore(),'lotteries','approved-lot'),validLottery()));
+  const missingMode=validLottery();delete missingMode.approvalMode;
+  await assertFails(setDoc(doc(general.firestore(),'lotteries','missing-mode'),missingMode));
+  await assertFails(setDoc(doc(general.firestore(),'lotteries','bad-mode'),validLottery({approvalMode:'sometimes'})));
+  await assertSucceeds(setDoc(doc(general.firestore(),'lotteries','automatic-lot'),validLottery({approvalMode:'automatic'})));
+});
+test('General Admin can atomically create an automatic lottery and matching audit record',async()=>{
+  const db=general.firestore();
+  const lotteryRef=doc(collection(db,'lotteries'));
+  const auditRef=doc(collection(db,'auditLogs'));
+  const batch=writeBatch(db);
+  batch.set(lotteryRef,validLottery({approvalMode:'automatic',createdAt:serverTimestamp()}));
+  batch.set(auditRef,{action:'createLottery',lotteryId:lotteryRef.id,
+    approvalMode:'automatic',adminId:'admin-1',createdAt:serverTimestamp(),
+    paymentAccountBanks:['CBE']});
+  await assertSucceeds(batch.commit());
 });
 test('lottery writes enforce the full schema and protect server allocation fields',async()=>{
   const ref=doc(assigned.firestore(),'lotteries','lot-a');
@@ -85,9 +100,14 @@ test('lottery writes enforce the full schema and protect server allocation field
   await assertSucceeds(updateDoc(ref,{paymentAccounts:[{bank:'CBE',number:'1000999999999',holderName:'Changed Holder'}]}));
   await assertFails(updateDoc(ref,{nextTicketNumber:900}));
   await assertFails(updateDoc(ref,{cleanupInProgress:true}));
+  await assertFails(updateDoc(ref,{approvalMode:'automatic'}));
+  await assertFails(updateDoc(ref,{approvalMode:deleteField()}));
+  await assertFails(updateDoc(doc(general.firestore(),'lotteries','lot-a'),{nextTicketNumber:900}));
+  await assertFails(updateDoc(doc(general.firestore(),'lotteries','lot-a'),{cleanupInProgress:true}));
   await assertFails(updateDoc(doc(general.firestore(),'lotteries','lot-a'),{extraData:'schema pollution'}));
   await assertSucceeds(updateDoc(doc(general.firestore(),'lotteries','legacy-lot'),{name:'Legacy edit'}));
   await assertSucceeds(updateDoc(doc(general.firestore(),'lotteries','legacy-lot'),{awards:['First Prize']}));
+  await assertFails(updateDoc(doc(general.firestore(),'lotteries','legacy-lot'),{approvalMode:'automatic'}));
   await assertFails(updateDoc(doc(general.firestore(),'lotteries','legacy-lot'),{awards:deleteField()}));
   await assertFails(updateDoc(doc(general.firestore(),'lotteries','lot-a'),{paymentAccounts:deleteField()}));
 });

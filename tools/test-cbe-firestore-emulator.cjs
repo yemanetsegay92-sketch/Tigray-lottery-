@@ -22,7 +22,7 @@ const account='1000123452968';
 const holder='MAHLIET TSEGAY GIDEY';
 const now=Date.now();
 const lotteryBase={name:'TEST ONLY: CBE automatic approval',status:'active',price:100,
-  min:1,max:1000,nextTicketNumber:1,cleanupInProgress:false,
+  min:1,max:1000,nextTicketNumber:1,cleanupInProgress:false,approvalMode:'automatic',
   paymentAccounts:[{bank:'CBE',number:account,holderName:holder}]};
 const bankTime=new Date(now-50000).toISOString();
 const orderTime=Timestamp.fromMillis(now-65000);

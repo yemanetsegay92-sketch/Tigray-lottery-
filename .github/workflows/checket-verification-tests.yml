@@ -6,11 +6,13 @@ on:
       - 'lib/checket-request-match.js'
       - 'lib/cbe-auto-eligibility.js'
       - 'lib/cbe-auto-worker.js'
+      - 'lib/lottery-approval-mode.js'
       - 'lib/cbe-verification-evidence.js'
       - 'tools/test-cbe-verification-evidence.cjs'
       - '.github/workflows/cbe-auto-approval-worker.yml'
       - 'lib/cbe-auto-cutover.js'
       - 'tools/test-cbe-auto-approval.cjs'
+      - 'tools/test-lottery-approval-mode.cjs'
       - 'api/customer/create-request.js'
       - 'lib/payment-claims.js'
       - 'tools/test-payment-claims.cjs'
@@ -46,10 +48,12 @@ jobs:
           node --check lib/checket-request-match.js
           node --check lib/cbe-auto-eligibility.js
           node --check lib/cbe-auto-worker.js
+          node --check lib/lottery-approval-mode.js
           node --check lib/cbe-verification-evidence.js
           node --check tools/test-cbe-verification-evidence.cjs
           node --check lib/cbe-auto-cutover.js
           node --check tools/test-cbe-auto-approval.cjs
+          node --check tools/test-lottery-approval-mode.cjs
           node --check api/customer/create-request.js
           node --check lib/payment-claims.js
           node --check tools/test-payment-claims.cjs
@@ -60,4 +64,4 @@ jobs:
           node --check api/admin/approvals.js
           node --check tools/test-checket-verification.cjs
       - name: Run mocked tests; no real Check.et calls or credentials
-        run: node --test tools/test-checket-verification.cjs tools/test-checket-request-match.cjs tools/test-payment-claims.cjs tools/test-checket-private-receipts.cjs tools/test-cbe-auto-approval.cjs tools/test-cbe-verification-evidence.cjs
+        run: node --test tools/test-checket-verification.cjs tools/test-checket-request-match.cjs tools/test-payment-claims.cjs tools/test-checket-private-receipts.cjs tools/test-cbe-auto-approval.cjs tools/test-cbe-verification-evidence.cjs tools/test-lottery-approval-mode.cjs

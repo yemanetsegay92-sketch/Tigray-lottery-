@@ -104,6 +104,7 @@ async function approveRequest(db, caller, profile, requestId, requestedLotteryId
     if(autoGuard){
       const {isAfterCutover,cutoverMs}=require('../../lib/cbe-auto-cutover');
       const {enabledFor,productionAccountFor}=require('../../lib/cbe-auto-worker');
+      const {usesAutomaticApproval}=require('../../lib/lottery-approval-mode');
       const {nameKey,cbeAccounts,timestampMs}=require('../../lib/cbe-auto-eligibility');
       const [configured]=cbeAccounts(lottery);
       const {checkSavedEvidence,MAX_AGE_MS}=require('../../lib/cbe-verification-evidence');
@@ -115,7 +116,7 @@ async function approveRequest(db, caller, profile, requestId, requestedLotteryId
       const guardTime=Number(autoGuard.verifiedAt||0);
       const createdAt=timestampMs(request.createdAt);
       const paidAt=timestampMs(autoGuard.transactionDate);
-      const valid = enabledFor(lotteryId) && lottery.status==='active' &&
+      const valid = usesAutomaticApproval(lottery) && enabledFor(lotteryId) && lottery.status==='active' &&
         String(autoGuard.requestId)===requestId &&
         String(autoGuard.lotteryId)===lotteryId &&
         autoGuard.policy==='CBE_UNATTENDED_V1' &&
