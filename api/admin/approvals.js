@@ -976,3 +976,7 @@ module.exports = async (req, res) => {
     });
   }
 };
+
+// Expose the same production transaction function only to Firebase emulator tests.
+// Never add an unauthenticated HTTP action for this helper.
+if (process.env.FIRESTORE_EMULATOR_HOST) module.exports._approveRequestForEmulator = approveRequest;
