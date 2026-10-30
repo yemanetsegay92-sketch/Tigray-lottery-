@@ -245,4 +245,405 @@ $('adminForm').addEventListener('submit',async e=>{
 });
 
 // Explicit admin selection avoids silent "no match" caused by email typos,
-// and thãOx¶‰žËkºwµçM½¹ÍÐ‰…¹¹•È€ô€ µ•ÍÍ…”œ¤ì4(€ÑÉäì4(€€€¥˜€ …±½ÑÑ•Éä¹±•…¹ÕÁ%¹AÉ½É•ÍÌ¤ì4(€€€€€‰…¹¹•È¹¥¹¹•É!Q50ôœñ‘¥Ø±…ÍÌô‰µÕÑ•ˆù¡•­¥¹œ±¥¹­•É•½É‘Ì™½È€œ­•ÍŒ¡±½ÑÑ•Éä¹¹…µ”¤¬ŸŠ˜ð½‘¥Øøœì4(€€€€€Í¡½Ý±•…¹ÕÁ9½Ñ¥”¡¥°€¡•­¥¹œ±¥¹­•É•½É‘ÏŠ˜œ¤ì4(€€€€€½¹ÍÐÀ€ô…Ý…¥Ð±•…¹ÕÁÁ¤ ±½ÑÑ•Éäµ±•…¹ÕÀµÁÉ•Ù¥•Üœ±¥¤ì4(€€€€€Í¡½Ý±•…¹ÕÁ9½Ñ¥”¡¥°€AÉ•Ù¥•Üè€œ­À¹É•ÅÕ•ÍÑÌ¬œÁÕÉ¡…Í•Ì°€œ­À¹…ÁÁÉ½Ù•¬œ…ÁÁÉ½Ù•°€œ­À¹Ñ¥­•ÑÌ¬œÑ¥­•ÑÌ¸•±•Ñ¥½¸¡…Ì9=PÍÑ…ÉÑ•¸œ¤ì4(€€€€€½¹ÍÐ‘•Ñ…¥°€ô4(€€€€€€€€1½ÑÑ•Éäè€œ­À¹¹…µ”¬q¸œ¬4(€€€€€€€€A…åµ•¹ÐÉ•ÅÕ•ÍÑÌè€œ­À¹É•ÅÕ•ÍÑÌ¬q¸œ¬4(€€€€€€€€ÁÁÉ½Ù•É•ÅÕ•ÍÑÌè€œ­À¹…ÁÁÉ½Ù•¬q¸œ¬4(€€€€€€€€%ÍÍÕ•Ñ¥­•ÑÌè€œ­À¹Ñ¥­•ÑÌ¬q¸œ¬4(€€€€€€€€I••¥ÁÐ±…¥µÌè€œ­À¹±…¥µÌ¬q¸œ¬4(€€€€€€€€EÕ•Õ•¹½Ñ¥™¥…Ñ¥½¹Ìè€œ­À¹¹½Ñ¥™¥…Ñ¥½¹Ì¬q¹q¸œ¬4(€€€€€€€€Q¡¥ÌAI599Q1dÉ•µ½Ù•Ì¥ÑÌÉ•ÅÕ•ÍÑÌ°Ñ¥­•Ð¹Õµ‰•ÉÌ°É••¥ÁÑÌ…¹…‘µ¥¸…ÍÍ¥¹µ•¹ÑÌ¸€œ¬4(€€€€€€€€±°ÕÍÑ½µ•ÉÌ¥¸Ñ¡¥Ì±½ÑÑ•Éä°¥¹±Õ‘¥¹œ…¹äÉ•…°‰Õå•ÉÌ°Ý¥±°±½Í”Ñ¡•¥ÈÉ•½É‘Ì¸€œ¬4(€€€€€€€€1½ÑÑ•ÉäµÍÁ•¥™¥Œ…Õ‘¥Ð¡¥ÍÑ½Éä¥Ì…±Í¼±•…É•°±•…Ù¥¹œ„µ¥¹¥µ…°‘•±•Ñ¥½¸•ÉÑ¥™¥…Ñ”¸€œ¬4(€€€€€€€€¥É•‰…Í”ÅÕ½Ñ…Ì½È‰¥±±¥¹œµ…ä…ÁÁ±ä¸€œ¬4(€€€€€€€€Q¡”±½ÑÑ•ÉäÉ•µ…¥¹Ì±½Í•Ñ¡É½Õ¡½ÕÐ±•…¹ÕÀ¸Q¼ÁÉ½••ÑåÁ”éq¹1Q€œ­¥ì4(€€€€€½¹ÍÐ½¹™¥Éµ…Ñ¥½¸€ôÁÉ½µÁÐ¡‘•Ñ…¥°¤ì4(€€€€€¥˜€¡½¹™¥Éµ…Ñ¥½¸€„ôô€1Q€œ­¥¤ì4(€€€€€€€‰…¹¹•È¹¥¹¹•É!Q50ôœñ‘¥Ø±…ÍÌô‰µÕÑ•ˆù1½ÑÑ•Éä±•…¹ÕÀ…¹•±±•¸9¼‘…Ñ„¡…¹•¸ð½‘¥Øøœì4(€€€€€€€Í¡½Ý±•…¹ÕÁ9½Ñ¥”¡¥°€…¹•±±•èå½ÔµÕÍÐ•¹Ñ•È1Q€œ­¥¬œ•á…Ñ±ä¸9¼‘…Ñ„Ý…Ì¡…¹•¸œ¤ì4(€€€€€€€É•ÑÕÉ¸ì4(€€€€€ô4(€€€€€¥˜€¡À¹…ÁÁÉ½Ù•øÀñðÀ¹Ñ¥­•ÑÌøÀ¤ì4(€€€€€€€½¹ÍÐ•áÑÉ„€ô½¹™¥É´ ]I9%9èQ¡¥Ì±½ÑÑ•Éä¡…Ì€œ­À¹…ÁÁÉ½Ù•¬4(€€€€€€€€€€œ…ÁÁÉ½Ù•ÁÕÉ¡…Í•Ì…¹€œ­À¹Ñ¥­•ÑÌ¬œ¥ÍÍÕ•Ñ¥­•ÑÌ¸€œ¬4(€€€€€€€€€€Q¡•Í”Ñ¥­•ÐÉ•½É‘ÌÝ¥±°…±Í¼‰”Á•Éµ…¹•¹Ñ±äÉ•µ½Ù•¸½¹Ñ¥¹Õ”üœ¤ì4(€€€€€€€¥˜€ …•áÑÉ„¤ìÍ¡½Ý±•…¹ÕÁ9½Ñ¥”¡¥°€…¹•±±•…Ð…ÁÁÉ½Ù•µÑ¥­•ÐÝ…É¹¥¹œ¸9¼‘…Ñ„Ý…Ì¡…¹•¸œ¤ìÉ•ÑÕÉ¸ìô4(€€€€€ô4(€€€€€½¹ÍÐ½¹Í•¹Ð€ô½¹™¥É´ 1…ÍÐ½¹™¥Éµ…Ñ¥½¸è±½Í”…¹Á•Éµ…¹•¹Ñ±ä‘•±•Ñ”±½ÑÑ•Éä€œ­À¹¹…µ”¬4(€€€€€€€€œ…¹10¥ÑÌÉ•±…Ñ•ÁÕÉ¡…Í”‘…Ñ„üQ¡¥Ì…¹¹½Ð‰”Õ¹‘½¹”¸œ¤ì4(€€€€€¥˜€ …½¹Í•¹Ð¤ìÍ¡½Ý±•…¹ÕÁ9½Ñ¥”¡¥°€…¹•±±•…Ð™¥¹…°½¹™¥Éµ…Ñ¥½¸¸9¼‘…Ñ„Ý…Ì¡…¹•¸œ¤ìÉ•ÑÕÉ¸ìô4(€€€€€…Ý…¥Ð±•…¹ÕÁÁ¤ ±½ÑÑ•Éäµ±•…¹ÕÀµÍÑ…ÉÐœ±¥±ì4(€€€€€€€½¹™¥É´è1Q€œ­¥°…•ÁÑ%ÉÉ•Ù•ÉÍ¥‰±”éÑÉÕ”4(€€€€€ô¤ì4(€€€€€±½ÑÑ•Éä¹±•…¹ÕÁ%¹AÉ½É•ÍÌ€ôÑÉÕ”ì4(€€€€€Í¡½Ý±•…¹ÕÁ9½Ñ¥”¡¥°€•±•Ñ¥½¸ÍÑ…ÉÑ•¸Q¡¥Ì±½ÑÑ•Éä¥Ì¹½Ü±½Í•ìÉÕ¹¹¥¹œÍµ…±°‰…Ñ¡•ÏŠ˜œ¤ì4(€€€ô•±Í”¥˜€ ……±É•…‘å½¹™¥Éµ•€˜˜€…½¹™¥É´ I•ÍÕµ”Ñ¡”•á¥ÍÑ¥¹œ‘•±•Ñ¥½¸½˜€œ­±½ÑÑ•Éä¹¹…µ”¬4(€€€€€€œüI•±…Ñ•Ñ•ÍÐ‘…Ñ„Ý¥±°‰”É•µ½Ù•¥¸Íµ…±°‰…Ñ¡•Ì¸œ¤¤ì4(€€€€€Í¡½Ý±•…¹ÕÁ9½Ñ¥”¡¥°€I•ÍÕµ”…¹•±±•¸±•…¹ÕÀÉ•µ…¥¹ÌÁ…ÕÍ•…¹Ñ¡”±½ÑÑ•ÉäÍÑ…åÌ±½Í•¸œ¤ì4(€€€€€É•ÑÕÉ¸ì4(€€€ô4(€€€±•ÐÍÑ•ÁÌ€ô€À°É•ÅÕ•ÍÑÌ€ô€À°‘½Õµ•¹ÑÌ€ô€À°™¥±•Ì€ô€À°ÅÕ½Ñ…I•ÑÉ¥•ÌôÀì4(€€€Ý¡¥±”€¡ÑÉÕ”¤ì4(€€€€€±•ÐÍÑ•Àì4(€€€€€ÑÉäì4(€€€€€€€ÍÑ•À€ô…Ý…¥Ð±•…¹ÕÁÁ¤ ±½ÑÑ•Éäµ±•…¹ÕÀµÍÑ•Àœ±¥¤ì4(€€€€€ô…Ñ €¡”¤ì4(€€€€€€€€¼¼¥É•‰…Í”…¸ÍÑ¥±°¥µÁ½Í”É•…°ÅÕ½Ñ„±¥µ¥ÑÌ•Ù•¸Ý¥Ñ¡½ÕÐ½ÕÈ½±‘…¥±ä…À¸4(€€€€€€€¥˜€¡”¹ÍÑ…ÑÕÌ€„ôô€ÐÈä€˜˜”¹ÍÑ…ÑÕÌ€„ôô€ÔÀÌ¤Ñ¡É½Ü”ì4(€€€€€€€ÅÕ½Ñ…I•ÑÉ¥•Ì¬¬ì4(€€€€€€€½¹ÍÐÝ…¥Ñ5Ì€ô5…Ñ ¹µ¥¸ ÌÀ¨ØÀ¨ÄÀÀÀ°ØÀ¨ÄÀÀÀ©5…Ñ ¹Á½Ü È±5…Ñ ¹µ¥¸¡ÅÕ½Ñ…I•ÑÉ¥•Ì°Ô¤¤¤ì4(€€€€€€€Í¡½Ý±•…¹ÕÁ9½Ñ¥”¡¥°¥É•‰…Í”¥Ì±¥µ¥Ñ¥¹œÉ•ÅÕ•ÍÑÌ¸ÕÑ½µ…Ñ¥…±±äÉ•ÑÉå¥¹œÝ¡•¸Ñ¡”½½±‘½Ý¸•¹‘Ìì­••ÀÑ¡”Ñ…ˆ½Á•¸¸œ¤ì4(€€€€€€€…Ý…¥Ð¹•ÜAÉ½µ¥Í”¡É•Í½±Ù”ôùÍ•ÑQ¥µ•½ÕÐ¡É•Í½±Ù”±Ý…¥Ñ5Ì¤¤ì4(€€€€€€€½¹Ñ¥¹Õ”ì4(€€€€€ô4(€€€€€ÅÕ½Ñ…I•ÑÉ¥•Ì€ô€Àì4(€€€€€ÍÑ•ÁÌ¬¬ì4(€€€€€€¼¼e¥•±½…Í¥½¹…±±äì±…É”±½ÑÑ•É¥•ÌÉ•µ…¥¸…ÕÑ½µ…Ñ¥ŒÝ¥Ñ¡½ÕÐ™±½½‘¥¹œY•É•°¸4(€€€€€¥˜€¡ÍÑ•ÁÌ”ÈÀÀ€ôôô€À¤…Ý…¥Ð¹•ÜAÉ½µ¥Í”¡É•Í½±Ù”ôùÍ•ÑQ¥µ•½ÕÐ¡É•Í½±Ù”°ÄÔÀÀ¤¤ì4(€€€€€É•ÅÕ•ÍÑÌ€¬ôÍÑ•À¹Á¡…Í”ôôôÉ•ÅÕ•ÍÑÌœ€üÍÑ•À¹ÁÉ½•ÍÍ•‘ñðÀ€è€Àì4(€€€€€‘½Õµ•¹ÑÌ€¬ôÍÑ•À¹‘•±•Ñ•‘½Õµ•¹ÑÍñðÀì4(€€€€€™¥±•Ì€¬ôÍÑ•À¹É•µ½Ù•‘¥±•ÍñðÀì4(€€€€€‰…¹¹•È¹¥¹¹•É!Q50ôœñ‘¥Ø±…ÍÌô‰µÕÑ•ˆù±•…¹ÕÀÉÕ¹¹¥¹œ™½È€ñˆøœ­•ÍŒ¡±½ÑÑ•Éä¹¹…µ”¤¬4(€€€€€€€€œð½ˆøƒŠPÁ¡…Í”è€œ­•ÍŒ¡ÍÑ•À¹Á¡…Í•ñðœœ¤¬œì‰…Ñ¡•Ìè€œ­ÍÑ•ÁÌ¬4(€€€€€€€€œìÉ•ÅÕ•ÍÑÌ±•…É•¥¸Ñ¡¥ÌÍ•ÍÍ¥½¸è€œ­É•ÅÕ•ÍÑÌ¬4(€€€€€€€€œì¥É•ÍÑ½É”‘½Õµ•¹ÑÌÉ•µ½Ù•è€œ­‘½Õµ•¹ÑÌ¬4(€€€€€€€€œìMÑ½É…”™¥±•ÌÉ•µ½Ù•è€œ­™¥±•Ì¬4(€€€€€€€€œ¸-••ÀÑ¡¥ÌÑ…ˆ½Á•¸¸±•…¹ÕÀ…¸É•ÍÕµ”¥˜¥¹Ñ•ÉÉÕÁÑ•¸ð½‘¥Øøœì4(€€€€€Í¡½Ý±•…¹ÕÁ9½Ñ¥”¡¥°€±•…¹¥¹œ€œ­ÍÑ•À¹Á¡…Í”¬œè€œ­‘½Õµ•¹ÑÌ¬œ¥É•ÍÑ½É”‘½Õµ•¹ÑÌ…¹€œ­™¥±•Ì¬œMÑ½É…”™¥±•ÌÉ•µ½Ù•¥¸Ñ¡¥ÌÍ•ÍÍ¥½¸¸œ¤ì4(€€€€€¥˜€¡ÍÑ•À¹Á…ÕÍ•¤ì4(€€€€€€€½¹ÍÐÉ•…‘åQ¥µ”€ô…Ñ”¹Á…ÉÍ”¡MÑÉ¥¹œ¡ÍÑ•À¹Ý…¥Ñ¥¹U¹Ñ¥±ñðœœ¤¤ì4(€€€€€€€¥˜€ …9Õµ‰•È¹¥Í¥¹¥Ñ”¡É•…‘åQ¥µ”¤¤ì4(€€€€€€€€€Í¡½Ý±•…¹ÕÁ9½Ñ¥”¡¥°€±•…¹ÕÀÁ…ÕÍ•¸Q¡”Í…™”É•ÍÕµ”Ñ¥µ”½Õ±¹½Ð‰”É•…¸±¥¬½¹Ñ¥¹Õ”±•…¹ÕÀ±…Ñ•È¸œ¤ì4(€€€€€€€€€‰É•…¬ì4(€€€€€€€ô4(€€€€€€€½¹ÍÐÝ…¥Ñ5Ì€ô5…Ñ ¹µ…à À±É•…‘åQ¥µ”µ…Ñ”¹¹½Ü ¤¤¬ÄÈÀÀì4(€€€€€€€½¹ÍÐµ¥¹ÕÑ•Ì€ô5…Ñ ¹µ…à Ä±5…Ñ ¹•¥°¡Ý…¥Ñ5Ì¼ØÀÀÀÀ¤¤ì4(€€€€€€€½¹ÍÐÝ…¥Ñ¥¹œ€ô€MÑ½É…”Í…™•ÑäÁ…ÕÍ”è…ÕÑ½µ…Ñ¥ŒÉ•ÍÕµ”¥¸…‰½ÕÐ€œ­µ¥¹ÕÑ•Ì¬4(€€€€€€€€€€œµ¥¹ÕÑ”¡Ì¤¸-••ÀÑ¡¥ÌÑ…ˆ½Á•¸ì¹¼Y•É•°A$É•ÅÕ•ÍÑÌ…É”µ…‘”‘ÕÉ¥¹œÑ¡”Á…ÕÍ”¸œì4(€€€€€€€‰…¹¹•È¹¥¹¹•É!Q50ôœñ‘¥Ø±…ÍÌô‰µÕÑ•ˆøœ­•ÍŒ¡Ý…¥Ñ¥¹œ¤¬œð½‘¥Øøœì4(€€€€€€€Í¡½Ý±•…¹ÕÁ9½Ñ¥”¡¥±Ý…¥Ñ¥¹œ¤ì4(€€€€€€€€¼¼A…ÕÍ”Ñ¡”‰É½ÝÍ•ÈÉ…Ñ¡•ÈÑ¡…¸¥ÍÍÕ¥¹œÉ•Á•…Ñ•Y•É•°Õ¹Ñ¥½¸É•ÅÕ•ÍÑÌ¸4(€€€€€€€€¼¼%˜¡É½µ”±½Í•Ì°Ñ¡”Í…Ù•±•…¹ÕÀÍÑ…Ñ”…±±½ÝÌ½¹”µ±¥¬É•ÍÕµÁÑ¥½¸¸4(€€€€€€€…Ý…¥Ð¹•ÜAÉ½µ¥Í”¡É•Í½±Ù”ôùÍ•ÑQ¥µ•½ÕÐ¡É•Í½±Ù”±Ý…¥Ñ5Ì¤¤ì4(€€€€€€€Í¡½Ý±•…¹ÕÁ9½Ñ¥”¡¥°€UÁ±½…±¥¹­Ì¡…Ù”•áÁ¥É•¸I•ÍÕµ¥¹œÑ¡”™¥¹…°±•…¹ÕÀ…ÕÑ½µ…Ñ¥…±±çŠ˜œ¤ì4(€€€€€€€½¹Ñ¥¹Õ”ì4(€€€€€ô4(€€€€€¥˜€¡ÍÑ•À¹‘½¹”¤ì4(€€€€€€€±•…¹ÕÁ9½Ñ¥•Ì¹‘•±•Ñ”¡¥¤ì4(€€€€€€€‰…¹¹•È¹¥¹¹•É!Q50ôœñ‘¥Ø±…ÍÌô‰ÍÕ•ÍÌˆù1½ÑÑ•Éä€œ­•ÍŒ¡±½ÑÑ•Éä¹¹…µ”¤¬4(€€€€€€€€€€œ…¹¥ÑÌ±¥¹­•É•½É‘ÌÝ•É”‘•±•Ñ•¸Õ‘¥Ð±½ÌÁÉ•Í•ÉÙ•¸ð½‘¥Øøœì4(€€€€€€€‰É•…¬ì4(€€€€€ô4(€€€ô4(€ô…Ñ ¡•ÉÉ½È¤ì4(€€€½¹ÍÐÁÉ•™¥à€ô•ÉÉ½È¹ÍÑ…ÑÕÌôôôÐÈä4(€€€€€€ü€±•…¹ÕÀÍ…™•±äÁ…ÕÍ•‰äÑ¡”‘…¥±ä¥É•ÍÑ½É”‘•±•Ñ¥½¸Õ…É¸€œ4(€€€€€€è€±•…¹ÕÀÍÑ½ÁÁ•Ý¥Ñ¡½ÕÐ…ÕÑ½µ…Ñ¥…±±äÉ•ÑÉå¥¹œ¸€œì4(€€€Í¡½Ý±•…¹ÕÁ9½Ñ¥”¡¥°ÁÉ•™¥à­•ÉÉ½È¹µ•ÍÍ…”¤ì4(€€€‰…¹¹•È¹¥¹¹•É!Q50ôœñ‘¥Ø±…ÍÌô‰•ÉÉ½Èˆøœ­•ÍŒ¡ÁÉ•™¥à­•ÉÉ½È¹µ•ÍÍ…”¤¬4(€€€€€€œI•™É•Í •¹•É…°‘µ¥¸…¹Í•±•Ð½¹Ñ¥¹Õ”±•…¹ÕÀÝ¡•¸Í…™”¸ð½‘¥Øøœì4(€ô™¥¹…±±äì4(€€€±•…¹ÕÁ	ÕÍäõ™…±Í”ì4(€€€ÑÉäì…Ý…¥ÐÉ•¹‘•É1½ÑÑ•É¥•Ì ¤ì…Ý…¥ÐÉ•¹‘•ÉMÕµµ…Éå=Ù•ÉÙ¥•Ü ¤ìÍ•ÑÕÁÉ…Ü ¤ìô4(€€€…Ñ ¡•ÉÉ½È¤ì½¹Í½±”¹Ý…É¸ …Í¡‰½…ÉÉ•™É•Í …™Ñ•È±•…¹ÕÀèœ±•ÉÉ½È¤ìô4(€ô4)ô4(4(4)…Íå¹Œ™Õ¹Ñ¥½¸±½…‘½¹Ñ…ÑM•ÑÑ¥¹Ì ¥ì4(€ÑÉåì4(€€€½¹ÍÐÍ¹…Àõ…Ý…¥Ð•Ñ½Œ¡‘½Œ¡‘ˆ°Í•ÑÑ¥¹Ìœ°Í¥Ñ”œ¤¤ì4(€€€½¹ÍÐ‘…Ñ„õÍ¹…À¹•á¥ÍÑÌ ¤ýÍ¹…À¹‘…Ñ„ ¤éíôì4(€€€€ Ý¡…ÑÍ…ÁÁ9Õµ‰•Èœ¤¹Ù…±Õ”õ‘…Ñ„¹Ý¡…ÑÍ…ÁÁ9Õµ‰•Éñðœœì4(€€€ÕÁ‘…Ñ•½¹Ñ…ÑAÉ•Ù¥•Ü ¤ì4(€õ…Ñ ¡”¥ì4(€€€€ ½¹Ñ…Ñ5•ÍÍ…”œ¤¹¥¹¹•É!Q50õ€ñ‘¥Ø±…ÍÌô‰•ÉÉ½Èˆø‘í•ÍŒ¡”¹µ•ÍÍ…•ñð½Õ±¹½Ð±½…½¹Ñ…ÐÍ•ÑÑ¥¹Ì¸œ¥ôð½‘¥Øù€ì4(€ô4)ô4(4)™Õ¹Ñ¥½¸É•¹‘•ÉÉ•…Ñ•A…åµ•¹Ñ½Õ¹ÑÍ‘¥Ñ½È ¥ì4(€½¹ÍÐ¡½ÍÐô É•…Ñ•A…åµ•¹Ñ½Õ¹ÑÍ‘¥Ñ½Èœ¤ì4(€¥˜ …¡½ÍÐ¥É•ÑÕÉ¸ì4(€¡½ÍÐ¹¥¹¹•É!Q50õÉ•…Ñ•A…åµ•¹Ñ½Õ¹ÑÌ¹µ…À ¡„±¤¤ôù€ñ‘¥Ø±…ÍÌô‰Á…åµ•¹Ðµ…½Õ¹Ðµ•‘¥ÐµÉ½ÜÉ•…Ñ”µÁ…åµ•¹ÐµÉ½Üˆøñ±…‰•°ù	…¹¬¹…µ”ñ¥¹ÁÕÐÑåÁ”ô‰Ñ•áÐˆ‘…Ñ„µÉ•…Ñ”µÁ…åµ•¹Ðµ‰…¹¬ôˆ‘í¥ôˆÙ…±Õ”ôˆ‘í•ÍŒ¡„¹‰…¹¬¥ôˆÁ±…•¡½±‘•Èô‰	ˆøð½±…‰•°øñ±…‰•°ù½Õ¹Ð¹Õµ‰•Èñ¥¹ÁÕÐÑåÁ”ô‰Ñ•áÐˆ‘…Ñ„µÉ•…Ñ”µÁ…åµ•¹Ðµ¹Õµ‰•Èôˆ‘í¥ôˆÙ…±Õ”ôˆ‘í•ÍŒ¡„¹¹Õµ‰•È¥ôˆ¥¹ÁÕÑµ½‘”ô‰¹Õµ•É¥ŒˆÁ±…•¡½±‘•ÈôˆÄÀÀÀÀÀÀÀÀÀÀÀÀˆøð½±…‰•°øñ±…‰•°ù½Õ¹Ð¡½±‘•Èñ¥¹ÁÕÐÑåÁ”ô‰Ñ•áÐˆ‘…Ñ„µÉ•…Ñ”µÁ…åµ•¹Ðµ¡½±‘•Èôˆ‘í¥ôˆÙ…±Õ”ôˆ‘í•ÍŒ¡„¹¡½±‘•É9…µ•ñðœœ¥ôˆÁ±…•¡½±‘•Èô‰½Õ¹Ð¡½±‘•È¹…µ”ˆøð½±…‰•°øñ‰ÕÑÑ½¸ÑåÁ”ô‰‰ÕÑÑ½¸ˆ±…ÍÌô‰‘…¹•ÈÍµ…±°µ‰Ñ¸ˆ‘…Ñ„µÉ•µ½Ù”µÉ•…Ñ”µÁ…åµ•¹Ðôˆ‘í¥ôˆùI•µ½Ù”ð½‰ÕÑÑ½¸øð½‘¥Øù€¤¹©½¥¸ œœ¤ì4(€¡½ÍÐ¹ÅÕ•ÉåM•±•Ñ½É±° m‘…Ñ„µÉ•µ½Ù”µÉ•…Ñ”µÁ…åµ•¹Ñtœ¤¹™½É… ¡ˆôùˆ¹…‘‘Ù•¹Ñ1¥ÍÑ•¹•È ±¥¬œ° ¤ôùÉ•µ½Ù•É•…Ñ•A…åµ•¹Ñ½Õ¹Ð¡9Õµ‰•È¡ˆ¹‘…Ñ…Í•Ð¹É•µ½Ù•É•…Ñ•A…åµ•¹Ð¤¤¤¤ì4)ô4(4)™Õ¹Ñ¥½¸É•…‘É•…Ñ•A…åµ•¹Ñ½Õ¹ÑÌ ¥ì4(€½¹ÍÐ‰…¹­Ìõl¸¸¹‘½Õµ•¹Ð¹ÅÕ•ÉåM•±•Ñ½É±° m‘…Ñ„µÉ•…Ñ”µÁ…åµ•¹Ðµ‰…¹­tœ¥tì4(€É•ÑÕÉ¸‰…¹­Ì¹µ…À ¡¥¹ÁÕÐ±¤¤ôø¡í‰…¹¬éMÑÉ¥¹œ¡¥¹ÁÕÐ¹Ù…±Õ•ñðœœ¤¹ÑÉ¥´ ¤±¹Õµ‰•ÈéMÑÉ¥¹œ¡‘½Õµ•¹Ð¹ÅÕ•ÉåM•±•Ñ½È¡m‘…Ñ„µÉ•…Ñ”µÁ…åµ•¹Ðµ¹Õµ‰•Èôˆ‘í¥ô‰u€¤ü¹Ù…±Õ•ñðœœ¤¹ÑÉ¥´ ¤±¡½±‘•É9…µ”éMÑÉ¥¹œ¡‘½Õµ•¹Ð¹ÅÕ•ÉåM•±•Ñ½È¡m‘…Ñ„µÉ•…Ñ”µÁ…åµ•¹Ðµ¡½±‘•Èôˆ‘í¥ô‰u€¤ü¹Ù…±Õ•ñðœœ¤¹ÑÉ¥´ ¥ô¤¤¹™¥±Ñ•È¡àôùà¹‰…¹­ññà¹¹Õµ‰•Éññà¹¡½±‘•É9…µ”¤ì4)ô4(4)™Õ¹Ñ¥½¸…‘‘É•…Ñ•A…åµ•¹Ñ½Õ¹Ð ¥ì4(€É•…Ñ•A…åµ•¹Ñ½Õ¹ÑÌ¹ÁÕÍ ¡í‰…¹¬èœœ±¹Õµ‰•Èèœœ±¡½±‘•É9…µ”èœô¤ì4(€É•¹‘•ÉÉ•…Ñ•A…åµ•¹Ñ½Õ¹ÑÍ‘¥Ñ½È ¤ì4(€½¹ÍÐ¥¹ÁÕÑÌõ‘½Õµ•¹Ð¹ÅÕ•ÉåM•±•Ñ½É±° m‘…Ñ„µÉ•…Ñ”µÁ…åµ•¹Ðµ‰…¹­tœ¤ì4(€¥¹ÁÕÑÍm¥¹ÁÕÑÌ¹±•¹Ñ ´Åtü¹™½ÕÌ ¤ì4)ô4(4)™Õ¹Ñ¥½¸É•µ½Ù•É•…Ñ•A…åµ•¹Ñ½Õ¹Ð¡¥¹‘•à¥ì4(€É•…Ñ•A…åµ•¹Ñ½Õ¹ÑÌ¹ÍÁ±¥”¡¥¹‘•à°Ä¤ì4(€¥˜ …É•…Ñ•A…åµ•¹Ñ½Õ¹ÑÌ¹±•¹Ñ ¥É•…Ñ•A…åµ•¹Ñ½Õ¹ÑÌ¹ÁÕÍ ¡í‰…¹¬èœœ±¹Õµ‰•Èèœœ±¡½±‘•É9…µ”èœô¤ì4(€É•¹‘•ÉÉ•…Ñ•A…åµ•¹Ñ½Õ¹ÑÍ‘¥Ñ½È ¤ì4)ô4(4)™Õ¹Ñ¥½¸ÕÁ‘…Ñ•½¹Ñ…ÑAÉ•Ù¥•Ü ¥ì4(€½¹ÍÐÉ…Üô Ý¡…ÑÍ…ÁÁ9Õµ‰•Èœ¤ü¹Ù…±Õ•ñðœœì4(€½¹ÍÐ‘¥¥ÑÌõÉ…Ü¹É•Á±…” ½mxÀ´åt½œ°œœ¤ì4(€€ Ý¡…ÑÍ…ÁÁAÉ•Ù¥•Üœ¤¹Ù…±Õ”õ‘¥¥ÑÌý¡ÑÑÁÌè¼½Ý„¹µ”¼‘í‘¥¥ÑÍõ€è9½Ð½¹™¥ÕÉ•œì4)ô4(4)…Íå¹Œ™Õ¹Ñ¥½¸Í…Ù•½¹Ñ…ÑM•ÑÑ¥¹Ì¡”¥ì4(€”¹ÁÉ•Ù•¹Ñ•™…Õ±Ð ¤ì4(€½¹ÍÐÉ…Üô Ý¡…ÑÍ…ÁÁ9Õµ‰•Èœ¤¹Ù…±Õ”¹ÑÉ¥´ ¤ì4(€½¹ÍÐ‘¥¥ÑÌõÉ…Ü¹É•Á±…” ½mxÀ´åt½œ°œœ¤ì4(€¥˜¡‘¥¥ÑÌ¹±•¹Ñ €ð€äñð‘¥¥ÑÌ¹±•¹Ñ €ø€ÄÔ¥ì4(€€€€ ½¹Ñ…Ñ5•ÍÍ…”œ¤¹¥¹¹•É!Q50ôœñ‘¥Ø±…ÍÌô‰•ÉÉ½Èˆù¹Ñ•È„Ù…±¥]¡…ÑÍÁÀ¹Õµ‰•È°¥¹±Õ‘¥¹œ½Õ¹ÑÉä½‘”¸ð½‘¥Øøœì4(€€€É•ÑÕÉ¸ì4(€ô4(€ÑÉåì4(€€€…Ý…¥ÐÍ•Ñ½Œ¡‘½Œ¡‘ˆ°Í•ÑÑ¥¹Ìœ°Í¥Ñ”œ¤±íÝ¡…ÑÍ…ÁÁ9Õµ‰•Èé‘¥¥ÑÌ±ÕÁ‘…Ñ•‘ÐéÍ•ÉÙ•ÉQ¥µ•ÍÑ…µÀ ¤±ÕÁ‘…Ñ•‘	äé…ÕÑ ¹ÕÉÉ•¹ÑUÍ•È¹Õ¥‘ô±íµ•É”éÑÉÕ•ô¤ì4(€€€…Ý…¥Ð…‘‘½Œ¡½±±•Ñ¥½¸¡‘ˆ°…Õ‘¥Ñ1½Ìœ¤±í…Ñ¥½¸èÕÁ‘…Ñ•ÕÍÑ½µ•É½¹Ñ…Ðœ±Ý¡…ÑÍ…ÁÁ9Õµ‰•É1…ÍÐÐé‘¥¥ÑÌ¹Í±¥” ´Ð¤±…‘µ¥¹%é…ÕÑ ¹ÕÉÉ•¹ÑUÍ•È¹Õ¥±É•…Ñ•‘ÐéÍ•ÉÙ•ÉQ¥µ•ÍÑ…µÀ ¥ô¤ì4(€€€ÕÁ‘…Ñ•½¹Ñ…ÑAÉ•Ù¥•Ü ¤ì4(€€€€ ½¹Ñ…Ñ5•ÍÍ…”œ¤¹¥¹¹•É!Q50ôœñ‘¥Ø±…ÍÌô‰ÍÕ•ÍÌˆù]¡…ÑÍÁÀ½¹Ñ…ÐÕÁ‘…Ñ•½¸Ñ¡”ÁÕ‰±¥Œ¡½µ”Á…”¸ð½‘¥Øøœì4(€õ…Ñ ¡”¥ì4(€€€€ ½¹Ñ…Ñ5•ÍÍ…”œ¤¹¥¹¹•É!Q50õ€ñ‘¥Ø±…ÍÌô‰•ÉÉ½Èˆø‘í•ÍŒ¡”¹µ•ÍÍ…•ñð½Õ±¹½ÐÍ…Ù”½¹Ñ…ÐÍ•ÑÑ¥¹Ì¸œ¥ôð½‘¥Øù€ì4(€ô4)ô4(4)…Íå¹Œ™Õ¹Ñ¥½¸É•Í•Ñ1½ÑÑ•Éå‘µ¥¹A…ÍÍÝ½É¡”¥ì4(€”¹ÁÉ•Ù•¹Ñ•™…Õ±Ð ¤í½¹ÍÐ‰Ñ¸õ”¹Ñ…É•Ð¹ÅÕ•ÉåM•±•Ñ½È ‰ÕÑÑ½¹mÑåÁ”ô‰ÍÕ‰µ¥Ð‰tœ¤í‰Ñ¸¹‘¥Í…‰±•õÑÉÕ”ì4(€ÑÉåì4(€€€½¹ÍÐ•µ…¥°ô É•Í•Ñµ…¥°œ¤¹Ù…±Õ”¹ÑÉ¥´ ¤¹Ñ½1½Ý•É…Í” ¤±Á…ÍÍÝ½Éô É•Í•ÑA…ÍÍÝ½Éœ¤¹Ù…±Õ”ì4(€€€¥˜ …•µ…¥±ññÁ…ÍÍÝ½É¹±•¹Ñ ðØ¥Ñ¡É½Ü¹•ÜÉÉ½È ¹Ñ•È…¸•á¥ÍÑ¥¹œ1½ÑÑ•Éä‘µ¥¸•µ…¥°…¹„Á…ÍÍÝ½É½˜…Ð±•…ÍÐ€Ø¡…É…Ñ•ÉÌ¸œ¤ì4(€€€½¹ÍÐÑ½­•¸õ…Ý…¥Ð…ÕÑ ¹ÕÉÉ•¹ÑUÍ•È¹•Ñ%‘Q½­•¸ ¤í½¹ÍÐÈõ…Ý…¥Ð™•Ñ  œ½…Á¤½…‘µ¥¸½É•Í•ÐµÁ…ÍÍÝ½Éœ±íµ•Ñ¡½èA=MPœ±¡•…‘•ÉÌéì½¹Ñ•¹ÐµÑåÁ”œè…ÁÁ±¥…Ñ¥½¸½©Í½¸œ°…ÕÑ¡½É¥é…Ñ¥½¸œé	•…É•È€‘íÑ½­•¹õô±‰½‘äé)M=8¹ÍÑÉ¥¹¥™ä¡í•µ…¥°±Á…ÍÍÝ½É‘ô¥ô¤í½¹ÍÐ¨õ…Ý…¥ÐÈ¹©Í½¸ ¤í¥˜ …È¹½­ñð…¨¹½¬¥Ñ¡É½Ü¹•ÜÉÉ½È¡¨¹•ÉÉ½Éñð½Õ±¹½ÐÉ•Í•ÐÁ…ÍÍÝ½É¸œ¤ì4(€€€€ É•Í•Ñ5•ÍÍ…”œ¤¹¥¹¹•É!Q50õ€ñ‘¥Ø±…ÍÌô‰ÍÕ•ÍÌˆûŠrA…ÍÍÝ½É¡…¹•™½È€‘í•ÍŒ¡¨¹‘¥ÍÁ±…å9…µ•ññ•µ…¥°¥ô¸¥Ù”Ñ¡”1½ÑÑ•Éä‘µ¥¸Ñ¡¥ÌÑ•µÁ½É…ÉäÁ…ÍÍÝ½ÉÍ•ÕÉ•±äè€ñˆø‘í•ÍŒ¡Á…ÍÍÝ½É¥ôð½ˆøð½‘¥Øù€í…Ý…¥Ð…‘‘½Œ¡½±±•Ñ¥½¸¡‘ˆ°…Õ‘¥Ñ1½Ìœ¤±í…Ñ¥½¸èÉ•Í•Ñ1½ÑÑ•Éå‘µ¥¹A…ÍÍÝ½É‘U$œ±…‘µ¥¹%é…ÕÑ ¹ÕÉÉ•¹ÑUÍ•È¹Õ¥±Ñ…É•Ñµ…¥°é•µ…¥°±É•…Ñ•‘ÐéÍ•ÉÙ•ÉQ¥µ•ÍÑ…µÀ ¥ô¤ì4(€õ…Ñ ¡”¥ì É•Í•Ñ5•ÍÍ…”œ¤¹¥¹¹•É!Q50õ€ñ‘¥Ø±…ÍÌô‰•ÉÉ½Èˆø‘í•ÍŒ¡”¹µ•ÍÍ…”¥ôð½‘¥Øùõ™¥¹…±±åí‰Ñ¸¹‘¥Í…‰±•õ™…±Í”íô4)ô4(4)™Õ¹Ñ¥½¸•¹•É…Ñ•Q•µÁA…ÍÍÝ½É ¥í½¹ÍÐ¡…ÉÌô	!)-159AEIMQUY]aei…‰‘•™¡¥©­µ¹½ÁÅÉÍÑÕÙÝáåèÈÌÐÔØÜàä… Œœí±•Ð½ÕÐôœœí½¹ÍÐ‰åÑ•Ìõ¹•ÜU¥¹ÐÌÉÉÉ…ä ÄÈ¤íÉåÁÑ¼¹•ÑI…¹‘½µY…±Õ•Ì¡‰åÑ•Ì¤í™½È¡½¹ÍÐ¸½˜‰åÑ•Ì¥½ÕÐ¬õ¡…ÉÍm¸•¡…ÉÌ¹±•¹Ñ¡tíÉ•ÑÕÉ¸½ÕÑô4(4)™Õ¹Ñ¥½¸Í•ÑÕÁÉ…Ü ¥ì4(€½¹ÍÐÍ•±•Ðô ‘É…Ý1½ÑÑ•ÉåM•±•Ðœ¤í¥˜ …Í•±•Ð¥É•ÑÕÉ¸ì4(€½¹ÍÐ¥õÍ•±•Ð¹Ù…±Õ•ñð¡±½ÑÍlÁtü¹¥‘ñðœœ¤í¥˜¡¥¥Í•±•Ð¹Ù…±Õ”õ¥ì4(€½¹ÍÐàõ±½ÑÌ¹™¥¹¡°ôù°¹¥ôôõÍ•±•Ð¹Ù…±Õ”¥ññ±½ÑÍlÁtí¥˜ …à¥É•ÑÕÉ¸ì4(€‘É…Ý¥¥ÑÌõmtì ‘É…ÝI•ÍÕ±Ðœ¤¹Ñ•áÑ½¹Ñ•¹Ðôœœì ‘É…Ý5•ÍÍ…”œ¤¹¥¹¹•É!Q50ôœœíÉ•¹‘•É	…±±Ì ¤íÕÁ‘…Ñ•É…ÝU$¡à¤ì4)ô4)™Õ¹Ñ¥½¸É•¹‘•É	…±±Ì ¥ì4(€½¹ÍÐ¡½ÍÐô ‘É…Ý	½ÑÑ±”œ¤í¥˜ …¡½ÍÐ¥É•ÑÕÉ¸ì4(€¡½ÍÐ¹ÅÕ•ÉåM•±•Ñ½É±° œ¹‘É…Üµ‰…±°œ¤¹™½É… ¡•°ôù•°¹É•µ½Ù” ¤¤ì4(€™½È¡±•ÐôÀíðôäí¬¬¥í½¹ÍÐ•°õ‘½Õµ•¹Ð¹É•…Ñ•±•µ•¹Ð ‘¥Øœ¤í•°¹±…ÍÍ9…µ”ô‘É…Üµ‰…±°œí•°¹‘…Ñ…Í•Ð¹‘¥¥Ðõí•°¹Ñ•áÑ½¹Ñ•¹Ðôœœí•°¹ÍÑå±”¹Í•ÑAÉ½Á•ÉÑä œ´µ‰…±°µ¡Õ”œ±MÑÉ¥¹œ ¡¨ÌÜ¬ÄÈ¤”ÌØÀ¤¤í¡½ÍÐ¹…ÁÁ•¹‘¡¥±¡•°¤íÁ½Í¥Ñ¥½¹	…±°¡•°±ÑÉÕ”¤íô4)ô4)™Õ¹Ñ¥½¸Á½Í¥Ñ¥½¹	…±°¡•°±¥¹¥Ñ¥…°õ™…±Í”¥ì4(€½¹ÍÐ±•™ÐôÄÈ­5…Ñ ¹É…¹‘½´ ¤¨ÜÈ±Ñ½ÀôÄà­5…Ñ ¹É…¹‘½´ ¤¨ØÔí•°¹ÍÑå±”¹±•™Ðõ€‘í±•™Ñô•€í•°¹ÍÑå±”¹Ñ½Àõ€‘íÑ½Áô•€í¥˜¡¥¹¥Ñ¥…°¥•°¹ÍÑå±”¹ÑÉ…¹Í¥Ñ¥½¸ô¹½¹”œíÍ•ÑQ¥µ•½ÕÐ  ¤ôù•°¹ÍÑå±”¹ÑÉ…¹Í¥Ñ¥½¸ôœœ°ÈÀ¤íô4)™Õ¹Ñ¥½¸Í¡Õ™™±•	…±±Ì ¥í‘½Õµ•¹Ð¹ÅÕ•ÉåM•±•Ñ½É±° œ¹‘É…Üµ‰…±°œ¤¹™½É… ¡•°ôùÁ½Í¥Ñ¥½¹	…±°¡•°¤¤íô4)™Õ¹Ñ¥½¸ÕÁ‘…Ñ•É…ÝU$¡±½ÑÑ•Éä¥ì4(€½¹ÍÐµ…á1•¸õMÑÉ¥¹œ¡5…Ñ ¹µ…à¡5…Ñ ¹…‰Ì¡9Õµ‰•È¡±½ÑÑ•Éä¹µ…áñðÀ¤¤±5…Ñ ¹…‰Ì¡9Õµ‰•È¡±½ÑÑ•Éä¹µ¥¹ñðÀ¤¤¤¤¹É•Á±…” ½x´¼°œœ¤¹±•¹Ñ¡ñðÄì4(€€ ‘É…ÝQ…É•Ðœ¤¹Ñ•áÑ½¹Ñ•¹Ðõ€‘í‘É…Ý¥¥ÑÌ¹±•¹Ñ¡ô¼‘íµ…á1•¹ô‘¥¥ÑÍ€ì4(€€ ‘É…ÝI•ÍÕ±Ðœ¤¹Ñ•áÑ½¹Ñ•¹Ðõ‘É…Ý¥¥ÑÌ¹©½¥¸ œœ¤ì4(€€ ‘É…Ý¥¥Ñ	Ñ¸œ¤¹‘¥Í…‰±•õ‘É…Ý	ÕÍåññ‘É…Ý¥¥ÑÌ¹±•¹Ñ øõµ…á1•¹ññ±½ÑÑ•Éä¹ÍÑ…ÑÕÌôôô‘É…Ý¸œì4(€€ É•Í•ÑÉ…Ý	Ñ¸œ¤¹‘¥Í…‰±•õ‘É…Ý	ÕÍäì4(€€ Í…Ù•É…Ý	Ñ¸œ¤¹‘¥Í…‰±•õ‘É…Ý	ÕÍåññ‘É…Ý¥¥ÑÌ¹±•¹Ñ „ôõµ…á1•¹ññ±½ÑÑ•Éä¹ÍÑ…ÑÕÌôôô‘É…Ý¸œì4(€¥˜¡±½ÑÑ•Éä¹ÍÑ…ÑÕÌôôô‘É…Ý¸œ¤ ‘É…Ý5•ÍÍ…”œ¤¹¥¹¹•É!Q50ôœñ‘¥Ø±…ÍÌô‰ÍÕ•ÍÌˆùQ¡¥Ì±½ÑÑ•Éä…±É•…‘ä¡…Ì„Í…Ù•‘É…ÜÉ•ÍÕ±Ð¸ð½‘¥Øøœì4)ô4)…Íå¹Œ™Õ¹Ñ¥½¸‘É…Ý¥¥Ð ¥ì4(€½¹ÍÐ±½ÑÑ•Éäõ±½ÑÌ¹™¥¹¡°ôù°¹¥ôôô ‘É…Ý1½ÑÑ•ÉåM•±•Ðœ¤¹Ù…±Õ”¥ññ±½ÑÍlÁtí¥˜ …±½ÑÑ•Éåññ‘É…Ý	ÕÍåññ±½ÑÑ•Éä¹ÍÑ…ÑÕÌôôô‘É…Ý¸œ¥É•ÑÕÉ¸ì4(€½¹ÍÐµ…á1•¸õMÑÉ¥¹œ¡5…Ñ ¹µ…à¡5…Ñ ¹…‰Ì¡9Õµ‰•È¡±½ÑÑ•Éä¹µ…áñðÀ¤¤±5…Ñ ¹…‰Ì¡9Õµ‰•È¡±½ÑÑ•Éä¹µ¥¹ñðÀ¤¤¤¤¹É•Á±…” ½x´¼°œœ¤¹±•¹Ñ¡ñðÄì4(€¥˜¡‘É…Ý¥¥ÑÌ¹±•¹Ñ øõµ…á1•¸¥É•ÑÕÉ¸ì4(€‘É…Ý	ÕÍäõÑÉÕ”íÕÁ‘…Ñ•É…ÝU$¡±½ÑÑ•Éä¤íÍ¡Õ™™±•	…±±Ì ¤ì4(€…Ý…¥Ð¹•ÜAÉ½µ¥Í”¡ÈôùÍ•ÑQ¥µ•½ÕÐ¡È°ØÔÀ¤¤ì4(€½¹ÍÐ‘¥¥Ðõ5…Ñ ¹™±½½È¡5…Ñ ¹É…¹‘½´ ¤¨ÄÀ¤í½¹ÍÐ‰…±°õ‘½Õµ•¹Ð¹ÅÕ•ÉåM•±•Ñ½È¡€¹‘É…Üµ‰…±±m‘…Ñ„µ‘¥¥Ðôˆ‘í‘¥¥Ñô‰u€¤í¥˜¡‰…±°¥í‘½Õµ•¹Ð¹ÅÕ•ÉåM•±•Ñ½É±° œ¹‘É…Üµ‰…±°œ¤¹™½É… ¡ˆôùíˆ¹±…ÍÍ1¥ÍÐ¹É•µ½Ù” ½Á•¹•œ¤íˆ¹Ñ•áÑ½¹Ñ•¹Ðôœœíô¤í‰…±°¹±…ÍÍ1¥ÍÐ¹…‘ ½Á•¹•œ¤í‰…±°¹Ñ•áÑ½¹Ñ•¹ÐõMÑÉ¥¹œ¡‘¥¥Ð¤íô4(€‘É…Ý¥¥ÑÌ¹ÁÕÍ ¡‘¥¥Ð¤ì ‘É…ÝI•ÍÕ±Ðœ¤¹Ñ•áÑ½¹Ñ•¹Ðõ‘É…Ý¥¥ÑÌ¹µ…À¡MÑÉ¥¹œ¤¹©½¥¸ œœ¤ì4(€…Ý…¥Ð¹•ÜAÉ½µ¥Í”¡ÈôùÍ•ÑQ¥µ•½ÕÐ¡È°ÐÔÀ¤¤ì4(€¥˜¡‰…±°¥í‰…±°¹±…ÍÍ1¥ÍÐ¹É•µ½Ù” ½Á•¹•œ¤í‰…±°¹Ñ•áÑ½¹Ñ•¹Ðôœœíô4(€‘É…Ý	ÕÍäõ™…±Í”íÕÁ‘…Ñ•É…ÝU$¡±½ÑÑ•Éä¤ì4(€¥˜¡‘É…Ý¥¥ÑÌ¹±•¹Ñ ôôõµ…á1•¸¤ ‘É…Ý5•ÍÍ…”œ¤¹¥¹¹•É!Q50ôœñ‘¥Ø±…ÍÌô‰ÍÕ•ÍÌˆù9Õµ‰•È½µÁ±•Ñ”¸I•Ù¥•Ü¥Ð°Ñ¡•¸Í…Ù”Ñ¡”‘É…ÜÉ•ÍÕ±Ð¸ð½‘¥Øøœì4)ô4)™Õ¹Ñ¥½¸É•Í•ÑÉ…Ü ¥í‘É…Ý¥¥ÑÌõmtì ‘É…Ý5•ÍÍ…”œ¤¹¥¹¹•É!Q50ôœœì ‘É…ÝI•ÍÕ±Ðœ¤¹Ñ•áÑ½¹Ñ•¹Ðôœœí½¹ÍÐ°õ±½ÑÌ¹™¥¹¡àôùà¹¥ôôô ‘É…Ý1½ÑÑ•ÉåM•±•Ðœ¤¹Ù…±Õ”¥ññ±½ÑÍlÁtíÉ•¹‘•É	…±±Ì ¤í¥˜¡°¥ÕÁ‘…Ñ•É…ÝU$¡°¥ô4)…Íå¹Œ™Õ¹Ñ¥½¸Í…Ù•É…Ü ¥ì4(€½¹ÍÐ±½ÑÑ•Éäõ±½ÑÌ¹™¥¹¡°ôù°¹¥ôôô ‘É…Ý1½ÑÑ•ÉåM•±•Ðœ¤¹Ù…±Õ”¥ññ±½ÑÍlÁtí¥˜ …±½ÑÑ•Éåññ‘É…Ý¥¥ÑÌ¹±•¹Ñ ôôôÀ¥É•ÑÕÉ¸ì4(€½¹ÍÐÉ•ÍÕ±Ðõ‘É…Ý¥¥ÑÌ¹©½¥¸ œœ¤í¥˜ …½¹™¥É´¡M…Ù”€‘íÉ•ÍÕ±Ñô…ÌÑ¡”‘É…ÜÉ•ÍÕ±Ð™½È€‘í±½ÑÑ•Éä¹¹…µ•ôý€¤¥É•ÑÕÉ¸ì4(€ÑÉåì4(€€€…Ý…¥ÐÕÁ‘…Ñ•½Œ¡‘½Œ¡‘ˆ°±½ÑÑ•É¥•Ìœ±±½ÑÑ•Éä¹¥¤±íÍÑ…ÑÕÌè‘É…Ý¸œ±‘É…Ý¹9Õµ‰•ÈéÉ•ÍÕ±Ð±‘É…Ý¥¥ÑÌ±‘É…Ý¹ÐéÍ•ÉÙ•ÉQ¥µ•ÍÑ…µÀ ¤±‘É…Ý¹	äé…ÕÑ ¹ÕÉÉ•¹ÑUÍ•È¹Õ¥‘ô¤ì4(€€€…Ý…¥Ð…‘‘½Œ¡½±±•Ñ¥½¸¡‘ˆ°…Õ‘¥Ñ1½Ìœ¤±í…Ñ¥½¸èÍ…Ù•É…ÝI•ÍÕ±Ðœ±±½ÑÑ•Éå%é±½ÑÑ•Éä¹¥±‘É…Ý¹9Õµ‰•ÈéÉ•ÍÕ±Ð±…‘µ¥¹%é…ÕÑ ¹ÕÉÉ•¹ÑUÍ•È¹Õ¥±É•…Ñ•‘ÐéÍ•ÉÙ•ÉQ¥µ•ÍÑ…µÀ ¥ô¤ì4(€€€±½ÑÑ•Éäõì¸¸¹±½ÑÑ•Éä±ÍÑ…ÑÕÌè‘É…Ý¸œ±‘É…Ý¹9Õµ‰•ÈéÉ•ÍÕ±Ð±‘É…Ý¥¥ÑÍôí±½ÑÌõ±½ÑÌ¹µ…À¡°ôù°¹¥ôôõ±½ÑÑ•Éä¹¥ý±½ÑÑ•Éäé°¤ì4(€€€€ ‘É…Ý5•ÍÍ…”œ¤¹¥¹¹•É!Q50ôœñ‘¥Ø±…ÍÌô‰ÍÕ•ÍÌˆûŠrÉ…ÜÉ•ÍÕ±ÐÍ…Ù•ÍÕ•ÍÍ™Õ±±ä¸ð½‘¥ØøœíÕÁ‘…Ñ•É…ÝU$¡±½ÑÑ•Éä¤í…Ý…¥ÐÉ•¹‘•É1½ÑÑ•É¥•Ì ¤í…Ý…¥ÐÉ•¹‘•ÉMÕµµ…Éå=Ù•ÉÙ¥•Ü ¤ì4(€õ…Ñ ¡”¥ì ‘É…Ý5•ÍÍ…”œ¤¹¥¹¹•É!Q50õ€ñ‘¥Ø±…ÍÌô‰•ÉÉ½Èˆø‘í•ÍŒ¡”¹µ•ÍÍ…”¥ôð½‘¥Øùô4)ô4
+// and the inline live region reports progress/errors beside the clicked button.
+$('assignForm').addEventListener('submit',async e=>{
+  e.preventDefault();
+  const btn=$('assignLotteryBtn'),msg=$('assignMessage');
+  const adminSelect=$('assignAdminSelect'),lotterySelect=$('assignLottery');
+  btn.disabled=true;adminSelect.disabled=true;lotterySelect.disabled=true;
+  const buttonText=btn.textContent;btn.textContent='Assigningâ€¦';
+  msg.innerHTML='<div class="success">Checking admin and lottery assignmentâ€¦</div>';
+  try{
+    const adminId=adminSelect.value,lotteryId=lotterySelect.value;
+    if(!adminId||!lotteryId)throw new Error('Choose an existing Lottery Admin and a lottery.');
+    if(!lots.some(l=>l.id===lotteryId))throw new Error('Lottery not found. Refresh the page and try again.');
+    const profileSnap=await getDoc(doc(db,'users',adminId));
+    if(!profileSnap.exists()||profileSnap.data().role!=='lotteryAdmin')
+      throw new Error('The selected user is not a Lottery Admin. Refresh the page.');
+    const admin=profileSnap.data();
+    const ids=Array.isArray(admin.lotteryIds)?admin.lotteryIds:[];
+    if(ids.includes(lotteryId))throw new Error('This admin is already assigned to that lottery.');
+    if(!auth.currentUser)throw new Error('Your admin session has expired. Sign in again.');
+    // Write the role assignment and its audit record together: otherwise the
+    // first write could succeed while the log fails and look like no response.
+    const batch=writeBatch(db);
+    batch.update(doc(db,'users',adminId),{lotteryIds:arrayUnion(lotteryId)});
+    batch.set(doc(collection(db,'auditLogs')),{action:'assignLottery',lotteryId,
+      adminId:auth.currentUser.uid,targetUserId:adminId,createdAt:serverTimestamp()});
+    await batch.commit();
+    const label=lots.find(l=>l.id===lotteryId)?.name||lotteryId;
+    msg.innerHTML='<div class="success">âœ“ '+esc(admin.displayName||admin.email||'Lottery Admin')+
+      ' can now manage '+esc(label)+'.</div>';
+    await renderAdminList();
+  }catch(err){
+    console.error('Assign Lottery failed:',err);
+    const explanation=err?.code==='permission-denied'
+      ? 'Firebase permission denied. Confirm you are signed in as General Admin.'
+      : (err?.message||'Could not assign the lottery.');
+    msg.innerHTML='<div class="error">'+esc(explanation)+'</div>';
+  }finally{
+    btn.disabled=false;adminSelect.disabled=false;lotterySelect.disabled=false;
+    btn.textContent=buttonText;
+  }
+});
+
+async function renderAdminList(){
+  const host=$('adminList'),select=$('assignAdminSelect');
+  try{
+    const qs=await getDocs(query(collection(db,'users'),where('role','==','lotteryAdmin'))),rows=qs.docs.map(d=>({id:d.id,...d.data()}));
+    $('statAdmins').textContent=rows.length;
+    const previouslySelected=select.value;
+    select.innerHTML='<option value="">'+(rows.length?'Choose an existing Lottery Adminâ€¦':'No lottery admins found â€” create one above')+'</option>'+
+      rows.map(a=>'<option value="'+esc(a.id)+'">'+esc((a.displayName||a.email||'Lottery Admin')+' Â· '+(a.email||a.id))+'</option>').join('');
+    if(rows.some(a=>a.id===previouslySelected))select.value=previouslySelected;
+    host.innerHTML=rows.length?`<table><thead><tr><th>Admin</th><th>Email</th><th>Assigned lotteries</th></tr></thead><tbody>${rows.map(a=>`<tr><td>${esc(a.displayName||'')}</td><td>${esc(a.email||'')}</td><td>${(a.lotteryIds||[]).map(id=>{const l=lots.find(x=>x.id===id);return esc(l?l.name:id)}).join(', ')}</td></tr>`).join('')}</tbody></table>`:'<p class="muted">No lottery admins yet. Create one using the form above, then assign additional lotteries here.</p>';
+  }catch(e){
+    select.innerHTML='<option value="">Could not load existing admins</option>';
+    host.innerHTML=`<div class="error">${esc(e.message||'Could not load lottery admins.')}</div>`;
+    $('assignMessage').innerHTML='<div class="error">Could not load available Lottery Admins. Refresh the page or check permissions.</div>';
+  }
+}
+
+async function renderLotteries(){
+  const ls=await getDocs(collection(db,'lotteries'));lots=ls.docs.map(d=>({id:d.id,...d.data()}));$('statLotteries').textContent=lots.length;
+  const opts=lots.map(x=>`<option value="${esc(x.id)}">${esc(x.name)}</option>`).join('');$('adminLottery').innerHTML=opts;$('assignLottery').innerHTML=opts;if($('drawLotterySelect'))$('drawLotterySelect').innerHTML=opts;if($('checketMatchLottery')){$('checketMatchLottery').innerHTML=opts;updateChecketMatchAccounts();void loadPendingChecketReceipts();}
+  $('lotteries').innerHTML=lots.map(x=>{const mode=x.approvalMode==='automatic'?'Automatic CBE':'Manual';return `<div class="row"><b>${esc(x.name)}</b> <span class="badge ${esc(x.status)}">${esc(x.status)}</span><br><span class="muted">ID: ${esc(x.id)} Â· ${Number(x.price||0)} Birr Â· ${esc(x.min)}â€“${esc(x.max)} Â· Next: ${esc(x.nextTicketNumber??x.min)} Â· Approval: <b>${mode}</b></span><div class="actions"><button data-edit="${esc(x.id)}">Edit</button><button class="secondary" data-summary="${esc(x.id)}">Open Summary</button><button class="danger" data-delete="${esc(x.id)}">${x.cleanupInProgress?"Continue Cleanup":"Delete & Clear"}</button></div><div class="muted" data-cleanup-message="${esc(x.id)}">${esc(cleanupNotices.get(x.id) || (x.cleanupInProgress?'Cleanup already started: this lottery is closed. Click Continue Cleanup to resume.':'Click Delete & Clear to preview linked data; then type DELETE followed by the exact lottery ID to confirm.'))}</div></div>`}).join('')||'<p class="muted">No lotteries.</p>';
+  document.querySelectorAll('[data-edit]').forEach(b=>b.addEventListener('click',()=>editLottery(b.dataset.edit)));
+  document.querySelectorAll('[data-delete]').forEach(b=>b.addEventListener('click',()=>removeLottery(b.dataset.delete)));
+  document.querySelectorAll('[data-summary]').forEach(b=>b.addEventListener('click',()=>openLotterySummary(b.dataset.summary)));
+  await renderAdminList();
+}
+
+async function renderSummaryOverview(){
+  const host=$('overview');host.innerHTML='<p class="muted">Loading summaryâ€¦</p>';
+  try{
+    const rows=[];
+    let allSold=0;
+    for(const lot of lots){
+      const [approvedSnap,pendingSnap,soldSnap]=await Promise.all([
+        getDocs(query(collection(db,'ticketRequests'),where('lotteryId','==',lot.id),where('status','==','approved'),limit(101))),
+        getDocs(query(collection(db,'ticketRequests'),where('lotteryId','==',lot.id),where('status','==','pending'),limit(51))),
+        getCountFromServer(query(collection(db,'tickets'),where('lotteryId','==',lot.id)))
+      ]);
+      const approvedShown=Math.min(100,approvedSnap.docs.length);
+      const pendingShown=Math.min(50,pendingSnap.docs.length);
+      const approvedHasMore=approvedSnap.docs.length>100;
+      const pendingHasMore=pendingSnap.docs.length>50;
+      const sold=Number(soldSnap.data().count||0);
+      allSold+=sold;
+      rows.push('<div class="row"><b>'+esc(lot.name)+'</b><br><span class="muted">Sold tickets: <b>'+sold.toLocaleString('en-US')+'</b> Â· Approved purchases shown: '+approvedShown+(approvedHasMore?'+':'')+' Â· Pending shown: '+pendingShown+(pendingHasMore?'+':'')+'<br>Next ticket: '+esc(lot.nextTicketNumber??lot.min)+'</span></div>');
+    }
+    $('statTickets').textContent=allSold.toLocaleString('en-US');
+    $('statRevenue').textContent='â€”'; // No reliable revenue aggregation yet.
+    host.innerHTML=rows.join('')||'<p class="muted">No lotteries yet.</p>';
+  }catch(e){
+    $('statTickets').textContent='â€”';
+    host.innerHTML='<div class="error">'+esc(e.message||'Could not load summary.')+'</div>';
+  }
+}
+async function openLotterySummary(id){
+  const lot=lots.find(x=>x.id===id);if(!lot)return;
+  $('summaryTitle').textContent=`Summary Â· ${lot.name}`;
+  $('summaryPanel').style.display='block';
+  $('summaryTable').innerHTML='<p class="muted">Loading up to 100 approved requestsâ€¦</p>';
+  try{
+    const qs=await getDocs(query(
+      collection(db,'ticketRequests'),
+      where('lotteryId','==',id),
+      where('status','==','approved'),
+      limit(101)
+    ));
+    const items=qs.docs.slice(0,100).map(d=>({id:d.id,...d.data()}));
+    const hasMore=qs.docs.length>100;
+    renderSummaryTable(items,lot,hasMore);
+    $('summaryPanel').scrollIntoView({behavior:'smooth'});
+  }catch(e){
+    $('summaryTable').innerHTML=`<div class="error">${esc(e.message||'Could not load summary.')}</div>`;
+  }
+}
+
+function tableHtml(rows){
+  const head='<thead><tr><th>Date</th><th>Name</th><th>Phone</th><th>Reference</th><th>Ticket Number</th><th>Ticket Price (Birr)</th><th>Purchase Qty</th><th>Request ID</th></tr></thead>';
+  return '<table>'+head+'<tbody>'+rows.map(r=>'<tr><td>'+esc(r.date)+'</td><td>'+esc(r.name)+'</td><td>'+esc(r.phone)+'</td><td>'+esc(r.reference)+'</td><td><b>'+esc(r.ticketNumber)+'</b></td><td>'+esc(Number.isFinite(r.price)?r.price:'â€”')+'</td><td>'+esc(r.purchaseQuantity)+'</td><td>'+esc(r.requestId)+'</td></tr>').join('')+'</tbody></table>';
+}
+function renderSummaryTable(items,lot,hasMore=false){
+  const {rows:approved,missingTicketRequests}=expandApprovedTicketRows(items);
+  $('summaryCount').textContent=approved.length+' individual ticket(s) shown from '+items.length+' approved purchase(s)' +
+    (hasMore?' Â· More approved purchases exist (export includes only those loaded).':'') +
+    (missingTicketRequests?' Â· WARNING: '+missingTicketRequests+' approved purchase(s) have no ticket numbers.':'');
+  $('summaryTable').innerHTML=approved.length?tableHtml(approved):'<p class="muted">No approved ticket numbers in loaded purchases.</p>';
+  $('downloadCsv').onclick=()=>downloadCsv(safeFileName(lot.name)+'-tickets.csv',approved);
+  $('copyExcel').onclick=async()=>{
+    try{await navigator.clipboard.writeText(ticketRowsToTsv(approved));$('summaryMessage').innerHTML='<div class="success">Copied one row per ticket.</div>'}
+    catch{$('summaryMessage').innerHTML='<div class="error">Copy blocked. Use Download CSV instead.</div>'}
+  };
+}
+function downloadCsv(name,rows){
+  const csv=ticketRowsToCsv(rows);
+  const blob=new Blob([csv],{type:'text/csv;charset=utf-8;'}),a=document.createElement('a');
+  a.href=URL.createObjectURL(blob);a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000);
+}
+function safeFileName(s){return String(s||'lottery').replace(/[^a-z0-9_-]+/gi,'_').slice(0,60)}
+
+async function editLottery(id){const x=lots.find(l=>l.id===id);if(!x)return;const name=prompt('Lottery name',x.name);if(name===null)return;const price=Number(prompt('Ticket price (Birr)',x.price));if(!price||price<=0)return alert('Invalid price.');const status=prompt('Status: active, upcoming, closed, drawn',x.status)||x.status;try{await updateDoc(doc(db,'lotteries',id),{name:name.trim(),price,status});await addDoc(collection(db,'auditLogs'),{action:'editLottery',lotteryId:id,adminId:auth.currentUser.uid,createdAt:serverTimestamp()});await renderLotteries();await renderSummaryOverview();setupDraw();}catch(e){alert(e.message)}}
+
+let cleanupBusy = false;
+async function cleanupApi(action, lotteryId, extras={}) {
+  const token = await auth.currentUser.getIdToken();
+  const res = await fetch('/api/admin/approvals', {
+    method:'POST',
+    headers:{'content-type':'application/json','authorization':'Bearer '+token},
+    body:JSON.stringify({action,lotteryId,...extras})
+  });
+  const body = await res.json().catch(()=>({}));
+  if (!res.ok || !body.ok) {
+    const error = new Error(body.error || 'Cleanup request failed (HTTP '+res.status+').');
+    error.status = res.status;
+    throw error;
+  }
+  return body;
+}
+async function autoResumeCleanupOnLoad() {
+  const pending = lots.filter(lottery => lottery.cleanupInProgress === true).map(lottery=>lottery.id);
+  for (const id of pending) {
+    // Every pending item was already confirmed when cleanup started.
+    if (!lots.some(lottery=>lottery.id===id && lottery.cleanupInProgress)) continue;
+    await removeLottery(id, true);
+  }
+}
+async function removeLottery(id, alreadyConfirmed=false) {
+  if (cleanupBusy) return;
+  const lottery = lots.find(item=>item.id===id);
+  if (!lottery) return;
+  cleanupBusy = true;
+  const banner = $('message');
+  try {
+    if (!lottery.cleanupInProgress) {
+      banner.innerHTML='<div class="muted">Checking linked records for '+esc(lottery.name)+'â€¦</div>';
+      showCleanupNotice(id, 'Checking linked recordsâ€¦');
+      const p = await cleanupApi('lottery-cleanup-preview',id);
+      showCleanupNotice(id, 'Preview: '+p.requests+' purchases, '+p.approved+' approved, '+p.tickets+' tickets. Deletion has NOT started.');
+      const detail =
+        'Lottery: '+p.name+'\n'+
+        'Payment requests: '+p.requests+'\n'+
+        'Approved requests: '+p.approved+'\n'+
+        'Issued tickets: '+p.tickets+'\n'+
+        'Receipt claims: '+p.claims+'\n'+
+        'Queued notifications: '+p.notifications+'\n\n'+
+        'This PERMANENTLY removes its requests, ticket numbers, receipts and admin assignments. '+
+        'All customers in this lottery, including any real buyers, will lose their records. '+
+        'Lottery-specific audit history is also cleared, leaving a minimal deletion certificate. '+
+        'Firebase quotas or billing may apply. '+
+        'The lottery remains closed throughout cleanup. To proceed type:\nDELETE '+id;
+      const confirmation = prompt(detail);
+      if (confirmation !== 'DELETE '+id) {
+        banner.innerHTML='<div class="muted">Lottery cleanup cancelled. No data changed.</div>';
+        showCleanupNotice(id, 'Cancelled: you must enter DELETE '+id+' exactly. No data was changed.');
+        return;
+      }
+      if (p.approved>0 || p.tickets>0) {
+        const extra = confirm('WARNING: This lottery has '+p.approved+
+          ' approved purchases and '+p.tickets+' issued tickets. '+
+          'These ticket records will also be permanently removed. Continue?');
+        if (!extra) { showCleanupNotice(id, 'Cancelled at approved-ticket warning. No data was changed.'); return; }
+      }
+      const consent = confirm('Last confirmation: close and permanently delete lottery '+p.name+
+        ' and ALL its related purchase data? This cannot be undone.');
+      if (!consent) { showCleanupNotice(id, 'Cancelled at final confirmation. No data was changed.'); return; }
+      await cleanupApi('lottery-cleanup-start',id,{
+        confirm:'DELETE '+id, acceptIrreversible:true
+      });
+      lottery.cleanupInProgress = true;
+      showCleanupNotice(id, 'Deletion started. This lottery is now closed; running small batchesâ€¦');
+    } else if (!alreadyConfirmed && !confirm('Resume the existing deletion of '+lottery.name+
+      '? Related test data will be removed in small batches.')) {
+      showCleanupNotice(id, 'Resume cancelled. Cleanup remains paused and the lottery stays closed.');
+      return;
+    }
+    let steps = 0, requests = 0, documents = 0, files = 0, quotaRetries=0;
+    while (true) {
+      let step;
+      try {
+        step = await cleanupApi('lottery-cleanup-step',id);
+      } catch (e) {
+        // Firebase can still impose real quota limits even without our old daily cap.
+        if (e.status !== 429 && e.status !== 503) throw e;
+        quotaRetries++;
+        const waitMs = Math.min(30*60*1000,60*1000*Math.pow(2,Math.min(quotaRetries,5)));
+        showCleanupNotice(id,'Firebase is limiting requests. Automatically retrying when the cooldown ends; keep the tab open.');
+        await new Promise(resolve=>setTimeout(resolve,waitMs));
+        continue;
+      }
+      quotaRetries = 0;
+      steps++;
+      // Yield occasionally; large lotteries remain automatic without flooding Vercel.
+      if (steps%200 === 0) await new Promise(resolve=>setTimeout(resolve,1500));
+      requests += step.phase==='requests' ? step.processed||0 : 0;
+      documents += step.deletedDocuments||0;
+      files += step.removedFiles||0;
+      banner.innerHTML='<div class="muted">Cleanup running for <b>'+esc(lottery.name)+
+        '</b> â€” phase: '+esc(step.phase||'')+'; batches: '+steps+
+        '; requests cleared in this session: '+requests+
+        '; Firestore documents removed: '+documents+
+        '; Storage files removed: '+files+
+        '. Keep this tab open. Cleanup can resume if interrupted.</div>';
+      showCleanupNotice(id, 'Cleaning '+step.phase+': '+documents+' Firestore documents and '+files+' Storage files removed in this session.');
+      if (step.paused) {
+        const readyTime = Date.parse(String(step.waitingUntil||''));
+        if (!Number.isFinite(readyTime)) {
+          showCleanupNotice(id, 'Cleanup paused. The safe resume time could not be read. Click Continue Cleanup later.');
+          break;
+        }
+        const waitMs = Math.max(0,readyTime-Date.now())+1200;
+        const minutes = Math.max(1,Math.ceil(waitMs/60000));
+        const waiting = 'Storage safety pause: automatic resume in about '+minutes+
+          ' minute(s). Keep this tab open; no Vercel API requests are made during the pause.';
+        banner.innerHTML='<div class="muted">'+esc(waiting)+'</div>';
+        showCleanupNotice(id,waiting);
+        // Pause the browser rather than issuing repeated Vercel Function requests.
+        // If Chrome closes, the saved cleanup state allows one-click resumption.
+        await new Promise(resolve=>setTimeout(resolve,waitMs));
+        showCleanupNotice(id, 'Upload links have expired. Resuming the final cleanup automaticallyâ€¦');
+        continue;
+      }
+      if (step.done) {
+        cleanupNotices.delete(id);
+        banner.innerHTML='<div class="success">Lottery '+esc(lottery.name)+
+          ' and its linked records were deleted. Audit logs preserved.</div>';
+        break;
+      }
+    }
+  } catch(error) {
+    const prefix = error.status===429
+      ? 'Cleanup safely paused by the daily Firestore deletion guard. '
+      : 'Cleanup stopped without automatically retrying. ';
+    showCleanupNotice(id, prefix+error.message);
+    banner.innerHTML='<div class="error">'+esc(prefix+error.message)+
+      ' Refresh General Admin and select Continue Cleanup when safe.</div>';
+  } finally {
+    cleanupBusy=false;
+    try { await renderLotteries(); await renderSummaryOverview(); setupDraw(); }
+    catch(error) { console.warn('Dashboard refresh after cleanup:',error); }
+  }
+}
+
+
+async function loadContactSettings(){
+  try{
+    const snap=await getDoc(doc(db,'settings','site'));
+    const data=snap.exists()?snap.data():{};
+    $('whatsappNumber').value=data.whatsappNumber||'';
+    updateContactPreview();
+  }catch(e){
+    $('contactMessage').innerHTML=`<div class="error">${esc(e.message||'Could not load contact settings.')}</div>`;
+  }
+}
+
+function renderCreatePaymentAccountsEditor(){
+  const host=$('createPaymentAccountsEditor');
+  if(!host)return;
+  host.innerHTML=createPaymentAccounts.map((a,i)=>`<div class="payment-account-edit-row create-payment-row"><label>Bank name<input type="text" data-create-payment-bank="${i}" value="${esc(a.bank)}" placeholder="CBE"></label><label>Account number<input type="text" data-create-payment-number="${i}" value="${esc(a.number)}" inputmode="numeric" placeholder="1000000000000"></label><label>Account holder<input type="text" data-create-payment-holder="${i}" value="${esc(a.holderName||'')}" placeholder="Account holder name"></label><button type="button" class="danger small-btn" data-remove-create-payment="${i}">Remove</button></div>`).join('');
+  host.querySelectorAll('[data-remove-create-payment]').forEach(b=>b.addEventListener('click',()=>removeCreatePaymentAccount(Number(b.dataset.removeCreatePayment))));
+}
+
+function readCreatePaymentAccounts(){
+  const banks=[...document.querySelectorAll('[data-create-payment-bank]')];
+  return banks.map((input,i)=>({bank:String(input.value||'').trim(),number:String(document.querySelector(`[data-create-payment-number="${i}"]`)?.value||'').trim(),holderName:String(document.querySelector(`[data-create-payment-holder="${i}"]`)?.value||'').trim()})).filter(x=>x.bank||x.number||x.holderName);
+}
+
+function addCreatePaymentAccount(){
+  createPaymentAccounts.push({bank:'',number:'',holderName:''});
+  renderCreatePaymentAccountsEditor();
+  const inputs=document.querySelectorAll('[data-create-payment-bank]');
+  inputs[inputs.length-1]?.focus();
+}
+
+function removeCreatePaymentAccount(index){
+  createPaymentAccounts.splice(index,1);
+  if(!createPaymentAccounts.length)createPaymentAccounts.push({bank:'',number:'',holderName:''});
+  renderCreatePaymentAccountsEditor();
+}
+
+function updateContactPreview(){
+  const raw=$('whatsappNumber')?.value||'';
+  const digits=raw.replace(/[^0-9]/g,'');
+  $('whatsappPreview').value=digits?`https://wa.me/${digits}`:'Not configured';
+}
+
+async function saveContactSettings(e){
+  e.preventDefault();
+  const raw=$('whatsappNumber').value.trim();
+  const digits=raw.replace(/[^0-9]/g,'');
+  if(digits.length < 9 || digits.length > 15){
+    $('contactMessage').innerHTML='<div class="error">Enter a valid WhatsApp number, including country code.</div>';
+    return;
+  }
+  try{
+    await setDoc(doc(db,'settings','site'),{whatsappNumber:digits,updatedAt:serverTimestamp(),updatedBy:auth.currentUser.uid},{merge:true});
+    await addDoc(collection(db,'auditLogs'),{action:'updateCustomerContact',whatsappNumberLast4:digits.slice(-4),adminId:auth.currentUser.uid,createdAt:serverTimestamp()});
+    updateContactPreview();
+    $('contactMessage').innerHTML='<div class="success">WhatsApp contact updated on the public home page.</div>';
+  }catch(e){
+    $('contactMessage').innerHTML=`<div class="error">${esc(e.message||'Could not save contact settings.')}</div>`;
+  }
+}
+
+async function resetLotteryAdminPassword(e){
+  e.preventDefault();const btn=e.target.querySelector('button[type="submit"]');btn.disabled=true;
+  try{
+    const email=$('resetEmail').value.trim().toLowerCase(),password=$('resetPassword').value;
+    if(!email||password.length<6)throw new Error('Enter an existing Lottery Admin email and a password of at least 6 characters.');
+    const token=await auth.currentUser.getIdToken();const r=await fetch('/api/admin/reset-password',{method:'POST',headers:{'content-type':'application/json','authorization':`Bearer ${token}`},body:JSON.stringify({email,password})});const j=await r.json();if(!r.ok||!j.ok)throw new Error(j.error||'Could not reset password.');
+    $('resetMessage').innerHTML=`<div class="success">âœ… Password changed for ${esc(j.displayName||email)}. Give the Lottery Admin this temporary password securely: <b>${esc(password)}</b></div>`;await addDoc(collection(db,'auditLogs'),{action:'resetLotteryAdminPasswordUI',adminId:auth.currentUser.uid,targetEmail:email,createdAt:serverTimestamp()});
+  }catch(e){$('resetMessage').innerHTML=`<div class="error">${esc(e.message)}</div>`}finally{btn.disabled=false;}
+}
+
+function generateTempPassword(){const chars='ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789!@#';let out='';const bytes=new Uint32Array(12);crypto.getRandomValues(bytes);for(const n of bytes)out+=chars[n%chars.length];return out}
+
+function setupDraw(){
+  const select=$('drawLotterySelect');if(!select)return;
+  const id=select.value||(lots[0]?.id||'');if(id)select.value=id;
+  const x=lots.find(l=>l.id===select.value)||lots[0];if(!x)return;
+  drawDigits=[];$('drawResult').textContent='';$('drawMessage').innerHTML='';renderBalls();updateDrawUI(x);
+}
+function renderBalls(){
+  const host=$('drawBottle');if(!host)return;
+  host.querySelectorAll('.draw-ball').forEach(el=>el.remove());
+  for(let d=0;d<=9;d++){const el=document.createElement('div');el.className='draw-ball';el.dataset.digit=d;el.textContent='';el.style.setProperty('--ball-hue',String((d*37+12)%360));host.appendChild(el);positionBall(el,true);}
+}
+function positionBall(el,initial=false){
+  const left=12+Math.random()*72,top=18+Math.random()*65;el.style.left=`${left}%`;el.style.top=`${top}%`;if(initial)el.style.transition='none';setTimeout(()=>el.style.transition='',20);}
+function shuffleBalls(){document.querySelectorAll('.draw-ball').forEach(el=>positionBall(el));}
+function updateDrawUI(lottery){
+  const maxLen=String(Math.max(Math.abs(Number(lottery.max||0)),Math.abs(Number(lottery.min||0)))).replace(/^-/,'').length||1;
+  $('drawTarget').textContent=`${drawDigits.length}/${maxLen} digits`;
+  $('drawResult').textContent=drawDigits.join('');
+  $('drawDigitBtn').disabled=drawBusy||drawDigits.length>=maxLen||lottery.status==='drawn';
+  $('resetDrawBtn').disabled=drawBusy;
+  $('saveDrawBtn').disabled=drawBusy||drawDigits.length!==maxLen||lottery.status==='drawn';
+  if(lottery.status==='drawn')$('drawMessage').innerHTML='<div class="success">This lottery already has a saved draw result.</div>';
+}
+async function drawDigit(){
+  const lottery=lots.find(l=>l.id===$('drawLotterySelect').value)||lots[0];if(!lottery||drawBusy||lottery.status==='drawn')return;
+  const maxLen=String(Math.max(Math.abs(Number(lottery.max||0)),Math.abs(Number(lottery.min||0)))).replace(/^-/,'').length||1;
+  if(drawDigits.length>=maxLen)return;
+  drawBusy=true;updateDrawUI(lottery);shuffleBalls();
+  await new Promise(r=>setTimeout(r,650));
+  const digit=Math.floor(Math.random()*10);const ball=document.querySelector(`.draw-ball[data-digit="${digit}"]`);if(ball){document.querySelectorAll('.draw-ball').forEach(b=>{b.classList.remove('opened');b.textContent='';});ball.classList.add('opened');ball.textContent=String(digit);}
+  drawDigits.push(digit);$('drawResult').textContent=drawDigits.map(String).join('');
+  await new Promise(r=>setTimeout(r,450));
+  if(ball){ball.classList.remove('opened');ball.textContent='';}
+  drawBusy=false;updateDrawUI(lottery);
+  if(drawDigits.length===maxLen)$('drawMessage').innerHTML='<div class="success">Number complete. Review it, then save the draw result.</div>';
+}
+function resetDraw(){drawDigits=[];$('drawMessage').innerHTML='';$('drawResult').textContent='';const l=lots.find(x=>x.id===$('drawLotterySelect').value)||lots[0];renderBalls();if(l)updateDrawUI(l)}
+async function saveDraw(){
+  const lottery=lots.find(l=>l.id===$('drawLotterySelect').value)||lots[0];if(!lottery||drawDigits.length===0)return;
+  const result=drawDigits.join('');if(!confirm(`Save ${result} as the draw result for ${lottery.name}?`))return;
+  try{
+    await updateDoc(doc(db,'lotteries',lottery.id),{status:'drawn',drawnNumber:result,drawDigits,drawnAt:serverTimestamp(),drawnBy:auth.currentUser.uid});
+    await addDoc(collection(db,'auditLogs'),{action:'saveDrawResult',lotteryId:lottery.id,drawnNumber:result,adminId:auth.currentUser.uid,createdAt:serverTimestamp()});
+    lottery={...lottery,status:'drawn',drawnNumber:result,drawDigits};lots=lots.map(l=>l.id===lottery.id?lottery:l);
+    $('drawMessage').innerHTML='<div class="success">âœ… Draw result saved successfully.</div>';updateDrawUI(lottery);await renderLotteries();await renderSummaryOverview();
+  }catch(e){$('drawMessage').innerHTML=`<div class="error">${esc(e.message)}</div>`}
+}

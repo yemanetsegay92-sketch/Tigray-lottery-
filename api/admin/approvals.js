@@ -357,4 +357,635 @@ async function rejectRequest(db, caller, profile, requestId, requestedLotteryId,
     const snap = await tx.get(ref);
     if (!snap.exists) throw new Error('Request not found.');
     const request = snap.data() || {};
-    const lotteryId = Sç­÷¶‰žËkºwµçE¡”µ½¹ÑÉ½°œ°¹¼µÍÑ½É”œ¤ì4(€¥˜€¡ÁÉ½•ÍÌ¹•¹Ø¹YI1}9X€„ôô€ÁÉ•Ù¥•Üœ¤ì4(€€€É•ÑÕÉ¸É•Ì¹ÍÑ…ÑÕÌ ÐÀÌ¤¹©Í½¸¡í½¬é™…±Í”±•ÉÉ½ÈèA…åµ•¹Ðµ…Ñ¡¥¹œÑ•ÍÑÌ…É”…Ù…¥±…‰±”½¹±ä½¸„Y•É•°AÉ•Ù¥•Ü‘•Á±½åµ•¹Ð¸ô¤ì4(€ô4(€½¹ÍÐ‘ˆ€ô…‘µ¥¹ˆ ¤ì4(€½¹ÍÐìÁÉ½™¥±”ô€ô…Ý…¥Ð…ÕÑ¡•¹Ñ¥…Ñ•‘µ¥¸¡É•Ä°‘ˆ¤ì4(€½¹ÍÐ±½ÑÑ•Éå%€ôMÑÉ¥¹œ¡‰½‘ä¹±½ÑÑ•Éå%ñð€œœ¤¹ÑÉ¥´ ¤ì4(€¥˜€ „½ym„µéµhÀ´å|µuìÄ°ÄÈáô¼¹Ñ•ÍÐ¡±½ÑÑ•Éå%¤¤ì4(€€€É•ÑÕÉ¸É•Ì¹ÍÑ…ÑÕÌ ÐÀÀ¤¹©Í½¸¡í½¬é™…±Í”±•ÉÉ½ÈèM•±•Ð„Ù…±¥±½ÑÑ•Éä¸ô¤ì4(€ô4(€¥˜€¡ÁÉ½™¥±”¹É½±”€ôôô€±½ÑÑ•Éå‘µ¥¸œ€˜˜4(€€€€…ÉÉ…ä¹¥ÍÉÉ…ä¡ÁÉ½™¥±”¹±½ÑÑ•Éå%‘Ìñðmt¤€¤ì4(€€€É•ÑÕÉ¸É•Ì¹ÍÑ…ÑÕÌ ÐÀÌ¤¹©Í½¸¡í½¬é™…±Í”±•ÉÉ½Èè9¼…ÍÍ¥¹•±½ÑÑ•É¥•Ì¸ô¤ì4(€ô4(€¥˜€¡ÁÉ½™¥±”¹É½±”€ôôô€±½ÑÑ•Éå‘µ¥¸œ€˜˜€„¡ÁÉ½™¥±”¹±½ÑÑ•Éå%‘Ìñðmt¤¹¥¹±Õ‘•Ì¡±½ÑÑ•Éå%¤¤ì4(€€€É•ÑÕÉ¸É•Ì¹ÍÑ…ÑÕÌ ÐÀÌ¤¹©Í½¸¡í½¬é™…±Í”±•ÉÉ½Èèe½Ô…É”¹½Ð…ÍÍ¥¹•Ñ¼Ñ¡¥Ì±½ÑÑ•Éä¸ô¤ì4(€ô4(€½¹ÍÐ±½ÑÑ•ÉåM¹…À€ô…Ý…¥Ð‘ˆ¹½±±•Ñ¥½¸ ±½ÑÑ•É¥•Ìœ¤¹‘½Œ¡±½ÑÑ•Éå%¤¹•Ð ¤ì4(€¥˜€ …±½ÑÑ•ÉåM¹…À¹•á¥ÍÑÌ¤É•ÑÕÉ¸É•Ì¹ÍÑ…ÑÕÌ ÐÀÐ¤¹©Í½¸¡í½¬é™…±Í”±•ÉÉ½Èè1½ÑÑ•Éä¹½Ð™½Õ¹¸ô¤ì4(€½¹ÍÐ±½ÑÑ•Éä€ô±½ÑÑ•ÉåM¹…À¹‘…Ñ„ ¤ñðíôì4(€¥˜€¡±½ÑÑ•Éä¹±•…¹ÕÁ%¹AÉ½É•ÍÌ¤É•ÑÕÉ¸É•Ì¹ÍÑ…ÑÕÌ ÐÀä¤¹©Í½¸¡í½¬é™…±Í”±•ÉÉ½ÈèQ¡¥Ì±½ÑÑ•Éä¥Ì‰•¥¹œ‘•±•Ñ•¸ô¤ì4(€½¹ÍÐ…½Õ¹ÑÌ€ôÉÉ…ä¹¥ÍÉÉ…ä¡±½ÑÑ•Éä¹Á…åµ•¹Ñ½Õ¹ÑÌ¤€ü±½ÑÑ•Éä¹Á…åµ•¹Ñ½Õ¹ÑÌ€èmtì4(€½¹ÍÐ‰•%¹‘•á•Ì€ô…½Õ¹ÑÌ¹µ…À ¡„±¤¤ôø¡í„±¥ô¤¤¹™¥±Ñ•È ¡í…ô¤ôø½x¡‰•ñ½µµ•É¥…°‰…¹¬½˜•Ñ¡¥½Á¥„¤½¤¹Ñ•ÍÐ¡MÑÉ¥¹œ¡„¹‰…¹¬ñð€œœ¤¹ÑÉ¥´ ¤¤¤ì4(€¥˜€ …‰•%¹‘•á•Ì¹±•¹Ñ ¤É•ÑÕÉ¸É•Ì¹ÍÑ…ÑÕÌ ÐÀÀ¤¹©Í½¸¡í½¬é™…±Í”±•ÉÉ½Èè½¹™¥ÕÉ”„É•…°	É••¥Ù¥¹œ…½Õ¹Ð™½ÈÑ¡¥Ì±½ÑÑ•Éä‰•™½É”Ñ•ÍÑ¥¹œ¸ô¤ì4(€½¹ÍÐ¥¹‘•à€ô‰½‘ä¹…½Õ¹Ñ%¹‘•à€ôôôÕ¹‘•™¥¹•ñð‰½‘ä¹…½Õ¹Ñ%¹‘•à€ôôô¹Õ±°ñð‰½‘ä¹…½Õ¹Ñ%¹‘•à€ôôô€œœ4(€€€€ü€¡‰•%¹‘•á•Ì¹±•¹Ñ €ôôô€Ä€ü‰•%¹‘•á•ÍlÁt¹¤€è€´Ä¤4(€€€€è9Õµ‰•È¡‰½‘ä¹…½Õ¹Ñ%¹‘•à¤ì4(€¥˜€ …9Õµ‰•È¹¥Í%¹Ñ••È¡¥¹‘•à¤ñð¥¹‘•à€ð€Àñð¥¹‘•à€øô…½Õ¹ÑÌ¹±•¹Ñ ñð4(€€€€…‰•%¹‘•á•Ì¹Í½µ”¡àôùà¹¤ôôõ¥¹‘•à¤¤ì4(€€€É•ÑÕÉ¸É•Ì¹ÍÑ…ÑÕÌ ÐÀÀ¤¹©Í½¸¡í½¬é™…±Í”±•ÉÉ½ÈèM•±•Ð½¹”½˜Ñ¡¥Ì±½ÑÑ•ÉåpÌ½¹™¥ÕÉ•	É••¥Ù¥¹œ…½Õ¹ÑÌ¸ô¤ì4(€ô4(€½¹ÍÐ…½Õ¹Ð€ôMÑÉ¥¹œ¡…½Õ¹ÑÍm¥¹‘•át¹¹Õµ‰•Èñð€œœ¤¹É•Á±…” ½qÌ¬½œ°œœ¤ì4(€¥˜€ „½yq‘ìà°ÌÁô¼¹Ñ•ÍÐ¡…½Õ¹Ð¤ñð…½Õ¹Ð€ôôô€œÄÀÀÀÀÀÀÀÀÀÀÀÀœ¤ì4(€€€É•ÑÕÉ¸É•Ì¹ÍÑ…ÑÕÌ ÐÀÀ¤¹©Í½¸¡í½¬é™…±Í”±•ÉÉ½ÈèI•Á±…”Ñ¡”Í…µÁ±”½µ¥ÍÍ¥¹œ	…½Õ¹ÐÝ¥Ñ „É•…°…½Õ¹Ð¥¸A…åµ•¹Ð½Õ¹ÑÌ¸ô¤ì4(€ô4(4(€±•ÐÉ•ÅÕ•ÍÑM¹…Àì4(€½¹ÍÐÉ•ÅÕ•ÍÑ%€ôMÑÉ¥¹œ¡‰½‘ä¹É•ÅÕ•ÍÑ%ñð€œœ¤¹ÑÉ¥´ ¤ì4(€¥˜€¡É•ÅÕ•ÍÑ%¤ì4(€€€¥˜€ „½ym„µéµhÀ´å|µuìÄ°ÄÈáô¼¹Ñ•ÍÐ¡É•ÅÕ•ÍÑ%¤¤É•ÑÕÉ¸É•Ì¹ÍÑ…ÑÕÌ ÐÀÀ¤¹©Í½¸¡í½¬é™…±Í”±•ÉÉ½Èè%¹Ù…±¥É•ÅÕ•ÍÐ%¸ô¤ì4(€€€É•ÅÕ•ÍÑM¹…À€ô…Ý…¥Ð‘ˆ¹½±±•Ñ¥½¸ Ñ¥­•ÑI•ÅÕ•ÍÑÌœ¤¹‘½Œ¡É•ÅÕ•ÍÑ%¤¹•Ð ¤ì4(€ô•±Í”ì4(€€€½¹ÍÐÉ•™•É•¹”€ôMÑÉ¥¹œ¡‰½‘ä¹É•™•É•¹”ñð€œœ¤¹ÑÉ¥´ ¤ì4(€€€¥˜€ „½ym„µéµhÀ´å|µuìÔ°àÁô¼¹Ñ•ÍÐ¡É•™•É•¹”¤¤ì4(€€€€€É•ÑÕÉ¸É•Ì¹ÍÑ…ÑÕÌ ÐÀÀ¤¹©Í½¸¡í½¬é™…±Í”±•ÉÉ½Èè¹Ñ•ÈÑ¡”•á…ÐÉ•™•É•¹”™É½´„Á•¹‘¥¹œÑ¥­•Ð¸ô¤ì4(€€€ô4(€€€½¹ÍÐ…¹½¹¥…±%€ôÍ¡„ÈÔØ Ièœ€¬É•™•É•¹”¹Ñ½UÁÁ•É…Í” ¤¤¹Í±¥” À°ÐÀ¤ì4(€€€½¹ÍÐ‘¥É•Ð€ô…Ý…¥Ð‘ˆ¹½±±•Ñ¥½¸ Ñ¥­•ÑI•ÅÕ•ÍÑÌœ¤¹‘½Œ¡…¹½¹¥…±%¤¹•Ð ¤ì4(€€€¥˜€¡‘¥É•Ð¹•á¥ÍÑÌ€˜˜‘¥É•Ð¹‘…Ñ„ ¤¹±½ÑÑ•Éå%€ôôô±½ÑÑ•Éå%€˜˜4(€€€€€€€MÑÉ¥¹œ¡‘¥É•Ð¹‘…Ñ„ ¤¹É•™•É•¹”ñð€œœ¤¹ÑÉ¥´ ¤¹Ñ½UÁÁ•É…Í” ¤€ôôôÉ•™•É•¹”¹Ñ½UÁÁ•É…Í” ¤¤ì4(€€€€€É•ÅÕ•ÍÑM¹…À€ô‘¥É•Ðì4(€€€ô•±Í”ì4(€€€€€½¹ÍÐÅÕ•Éå5…Ñ¡•Ì€ô…Ý…¥Ð‘ˆ¹½±±•Ñ¥½¸ Ñ¥­•ÑI•ÅÕ•ÍÑÌœ¤¹Ý¡•É” É•™•É•¹”œ°œôôœ±É•™•É•¹”¤¹±¥µ¥Ð ÈÄ¤¹•Ð ¤ì4(€€€€€½¹ÍÐµ…Ñ¡•Ì€ôÅÕ•Éå5…Ñ¡•Ì¹‘½Ì¹™¥±Ñ•È¡ôù¹‘…Ñ„ ¤¹±½ÑÑ•Éå%ôôõ±½ÑÑ•Éå%¤ì4(€€€€€¥˜€¡ÅÕ•Éå5…Ñ¡•Ì¹Í¥é”€øô€ÈÄ¤É•ÑÕÉ¸É•Ì¹ÍÑ…ÑÕÌ ÐÀä¤¹©Í½¸¡í½¬é™…±Í”±•ÉÉ½ÈèQ½¼µ…¹äÉ•ÅÕ•ÍÑÌÍ¡…É”Ñ¡¥ÌÉ•™•É•¹”¸UÍ”Ñ¡”É•ÅÕ•ÍÐ%¸ô¤ì4(€€€€€¥˜€¡µ…Ñ¡•Ì¹±•¹Ñ €„ôô€Ä¤É•ÑÕÉ¸É•Ì¹ÍÑ…ÑÕÌ¡µ…Ñ¡•Ì¹±•¹Ñ üÐÀäèÐÀÐ¤¹©Í½¸¡ì4(€€€€€€€½¬é™…±Í”±•ÉÉ½Èéµ…Ñ¡•Ì¹±•¹Ñ üI•™•É•¹”¥Ì…µ‰¥Õ½ÕÌ¸UÍ”Ñ¡”É•ÅÕ•ÍÐ%¸œè9¼µ…Ñ¡¥¹œÑ¥­•ÐÉ•ÅÕ•ÍÐ™½Õ¹¥¸Ñ¡¥Ì±½ÑÑ•Éä¸œ4(€€€€€ô¤ì4(€€€€€É•ÅÕ•ÍÑM¹…À€ôµ…Ñ¡•ÍlÁtì4(€€€ô4(€ô4(€¥˜€ …É•ÅÕ•ÍÑM¹…Àü¹•á¥ÍÑÌñðÉ•ÅÕ•ÍÑM¹…À¹‘…Ñ„ ¤¹±½ÑÑ•Éå%€„ôô±½ÑÑ•Éå%¤ì4(€€€É•ÑÕÉ¸É•Ì¹ÍÑ…ÑÕÌ ÐÀÐ¤¹©Í½¸¡í½¬é™…±Í”±•ÉÉ½ÈèA•¹‘¥¹œÑ¥­•ÐÉ•ÅÕ•ÍÐ¹½Ð™½Õ¹¥¸Ñ¡”Í•±•Ñ•±½ÑÑ•Éä¸ô¤ì4(€ô4(€½¹ÍÐÁÕÉ¡…Í”€ôÉ•ÅÕ•ÍÑM¹…À¹‘…Ñ„ ¤ñðíôì4(€¥˜€¡ÁÕÉ¡…Í”¹ÍÑ…ÑÕÌ€„ôô€Á•¹‘¥¹œœ¤É•ÑÕÉ¸É•Ì¹ÍÑ…ÑÕÌ ÐÀä¤¹©Í½¸¡í½¬é™…±Í”±•ÉÉ½Èè=¹±äÁ•¹‘¥¹œÉ•ÅÕ•ÍÑÌ…¸‰”¡•­•¸ô¤ì4(€½¹ÍÐÍÑ½É•‘I•™•É•¹”€ôMÑÉ¥¹œ¡ÁÕÉ¡…Í”¹É•™•É•¹”ñð€œœ¤¹ÑÉ¥´ ¤ì4(€½¹ÍÐµ•Ñ¡½€ôMÑÉ¥¹œ¡‰½‘ä¹Ù•É¥™¥…Ñ¥½¹5•Ñ¡½ñð€É•™•É•¹”œ¤¹Ñ½1½Ý•É…Í” ¤ì4(€¥˜€ …lÉ•™•É•¹”œ°É••¥ÁÐt¹¥¹±Õ‘•Ì¡µ•Ñ¡½¤¤ì4(€€€É•ÑÕÉ¸É•Ì¹ÍÑ…ÑÕÌ ÐÀÀ¤¹©Í½¸¡í½¬é™…±Í”±•ÉÉ½ÈèU¹ÍÕÁÁ½ÉÑ•Ù•É¥™¥…Ñ¥½¸µ•Ñ¡½¸ô¤ì4(€ô4(€¥˜€¡µ•Ñ¡½€ôôô€É•™•É•¹”œ€˜˜€„½ym„µéµhÀ´å|µuìÔ°àÁô¼¹Ñ•ÍÐ¡ÍÑ½É•‘I•™•É•¹”¤¤ì4(€€€É•ÑÕÉ¸É•Ì¹ÍÑ…ÑÕÌ ÐÀÀ¤¹©Í½¸¡í½¬é™…±Í”±•ÉÉ½ÈèQ¡¥ÌÉ•ÅÕ•ÍÐ¡…Ì¹¼ÍÕÁÁ½ÉÑ•	É•™•É•¹”¸M•±•ÐÑ¡”É••¥ÁÐµ•Ñ¡½¥˜¥Ð¡…Ì„A½¥µ…”¸ô¤ì4(€ô4(€¥˜€¡µ•Ñ¡½€ôôô€É••¥ÁÐœ€˜˜€…ÁÕÉ¡…Í”¹ÁÉ½½™A…Ñ ¤ì4(€€€É•ÑÕÉ¸É•Ì¹ÍÑ…ÑÕÌ ÐÀÀ¤¹©Í½¸¡í½¬é™…±Í”±•ÉÉ½Èè9¼ÁÉ¥Ù…Ñ”A½ÈÍÉ••¹Í¡½Ð¥Ì…ÑÑ…¡•Ñ¼Ñ¡¥ÌÉ•ÅÕ•ÍÐ¸ô¤ì4(€ô4(€½¹ÍÐìÙ•É¥™å¡•­ÑA…åµ•¹Ðô€ôÉ•ÅÕ¥É” œ¸¸¼¸¸½±¥ˆ½¡•­•ÐµÙ•É¥™äœ¤ì4(€½¹ÍÐì½µÁ…É•A…åµ•¹ÑQ½I•ÅÕ•ÍÐô€ôÉ•ÅÕ¥É” œ¸¸¼¸¸½±¥ˆ½¡•­•ÐµÉ•ÅÕ•ÍÐµµ…Ñ œ¤ì4(€±•ÐÉ••¥ÁÑ¥±”€ô¹Õ±°ì4(€¥˜€¡µ•Ñ¡½€ôôô€É••¥ÁÐœ¤ì4(€€€½¹ÍÐíÉ•…‘¥¹…±I••¥ÁÑôõÉ•ÅÕ¥É” œ¸¸¼¸¸½±¥ˆ½¡•­•ÐµÁÉ¥Ù…Ñ”µÉ••¥ÁÐœ¤ì4(€€€€¼¼=¹±äÍ•ÉÙ•Èµ½Ý¹•™¥¹…±¥é•L½‰©•ÑÌì¹•Ù•ÈÍ•¹ÕÍÑ½µ•ÈUI1ÌÑ¼¡•¬¹•Ð¸4(€€€É••¥ÁÑ¥±”õ…Ý…¥ÐÉ•…‘¥¹…±I••¥ÁÐ¡ÁÕÉ¡…Í”¤ì4(€ô4(€€¼¼¡•¬¹•ÐÉ••¥Ù•ÌÑ¡”™Õ±°½¹™¥ÕÉ•É••¥Ù¥¹œ…½Õ¹Ð°…¹„É•™•É•¹”4(€€¼¼=HÑ¡”…ÕÑ¡•¹Ñ¥…Ñ•ÁÉ¥Ù…Ñ”™¥±”¸A½•Ì‘¥É•Ñ±äÑ¼¡•¬¹•Ðè¹¼=H¸4(€€¼¼%µ…•Ì…É”…¸•áÁ•É¥µ•¹Ðì¡•¬¹•Ðµ…äÉ•ÍÁ½¹€ÐÈÈÝ¥Ñ¡½ÕÐÉ••¥ÁÑ}Ñ•áÐ¸4(€½¹ÍÐÙ•É¥™¥…Ñ¥½¸€ô…Ý…¥ÐÙ•É¥™å¡•­ÑA…åµ•¹Ð¡ì4(€€€‰…¹¬è‰”œ°…½Õ¹Ñ9Õµ‰•Èé…½Õ¹Ð°4(€€€€¸¸¸¡µ•Ñ¡½€ôôô€É••¥ÁÐœ€üíÉ••¥ÁÑ¥±•ô€èíÑÉ…¹Í…Ñ¥½¹9Õµ‰•ÈéÍÑ½É•‘I•™•É•¹•ô¤4(€ô¤ì4(€½¹ÍÐÁÉ½Ù¥‘•ÉI•™•É•¹”€ôMÑÉ¥¹œ¡Ù•É¥™¥…Ñ¥½¸¹É•Á½ÉÑ•‘QÉ…¹Í…Ñ¥½¹9Õµ‰•Èñð€œœ¤¹ÑÉ¥´ ¤¹Ñ½UÁÁ•É…Í” ¤ì4(€½¹ÍÐ•™™•Ñ¥Ù•I•™•É•¹”€ôµ•Ñ¡½€ôôô€É••¥ÁÐœ4(€€€€ü€¡ÁÉ½Ù¥‘•ÉI•™•É•¹”ñðÍÑ½É•‘I•™•É•¹”¹Ñ½UÁÁ•É…Í” ¤¤€èÍÑ½É•‘I•™•É•¹”ì4(€€¼¼Q¡¥Ì±½½­ÕÀ¥Ì…‘Ù¥Í½Éä€¡•á…Ð±•…ä¥É•ÍÑ½É”É•™•É•¹”½¹±ä¤¸A•ÉÍ¥ÍÑ•¹Ð4(€€¼¼±½‰…°Á…åµ•¹Ñ±…¥µÌ¥ÌÑ¡”ÍÑÉ½¹•È™ÕÑÕÉ”ÁÉ½Ñ•Ñ¥½¸¸9•¥Ñ¡•ÈÝÉ¥Ñ•Ì‘…Ñ„¸4(€½¹ÍÐ±…¥µI•˜€ô€½ymµhÀ´å|µuìÔ°àÁô¼¹Ñ•ÍÐ¡•™™•Ñ¥Ù•I•™•É•¹”¤4(€€€€üÁ…åµ•¹Ñ±…¥µI•˜¡‘ˆ±•™™•Ñ¥Ù•I•™•É•¹”¤€è¹Õ±°ì4(€½¹ÍÐmÍ…µ•I•˜°•á¥ÍÑ¥¹±…¥µt€ô…Ý…¥ÐAÉ½µ¥Í”¹…±°¡l4(€€€±…¥µI•˜4(€€€€€€ü‘ˆ¹½±±•Ñ¥½¸ Ñ¥­•ÑI•ÅÕ•ÍÑÌœ¤¹Ý¡•É” É•™•É•¹”œ°œôôœ±•™™•Ñ¥Ù•I•™•É•¹”¤¹±¥µ¥Ð ÈÄ¤¹•Ð ¤4(€€€€€€èAÉ½µ¥Í”¹É•Í½±Ù”¡í‘½Ìémt±Í¥é”èÁô¤°4(€€€±…¥µI•˜€ü±…¥µI•˜¹•Ð ¤€èAÉ½µ¥Í”¹É•Í½±Ù”¡¹Õ±°¤4(€t¤ì4(€½¹ÍÐ½Ñ¡•É½Ì€ôÍ…µ•I•˜¹‘½Ì¹™¥±Ñ•È¡àôùà¹¥„ôõÉ•ÅÕ•ÍÑM¹…À¹¥¤ì4(€½¹ÍÐ‘ÕÁ±¥…Ñ”€ôì4(€€€½Ñ¡•É½Õ¹Ðé½Ñ¡•É½Ì¹±•¹Ñ °4(€€€½Ñ¡•ÉÁÁÉ½Ù•‘½Õ¹Ðé½Ñ¡•É½Ì¹™¥±Ñ•È¡àôùà¹‘…Ñ„ ¤¹ÍÑ…ÑÕÌôôô…ÁÁÉ½Ù•œ¤¹±•¹Ñ °4(€€€ÑÉÕ¹…Ñ•éÍ…µ•I•˜¹Í¥é”ôôôÈÄ°4(€€€±…¥µMÑ…ÑÕÌé±…¥µI•˜€ü±…¥µM¹…ÁÍ¡½ÑMÑ…ÑÕÌ¡•á¥ÍÑ¥¹±…¥´±É•ÅÕ•ÍÑM¹…À¹¥¤€è€É•™•É•¹•}¹½Ñ}É•ÑÕÉ¹•œ4(€ôì4(€€¼¼½ÈÉ••¥ÁÐµ½¹±äÁÕÉ¡…Í•Ì°µ…É¬Ñ¡”‰…¹¬µÍÕÁÁ±¥•É•™•É•¹”…Ì•áÑÉ…Ñ•°4(€€¼¼9=P…Ì„ÕÍÑ½µ•ÈÉ•™•É•¹”µ…Ñ ¸-••À¡Õµ…¸É•Ù¥•ÜÉ•…É‘±•ÍÌ¸4(€½¹ÍÐ…ÍÍ•ÍÍµ•¹Ð€ô½µÁ…É•A…åµ•¹ÑQ½I•ÅÕ•ÍÐ 4(€€€ì¸¸¹ÁÕÉ¡…Í”±±½ÑÑ•Éå%‘ô°Ù•É¥™¥…Ñ¥½¸°í¥é±½ÑÑ•Éå%‘ô±‘ÕÁ±¥…Ñ”4(€€¤ì4(€¥˜€¡µ•Ñ¡½€ôôô€É••¥ÁÐœ¤ì4(€€€…ÍÍ•ÍÍµ•¹Ð¹¡•­Ì¹É••¥ÁÑ%¹ÁÕÐ€ôÉ••¥ÁÑ¥±”¹µ¥µ”€ôôô€…ÁÁ±¥…Ñ¥½¸½Á‘˜œ€ü€Á‘˜œ€è€¥µ…”œì4(€€€…ÍÍ•ÍÍµ•¹Ð¹¡•­Ì¹‰…¹­áÑÉ…Ñ•‘I•™•É•¹”€ôÁÉ½Ù¥‘•ÉI•™•É•¹”¹±•¹Ñ €ø€Àì4(€€€¥˜€ …ÍÑ½É•‘I•™•É•¹”¤ì4(€€€€€…ÍÍ•ÍÍµ•¹Ð¹É•½µµ•¹‘…Ñ¥½¸ô59U1}IY%\œì4(€€€€€…ÍÍ•ÍÍµ•¹Ð¹½¹•É¹Ì¹ÁÕÍ ¡ÁÉ½Ù¥‘•ÉI•™•É•¹”4(€€€€€€€€ü€I•™•É•¹”Ý…Ì•áÑÉ…Ñ•™É½´„É••¥ÁÐ°¹½Ð•¹Ñ•É•‰äÑ¡”‰Õå•È¸I•½¹¥±”¥Ð‰•™½É”…ÁÁÉ½Ù…°¸œ4(€€€€€€€€è€¡•¬¹•Ð‘¥¹½ÐÉ•ÑÕÉ¸„ÕÍ…‰±”É•™•É•¹”¸ÁÁÉ½Ù…°É•ÅÕ¥É•Ì„Ù•É¥™¥•É•™•É•¹”¸œ¤ì4(€€€ô4(€€€¥˜€¡ÍÑ½É•‘I•™•É•¹”€˜˜ÁÉ½Ù¥‘•ÉI•™•É•¹”€˜˜ÍÑ½É•‘I•™•É•¹”¹Ñ½UÁÁ•É…Í” ¤€„ôôÁÉ½Ù¥‘•ÉI•™•É•¹”¤ì4(€€€€€…ÍÍ•ÍÍµ•¹Ð¹É•½µµ•¹‘…Ñ¥½¸ô59U1}IY%\œì4(€€€€€…ÍÍ•ÍÍµ•¹Ð¹½¹•É¹Ì¹ÁÕÍ  Q¡”A½¥µ…”É•™•É•¹”‘¥™™•ÉÌ™É½´Ñ¡”ÕÍÑ½µ•Èµ•¹Ñ•É•É•™•É•¹”¸œ¤ì4(€€€ô4(€ô4(€½¹ÍÐí•Ù…±Õ…Ñ•ÕÑ½A…åµ•¹ÑôõÉ•ÅÕ¥É” œ¸¸¼¸¸½±¥ˆ½‰”µ…ÕÑ¼µ•±¥¥‰¥±¥Ñäœ¤ì4(€€¼¼%¹™½Éµ…Ñ¥Ù”½¹±äèAÉ•Ù¥•ÜÕÍ•ÌÑ¡”Í…µ”ÁÉ½‘ÕÑ¥½¸¥É•ÍÑ½É”‰ÕÐÝ¥±°9YH4(€€¼¼¡…¹”Ñ¥­•ÑÌ‰…Í•½¸Ñ¡¥Ì•±¥¥‰¥±¥ÑäÉ•Á½ÉÐ¸4(€½¹ÍÐ…ÕÑ½±¥¥‰¥±¥Ñäõ•Ù…±Õ…Ñ•ÕÑ½A…åµ•¹Ð¡ì4(€€€ÁÕÉ¡…Í”±±½ÑÑ•Éä±Ù•É¥™¥…Ñ¥½¸±‘ÕÁ±¥…Ñ”4(€ô¤ì4(€É•ÑÕÉ¸É•Ì¹ÍÑ…ÑÕÌ ÈÀÀ¤¹©Í½¸¡ì4(€€€½¬éÑÉÕ”±É•…‘=¹±äéÑÉÕ”±Ù•É¥™¥…Ñ¥½¹%¹ÁÕÐéµ•Ñ¡½°4(€€€…ÕÑ½±¥¥‰¥±¥Ñä°4(€€€É•ÅÕ•ÍÐéí¥éÉ•ÅÕ•ÍÑM¹…À¹¥±±½ÑÑ•Éå%±Ñ½Ñ…°é9Õµ‰•È¡ÁÕÉ¡…Í”¹Ñ½Ñ…±ñðÀ¤°4(€€€€€É•™•É•¹”éÍÑ½É•‘I•™•É•¹”±•áÑÉ…Ñ•‘I•™•É•¹”éµ•Ñ¡½ôôôÉ••¥ÁÐœýÁÉ½Ù¥‘•ÉI•™•É•¹”èœô°4(€€€Á…åµ•¹Ðéì4(€€€€€‰…¹¬éÙ•É¥™¥…Ñ¥½¸¹‰…¹¬±ÍÑ…ÑÕÌéÙ•É¥™¥…Ñ¥½¸¹ÍÑ…ÑÕÌ±…µ½Õ¹ÐéÙ•É¥™¥…Ñ¥½¸¹…µ½Õ¹Ð±ÕÉÉ•¹äéÙ•É¥™¥…Ñ¥½¸¹ÕÉÉ•¹ä°4(€€€€€ÑÉ…¹Í…Ñ¥½¹…Ñ”éÙ•É¥™¥…Ñ¥½¸¹ÑÉ…¹Í…Ñ¥½¹…Ñ”±Á…å•É9…µ”éÙ•É¥™¥…Ñ¥½¸¹Á…å•É9…µ”±É••¥Ù•É9…µ”éÙ•É¥™¥…Ñ¥½¸¹É••¥Ù•É9…µ”°4(€€€€€É••¥Ù•É½Õ¹ÑMÑ…ÑÕÌéÙ•É¥™¥…Ñ¥½¸¹É••¥Ù•É½Õ¹ÑMÑ…ÑÕÌ°4(€€€€€ÁÉ½Ù¥‘•É‰•½Õ¹Ñ¡•¬éÙ•É¥™¥…Ñ¥½¸¹ÁÉ½Ù¥‘•É‰•½Õ¹Ñ¡•¬4(€€€ô°4(€€€…ÍÍ•ÍÍµ•¹Ð4(€ô¤ì4)ô4(4(¼¼AÉ•Ù¥•Üµ½¹±äµ…¹Õ…°Ù•É¥™¥…Ñ¥½¸è¹¼¥É•ÍÑ½É”µÕÑ…Ñ¥½¹Ì½ÈÑ¥­•Ð…ÁÁÉ½Ù…°¸4)…Íå¹Œ™Õ¹Ñ¥½¸¡…¹‘±•¡•­ÑY•É¥™¥…Ñ¥½¸¡É•Ä°É•Ì°‰½‘ä¤ì4(€É•Ì¹Í•Ñ!•…‘•È …¡”µ½¹ÑÉ½°œ°€¹¼µÍÑ½É”œ¤ì4(€¥˜€¡ÁÉ½•ÍÌ¹•¹Ø¹YI1}9X€„ôô€ÁÉ•Ù¥•Üœ¤ì4(€€€É•ÑÕÉ¸É•Ì¹ÍÑ…ÑÕÌ ÐÀÌ¤¹©Í½¸¡ì½¬é™…±Í”°•ÉÉ½Èè5…¹Õ…°¡•¬¹•ÐÙ•É¥™¥…Ñ¥½¸Ñ•ÍÑÌ…É”…Ù…¥±…‰±”½¹±ä½¸„Y•É•°AÉ•Ù¥•Ü‘•Á±½åµ•¹Ð¸œô¤ì4(€ô4(€½¹ÍÐ‘ˆ€ô…‘µ¥¹ˆ ¤ì4(€½¹ÍÐìÁÉ½™¥±”ô€ô…Ý…¥Ð…ÕÑ¡•¹Ñ¥…Ñ•‘µ¥¸¡É•Ä°‘ˆ¤ì4(€¥˜€¡ÁÉ½™¥±”¹É½±”€„ôô€•¹•É…±‘µ¥¸œ¤ì4(€€€É•ÑÕÉ¸É•Ì¹ÍÑ…ÑÕÌ ÐÀÌ¤¹©Í½¸¡ì½¬é™…±Í”°•ÉÉ½Èè=¹±ä•¹•É…°‘µ¥¸…¸Ñ•ÍÐÁ…åµ•¹ÐÙ•É¥™¥…Ñ¥½¸¸œô¤ì4(€ô4(€½¹ÍÐìÙ•É¥™å¡•­ÑA…åµ•¹Ðô€ôÉ•ÅÕ¥É” œ¸¸¼¸¸½±¥ˆ½¡•­•ÐµÙ•É¥™äœ¤ì4(€½¹ÍÐÉ•ÍÕ±Ð€ô…Ý…¥ÐÙ•É¥™å¡•­ÑA…åµ•¹Ð¡‰½‘ä¤ì4(€É•ÑÕÉ¸É•Ì¹ÍÑ…ÑÕÌ ÈÀÀ¤¹©Í½¸¡ì½¬éÑÉÕ”°€¸¸¹É•ÍÕ±Ðô¤ì4)ô4(4(¼¼É½¸µ½¹±ä…ÕÑ½µ…Ñ¥Œ	Á…åµ•¹ÐÁÉ½•ÍÍ½È¸9¼ÁÕ‰±¥Œ…±±•È…¹¹•Ù•È™É½´4(¼¼Y•É•°AÉ•Ù¥•Ü€¡Ý¡¥ Í¡…É•ÌÑ¡”ÁÉ½‘ÕÑ¥½¸¥É•ÍÑ½É”‘…Ñ…‰…Í”¤¸4)…Íå¹Œ™Õ¹Ñ¥½¸¡…¹‘±•ÕÑ½‰•]½É­•È¡É•Ä±É•Ì¥ì4(€É•Ì¹Í•Ñ!•…‘•È …¡”µ½¹ÑÉ½°œ°¹¼µÍÑ½É”œ¤ì4(€½¹ÍÐí¡•­]½É­•ÉM•É•Ð±ÉÕ¹	…Ñ¡ôõÉ•ÅÕ¥É” œ¸¸¼¸¸½±¥ˆ½‰”µ…ÕÑ¼µÝ½É­•Èœ¤ì4(€¥˜ …¡•­]½É­•ÉM•É•Ð¡É•Ä¤¥É•ÑÕÉ¸É•Ì¹ÍÑ…ÑÕÌ ÐÀÄ¤¹©Í½¸¡í½¬é™…±Í”±•ÉÉ½ÈèU¹…ÕÑ¡½É¥é•¸ô¤ì4(€½¹ÍÐíÕÑ½Ù•É5ÍôõÉ•ÅÕ¥É” œ¸¸¼¸¸½±¥ˆ½‰”µ…ÕÑ¼µÕÑ½Ù•Èœ¤ì4(€¥˜¡ÁÉ½•ÍÌ¹•¹Ø¹YI1}9X„ôôÁÉ½‘ÕÑ¥½¸œñð4(€€€€ÁÉ½•ÍÌ¹•¹Ø¹1=QQIe}	}UQ=}AAI=Y1}9	1„ôôÑÉÕ”œñð4(€€€€€…9Õµ‰•È¹¥Í¥¹¥Ñ”¡ÕÑ½Ù•É5Ì ¤¤ñð…Ñ”¹¹½Ü ¤ñÕÑ½Ù•É5Ì ¤¤ì4(€€€É•ÑÕÉ¸É•Ì¹ÍÑ…ÑÕÌ ÐÀÌ¤¹©Í½¸¡í½¬é™…±Í”±•ÉÉ½Èè	…ÕÑ½µ…Ñ¥Œ…ÁÁÉ½Ù…°¥Ì¹½Ð•¹…‰±•¸ô¤ì4(€ô4(€½¹ÍÐ‘ˆõ…‘µ¥¹ˆ ¤ì4(€½¹ÍÐÉ•ÍÕ±Ðõ…Ý…¥ÐÉÕ¹	…Ñ ¡‘ˆ±ì4(€€€…ÁÁÉ½Ù”é…Íå¹Œ¡É•ÅÕ•ÍÑ%±±½ÑÑ•Éå%±É•™•É•¹”±Õ…É¤ôùì4(€€€€€…Ý…¥Ð…ÁÁÉ½Ù•I•ÅÕ•ÍÐ¡‘ˆ±íÕ¥èÍåÍÑ•´é¡•­•Ðµ‰”ô±íÉ½±”è•¹•É…±‘µ¥¸ô°4(€€€€€€€É•ÅÕ•ÍÑ%±±½ÑÑ•Éå%±É•™•É•¹”±Õ…É¤ì4(€€€ô4(€ô¤ì4(€É•ÑÕÉ¸É•Ì¹ÍÑ…ÑÕÌ ÈÀÀ¤¹©Í½¸¡í½¬éÑÉÕ”°¸¸¹É•ÍÕ±Ñô¤ì4)ô4(4)µ½‘Õ±”¹•áÁ½ÉÑÌ€ô…Íå¹Œ€¡É•Ä°É•Ì¤€ôøì4(€¥˜€¡É•Ä¹µ•Ñ¡½€ôôô€Pœ€˜˜MÑÉ¥¹œ¡É•Ä¹ÅÕ•Éäü¹É••¥ÁÐñð€œœ¤€ôôô€œÄœ¤ì4(€€€É•ÑÕÉ¸Í•ÉÙ•A…åµ•¹ÑI••¥ÁÐ¡É•Ä°É•Ì¤ì4(€ô4(€¥˜€¡É•Ä¹µ•Ñ¡½€„ôô€A=MPœ¤ì4(€€€É•ÑÕÉ¸É•Ì¹ÍÑ…ÑÕÌ ÐÀÔ¤¹©Í½¸¡ì½¬è™…±Í”°•ÉÉ½Èè€5•Ñ¡½¹½Ð…±±½Ý•¸œô¤ì4(€ô4(4(€ÑÉäì4(€€€½¹ÍÐ‰½‘ä€ôÉ•…‘	½‘ä¡É•Ä¤ì4(€€€½¹ÍÐ…Ñ¥½¸€ôMÑÉ¥¹œ¡‰½‘ä¹…Ñ¥½¸ñð€œœ¤¹ÑÉ¥´ ¤¹Ñ½1½Ý•É…Í” ¤ì4(€€€¥˜€¡…Ñ¥½¸€ôôô€‰”µ…ÕÑ¼µÝ½É­•Èœ¤É•ÑÕÉ¸…Ý…¥Ð¡…¹‘±•ÕÑ½‰•]½É­•È¡É•Ä°É•Ì¤ì4(€€€¥˜€¡…Ñ¥½¸€ôôô€¡•­•Ðµµ…Ñ µÁ•¹‘¥¹œœ¤É•ÑÕÉ¸…Ý…¥Ð¡…¹‘±•¡•­ÑA•¹‘¥¹5…Ñ ¡É•Ä°É•Ì°‰½‘ä¤ì4(€€€¥˜€¡…Ñ¥½¸€ôôô€¡•­•ÐµÙ•É¥™äœ¤É•ÑÕÉ¸…Ý…¥Ð¡…¹‘±•¡•­ÑY•É¥™¥…Ñ¥½¸¡É•Ä°É•Ì°‰½‘ä¤ì4(€€€¥˜€¡…Ñ¥½¸€ôôô€±½½­ÕÀµÉ•™•É•¹”œ¤É•ÑÕÉ¸…Ý…¥Ð±½½­ÕÁI•™•É•¹”¡É•Ä°É•Ì°‰½‘ä¤ì4(€€€¥˜€¡…Ñ¥½¸¹ÍÑ…ÉÑÍ]¥Ñ  ±½ÑÑ•Éäµ±•…¹ÕÀ´œ¤¤É•ÑÕÉ¸…Ý…¥Ð¡…¹‘±•1½ÑÑ•Éå±•…¹ÕÀ¡É•Ä°É•Ì°‰½‘ä¤ì4(€€€½¹ÍÐÉ•ÅÕ•ÍÑ%€ôMÑÉ¥¹œ¡‰½‘ä¹É•ÅÕ•ÍÑ%ñð€œœ¤¹ÑÉ¥´ ¤ì4(€€€½¹ÍÐÉ•ÅÕ•ÍÑ•‘1½ÑÑ•Éå%€ôMÑÉ¥¹œ¡‰½‘ä¹±½ÑÑ•Éå%ñð€œœ¤¹ÑÉ¥´ ¤ì4(4(€€€¥˜€ …É•ÅÕ•ÍÑ%¤ì4(€€€€€É•ÑÕÉ¸É•Ì¹ÍÑ…ÑÕÌ ÐÀÀ¤¹©Í½¸¡ì½¬è™…±Í”°•ÉÉ½Èè€É•ÅÕ•ÍÑ%¥ÌÉ•ÅÕ¥É•¸œô¤ì4(€€€ô4(4(€€€¥˜€ …l…ÁÁÉ½Ù”œ°€É•©•Ðœ°€…¹•°t¹¥¹±Õ‘•Ì¡…Ñ¥½¸¤¤ì4(€€€€€É•ÑÕÉ¸É•Ì¹ÍÑ…ÑÕÌ ÐÀÀ¤¹©Í½¸¡ì½¬è™…±Í”°•ÉÉ½Èè€…Ñ¥½¸µÕÍÐ‰”…ÁÁÉ½Ù”°É•©•Ð°½È…¹•°¸œô¤ì4(€€€ô4(4(€€€½¹ÍÐ‘ˆ€ô…‘µ¥¹ˆ ¤ì4(€€€½¹ÍÐì…±±•È°ÁÉ½™¥±”ô€ô…Ý…¥Ð…ÕÑ¡•¹Ñ¥…Ñ•‘µ¥¸¡É•Ä°‘ˆ¤ì4(4(€€€¥˜€¡…Ñ¥½¸€ôôô€…ÁÁÉ½Ù”œ¤ì4(€€€€€½¹ÍÐÉ•ÍÕ±Ð€ô…Ý…¥Ð…ÁÁÉ½Ù•I•ÅÕ•ÍÐ 4(€€€€€€€‘ˆ°4(€€€€€€€…±±•È°4(€€€€€€€ÁÉ½™¥±”°4(€€€€€€€É•ÅÕ•ÍÑ%°4(€€€€€€€É•ÅÕ•ÍÑ•‘1½ÑÑ•Éå%°4(€€€€€€€MÑÉ¥¹œ¡‰½‘ä¹µ…¹Õ…±I•™•É•¹”ñð€œœ¤¹ÑÉ¥´ ¤4(€€€€€€¤ì4(4(€€€€€É•ÑÕÉ¸É•Ì¹ÍÑ…ÑÕÌ ÈÀÀ¤¹©Í½¸¡ì4(€€€€€€€½¬èÑÉÕ”°4(€€€€€€€…ÁÁÉ½Ù•èÑÉÕ”°4(€€€€€€€É•ÅÕ•ÍÐèÉ•ÍÕ±Ð4(€€€€€ô¤ì4(€€€ô4(4(€€€¥˜€¡…Ñ¥½¸€ôôô€É•©•Ðœ¤ì4(€€€€€½¹ÍÐÉ•…Í½¸€ôMÑÉ¥¹œ¡‰½‘ä¹É•…Í½¸ñð€œœ¤¹ÑÉ¥´ ¤¹Í±¥” À°€ÌÀÀ¤ì4(€€€€€¥˜€ …É•…Í½¸¤É•ÑÕÉ¸É•Ì¹ÍÑ…ÑÕÌ ÐÀÀ¤¹©Í½¸¡ì½¬è™…±Í”°•ÉÉ½Èè€I•©•Ñ¥½¸É•…Í½¸É•ÅÕ¥É•¸œô¤ì4(€€€€€…Ý…¥ÐÉ•©•ÑI•ÅÕ•ÍÐ¡‘ˆ°…±±•È°ÁÉ½™¥±”°É•ÅÕ•ÍÑ%°É•ÅÕ•ÍÑ•‘1½ÑÑ•Éå%°É•…Í½¸¤ì4(€€€€€É•ÑÕÉ¸É•Ì¹ÍÑ…ÑÕÌ ÈÀÀ¤¹©Í½¸¡ì½¬èÑÉÕ”°É•©•Ñ•èÑÉÕ”ô¤ì4(€€€ô4(€€€½¹ÍÐÉ•…Í½¸€ôMÑÉ¥¹œ 4(€€€€€‰½‘ä¹É•…Í½¸ñð€ÁÁÉ½Ù•¥¸•ÉÉ½È¸œ4(€€€€¤¹ÑÉ¥´ ¤¹Í±¥” À°€ÌÀÀ¤ñð€ÁÁÉ½Ù•¥¸•ÉÉ½È¸œì4(4(€€€…Ý…¥Ð…¹•±ÁÁÉ½Ù…° 4(€€€€€‘ˆ°4(€€€€€…±±•È°4(€€€€€ÁÉ½™¥±”°4(€€€€€É•ÅÕ•ÍÑ%°4(€€€€€É•…Í½¸4(€€€€¤ì4(4(€€€É•ÑÕÉ¸É•Ì¹ÍÑ…ÑÕÌ ÈÀÀ¤¹©Í½¸¡ì4(€€€€€½¬èÑÉÕ”°4(€€€€€…¹•±±•èÑÉÕ”4(€€€ô¤ì4(€ô…Ñ €¡•ÉÉ½È¤ì4(€€€½¹Í½±”¹•ÉÉ½È …‘µ¥¸…ÁÁÉ½Ù…±Ì•ÉÉ½Èèœ°•ÉÉ½È¤ì4(4(€€€½¹ÍÐµ•ÍÍ…”€ôMÑÉ¥¹œ 4(€€€€€•ÉÉ½Èü¹µ•ÍÍ…”ñð€½Õ±¹½Ð½µÁ±•Ñ”Ñ¡”…ÁÁÉ½Ù…°…Ñ¥½¸¸œ4(€€€€¤ì4(4(€€€½¹ÍÐÍÑ…ÑÕÌ€ô9Õµ‰•È¡•ÉÉ½Èü¹ÍÑ…ÑÕÍ½‘”ñð€À¤ì4(€€€¥˜€¡ÍÑ…ÑÕÌ€øô€ÐÀÀ€˜˜ÍÑ…ÑÕÌ€ð€ÔÀÀ¤ì4(€€€€€É•ÑÕÉ¸É•Ì¹ÍÑ…ÑÕÌ¡ÍÑ…ÑÕÌ¤¹©Í½¸¡ì½¬è™…±Í”°•ÉÉ½Èèµ•ÍÍ…”ô¤ì4(€€€ô4(4(€€€¥˜€ 4(€€€€€•ÉÉ½Èü¹½‘”€ôôô€àñð4(€€€€€µ•ÍÍ…”¹¥¹±Õ‘•Ì IM=UI}a!UMQœ¤ñð4(€€€€€µ•ÍÍ…”¹¥¹±Õ‘•Ì EÕ½Ñ„•á••‘•œ¤4(€€€€¤ì4(€€€€€É•ÑÕÉ¸É•Ì¹ÍÑ…ÑÕÌ ÐÈä¤¹©Í½¸¡ì4(€€€€€€€½¬è™…±Í”°4(€€€€€€€•ÉÉ½Èè€¥É•ÍÑ½É”¥ÌÑ•µÁ½É…É¥±ä½ÕÐ½˜ÅÕ½Ñ„½È…Á…¥Ñä¸A±•…Í”ÑÉäÑ¡”…ÁÁÉ½Ù…°……¥¸…™Ñ•ÈÑ¡”¥É•ÍÑ½É”ÅÕ½Ñ„Ý¥¹‘½ÜÉ•Í•ÑÌ¸œ4(€€€€€ô¤ì4(€€€ô4(4(€€€¥˜€ 4(€€€€€µ•ÍÍ…”¹¥¹±Õ‘•Ì ±É•…‘ä•á¥ÍÑÌœ¤ñð4(€€€€€•ÉÉ½Èü¹½‘”€ôôô€Øñð4(€€€€€•ÉÉ½Èü¹½‘”€ôôô€…±É•…‘äµ•á¥ÍÑÌœ4(€€€€¤ì4(€€€€€É•ÑÕÉ¸É•Ì¹ÍÑ…ÑÕÌ ÐÀä¤¹©Í½¸¡ì4(€€€€€€€½¬è™…±Í”°4(€€€€€€€•ÉÉ½Èè€Ñ¥­•Ðµ¹Õµ‰•È½±±¥Í¥½¸Ý…Ì‘•Ñ•Ñ•¸9¼•á¥ÍÑ¥¹œÑ¥­•ÐÝ…Ì½Ù•ÉÝÉ¥ÑÑ•¸¸A±•…Í”É•Á…¥ÈÑ¡”±½ÑÑ•Éä½Õ¹Ñ•È‰•™½É”…ÁÁÉ½Ù¥¹œÑ¡¥ÌÉ•ÅÕ•ÍÐ¸œ4(€€€€€ô¤ì4(€€€ô4(4(€€€¥˜€ 4(€€€€€µ•ÍÍ…”€ôôô€I•ÅÕ•ÍÐ¹½Ð™½Õ¹¸œñð4(€€€€€µ•ÍÍ…”€ôôô€1½ÑÑ•Éä¹½Ð™½Õ¹¸œñð4(€€€€€µ•ÍÍ…”€ôôô€Q¡¥ÌÉ•ÅÕ•ÍÐ¡…Ì…±É•…‘ä‰••¸É•Ù¥•Ý•¸œñð4(€€€€€µ•ÍÍ…”€ôôô€=¹±ä…ÁÁÉ½Ù•É•ÅÕ•ÍÑÌ…¸‰”…¹•±±•¸œ4(€€€€¤ì4(€€€€€É•ÑÕÉ¸É•Ì¹ÍÑ…ÑÕÌ ÐÀä¤¹©Í½¸¡ì½¬è™…±Í”°•ÉÉ½Èèµ•ÍÍ…”ô¤ì4(€€€ô4(4(€€€É•ÑÕÉ¸É•Ì¹ÍÑ…ÑÕÌ ÔÀÀ¤¹©Í½¸¡ì4(€€€€€½¬è™…±Í”°4(€€€€€•ÉÉ½Èèµ•ÍÍ…”4(€€€ô¤ì4(€ô4)ôì4(4(¼¼áÁ½Í”Ñ¡”Í…µ”ÁÉ½‘ÕÑ¥½¸ÑÉ…¹Í…Ñ¥½¸™Õ¹Ñ¥½¸½¹±äÑ¼¥É•‰…Í”•µÕ±…Ñ½ÈÑ•ÍÑÌ¸4(¼¼9•Ù•È…‘…¸Õ¹…ÕÑ¡•¹Ñ¥…Ñ•!QQ@…Ñ¥½¸™½ÈÑ¡¥Ì¡•±Á•È¸4)¥˜€¡ÁÉ½•ÍÌ¹•¹Ø¹%IMQ=I}5U1Q=I}!=MP¤µ½‘Õ±”¹•áÁ½ÉÑÌ¹}…ÁÁÉ½Ù•I•ÅÕ•ÍÑ½ÉµÕ±…Ñ½È€ô…ÁÁÉ½Ù•I•ÅÕ•ÍÐì4(
+    const lotteryId = String(request.lotteryId || '');
+    if (requestedLotteryId && requestedLotteryId !== lotteryId) {
+      throw new Error('Request does not belong to the selected lottery.');
+    }
+    assertLotteryAccess(profile, lotteryId);
+    const selectedLottery = await tx.get(db.collection('lotteries').doc(lotteryId));
+    if (!selectedLottery.exists || selectedLottery.data().cleanupInProgress === true) {
+      throw new Error('Lottery cleanup is in progress. Payment decisions are disabled.');
+    }
+    if (request.status !== 'pending') throw new Error('This request has already been reviewed.');
+    const now = FieldValue.serverTimestamp();
+    tx.update(ref, {
+      status: 'rejected', rejectionReason: reason,
+      reviewedBy: caller.uid, reviewedAt: now
+    });
+    const phone = normalizePhone(request.phone);
+    const phoneHash = String(request.phoneHash || sha256(phone));
+    tx.set(db.collection('publicStatus').doc(phoneHash).collection('requests').doc(requestId), {
+      lotteryId, status: 'rejected', rejectionReason: reason, reviewedAt: now
+    }, { merge: true });
+    tx.create(db.collection('buyerNotificationQueue').doc(requestId + '_rejected'), {
+      requestId, lotteryId, decision: 'rejected', state: 'pending',
+      attempts: 0, nextAttemptAt: now, createdAt: now
+    });
+    tx.create(db.collection('auditLogs').doc(), {
+      action: 'rejectRequest', lotteryId, requestId, adminId: caller.uid,
+      rejectionReason: reason, createdAt: now
+    });
+  });
+}
+
+// Admin-authenticated, short-lived read link. Private bucket rules stay deny-all;
+// only a verified admin assigned to this lottery may obtain the signed URL.
+// Actual receipt bytes travel Storage -> browser, not Storage -> Vercel -> browser.
+async function servePaymentReceipt(req, res) {
+  res.setHeader('Cache-Control', 'no-store');
+  try {
+    const requestId = String(req.query?.requestId || '').trim();
+    if (!/^[a-f0-9]{40}$/.test(requestId)) {
+      return res.status(400).json({ ok: false, error: 'Invalid request ID.' });
+    }
+    const db = adminDb();
+    const { profile } = await authenticateAdmin(req, db);
+    const snap = await db.collection('ticketRequests').doc(requestId).get();
+    if (!snap.exists) return res.status(404).json({ ok: false, error: 'Request not found.' });
+    const data = snap.data() || {};
+    const lotteryId = String(data.lotteryId || '');
+    assertLotteryAccess(profile, lotteryId);
+    const path = String(data.proofPath || '');
+    if (!path || !path.startsWith('payment-proofs/' + encodeURIComponent(lotteryId) + '/') ||
+        path.includes('..') || path.includes('\\')) {
+      return res.status(404).json({ ok: false, error: 'Receipt not found.' });
+    }
+    const bucket = getStorage().bucket('tigiray-lottery.firebasestorage.app');
+    const file = bucket.file(path);
+    const [metadata] = await file.getMetadata();
+    const bytes = Number(metadata.size);
+    const mime = String(data.proofMime || '');
+    if (!['image/jpeg', 'image/png', 'image/webp', 'application/pdf'].includes(mime) ||
+        mime !== metadata.contentType || !Number.isSafeInteger(bytes) || bytes < 1 ||
+        bytes > (mime === 'application/pdf' ? 2 * 1024 * 1024 : 420 * 1024)) {
+      return res.status(409).json({ ok: false, error: 'Receipt metadata is invalid.' });
+    }
+    const [url] = await file.getSignedUrl({
+      action: 'read',
+      expires: Date.now() + 60 * 1000,
+      responseDisposition: 'attachment'
+    });
+    return res.status(200).json({ ok: true, url, mime, expiresInSeconds: 60 });
+  } catch (error) {
+    const status = Number(error?.statusCode || 0);
+    if (status >= 400 && status < 500) {
+      return res.status(status).json({ ok: false, error: error.message });
+    }
+    if (error?.code === 404) return res.status(404).json({ ok: false, error: 'Receipt not found.' });
+    if (error?.message === 'You are not assigned to this lottery.') {
+      return res.status(403).json({ ok: false, error: 'Not authorized for this lottery.' });
+    }
+    console.error('payment receipt read authorization failed', error);
+    return res.status(500).json({ ok: false, error: 'Could not access the receipt.' });
+  }
+}
+
+// Verify that a reference belongs to a lottery this caller is allowed to
+// manage. Server-side lookup distinguishes a missing document (404) from an
+// actual permissions failure (403), unlike client Firestore security rules.
+async function lookupReference(req, res, body) {
+  res.setHeader('Cache-Control', 'no-store');
+  const lotteryId = String(body.lotteryId || '').trim();
+  const reference = String(body.reference || '').trim();
+  if (!/^[a-zA-Z0-9_-]{1,128}$/.test(lotteryId) || !reference || reference.length > 180) {
+    return res.status(400).json({ ok: false, error: 'Provide the selected lottery and an exact payment reference.' });
+  }
+
+  const db = adminDb();
+  const { profile } = await authenticateAdmin(req, db);
+  if (profile.role === 'lotteryAdmin' &&
+      !(Array.isArray(profile.lotteryIds) && profile.lotteryIds.includes(lotteryId))) {
+    return res.status(403).json({ ok: false, error: 'You are not assigned to this lottery.' });
+  }
+
+  const requestId = sha256('REF:' + reference.toUpperCase()).slice(0, 40);
+  const snap = await db.collection('ticketRequests').doc(requestId).get();
+  if (!snap.exists || snap.data()?.lotteryId !== lotteryId) {
+    return res.status(404).json({
+      ok: false, code: 'PAYMENT_NOT_FOUND',
+      error: 'No payment found for this reference in the selected lottery. Check the number and try again.'
+    });
+  }
+  const data = snap.data() || {};
+  return res.status(200).json({
+    ok: true, request: {
+      id: requestId,
+      name: String(data.name || ''),
+      phone: String(data.phone || ''),
+      reference: String(data.reference || reference),
+      status: String(data.status || 'pending'),
+      quantity: Number(data.quantity || 1),
+      total: Number(data.total || 0),
+      proofMime: String(data.proofMime || ''),
+      hasProof: Boolean(data.proofPath),
+      createdAt: data.createdAt?.toDate?.().toISOString() || null
+    }
+  });
+}
+
+
+// General-Admin-only, resumable test-lottery cleanup. It never transfers
+// receipt image bytes via Vercel. This deliberately uses an existing API
+// function so Hobby deployments do not acquire an additional function.
+const CLEANUP_PHASES = [
+  'requests', 'tickets', 'receiptClaims', 'notifications', 'auditLogs',
+  'finalProofs', 'incomingProofs', 'adminAssignments', 'finish'
+];
+const CLEANUP_BATCH = 30;
+function cleanupFailure(message, statusCode = 400) {
+  return Object.assign(new Error(message), { statusCode });
+}
+async function cleanupCount(collectionRef, field, value) {
+  return Number((await collectionRef.where(field, '==', value).count().get()).data().count || 0);
+}
+async function cleanupPreview(db, lotteryId, lotterySnap) {
+  const [requests, approved, tickets, claims, notifications, auditLogs] = await Promise.all([
+    cleanupCount(db.collection('ticketRequests'), 'lotteryId', lotteryId),
+    Number((await db.collection('ticketRequests').where('lotteryId','==',lotteryId)
+      .where('status','==','approved').count().get()).data().count || 0),
+    cleanupCount(db.collection('tickets'), 'lotteryId', lotteryId),
+    cleanupCount(db.collection('receiptUploadClaims'), 'lotteryId', lotteryId),
+    cleanupCount(db.collection('buyerNotificationQueue'), 'lotteryId', lotteryId),
+    cleanupCount(db.collection('auditLogs'), 'lotteryId', lotteryId)
+  ]);
+  return {
+    lotteryId, name: String(lotterySnap.data().name || lotteryId),
+    lotteryStatus: String(lotterySnap.data().status || ''),
+    cleanupInProgress: lotterySnap.data().cleanupInProgress === true,
+    cleanupPhase: String(lotterySnap.data().cleanupPhase || ''),
+    requests, approved, tickets, claims, notifications, auditLogs,
+    warning: 'Deletes all related records in this lottery, including real transactions. User accounts are preserved. Historical lottery audit entries are removed; a deletion certificate remains.'
+  };
+}
+async function cleanupDeleteDocuments(db, refs) {
+  const unique = [...new Map(refs.map(ref => [ref.path, ref])).values()];
+  if (!unique.length) return 0;
+  // Small atomic batches, not one Vercel request per document.
+  // Firebase itself enforces any remaining free-plan quotas.
+  const batch = db.batch();
+  for (const ref of unique) batch.delete(ref);
+  await batch.commit();
+  return unique.length;
+}
+async function cleanupStep(db, lotteryId, lotteryRef, data) {
+  const phase = String(data.cleanupPhase || 'requests');
+  const nextPhase = async () => {
+    const index = CLEANUP_PHASES.indexOf(phase);
+    if (index < 0 || index === CLEANUP_PHASES.length - 1)
+      throw cleanupFailure('Invalid cleanup phase. Contact technical support.');
+    const next = CLEANUP_PHASES[index+1];
+    await lotteryRef.update({ cleanupPhase: next });
+    return { ok:true, phase:next, advanced:true, processed:0, deletedDocuments:0 };
+  };
+  const collections = {
+    requests:'ticketRequests', tickets:'tickets',
+    receiptClaims:'receiptUploadClaims', notifications:'buyerNotificationQueue', auditLogs:'auditLogs'
+  };
+  if (collections[phase]) {
+    const snap = await db.collection(collections[phase]).where('lotteryId','==',lotteryId)
+      .limit(CLEANUP_BATCH).get();
+    if (snap.empty) return nextPhase();
+    const proofPaths = [];
+    if (phase === 'requests') {
+      for (const requestDoc of snap.docs) {
+        const proofPath = String(requestDoc.data().proofPath || '');
+        if (proofPath) {
+          const prefix = 'payment-proofs/' + encodeURIComponent(lotteryId) + '/';
+          if (!proofPath.startsWith(prefix) || proofPath.includes('..') || proofPath.includes('\\')) {
+            throw cleanupFailure('Unsafe receipt path in request ' + requestDoc.id + '. Cleanup stopped.');
+          }
+          proofPaths.push(proofPath);
+        }
+      }
+    }
+    const refs = [];
+    for (const item of snap.docs) {
+      refs.push(item.ref);
+      if (phase === 'requests') {
+        const record = item.data();
+        const phoneHash = String(record.phoneHash || '') || sha256(normalizePhone(record.phone));
+        if (!/^[a-f0-9]{64}$/.test(phoneHash)) {
+          throw cleanupFailure('Invalid phone hash in request ' + item.id + '. Cleanup stopped.');
+        }
+        refs.push(db.collection('publicStatus').doc(phoneHash).collection('requests').doc(item.id));
+      }
+    }
+    const deletedDocuments = await cleanupDeleteDocuments(db, refs);
+    // Delete proof objects only after the database batch commits. If GCS removal
+    // fails, finalProofs later sweeps this lottery prefix, so cleanup is resumable.
+    if (proofPaths.length) {
+      const bucket = getStorage().bucket('tigiray-lottery.firebasestorage.app');
+      await Promise.all(proofPaths.map(path => bucket.file(path).delete({ignoreNotFound:true})));
+    }
+    return { ok:true, phase, processed:snap.size, deletedDocuments, removedFiles:proofPaths.length };
+  }
+  if (phase === 'finalProofs' || phase === 'incomingProofs') {
+    const prefix = (phase === 'finalProofs' ? 'payment-proofs/' : 'payment-proof-incoming/') +
+      encodeURIComponent(lotteryId) + '/';
+    const [files] = await getStorage().bucket('tigiray-lottery.firebasestorage.app').getFiles({
+      prefix, autoPaginate:false, maxResults:CLEANUP_BATCH
+    });
+    if (!files.length) return nextPhase();
+    await Promise.all(files.map(file => file.delete({ ignoreNotFound:true })));
+    return { ok:true, phase, processed:files.length, deletedDocuments:0, removedFiles:files.length };
+  }
+  if (phase === 'adminAssignments') {
+    const snap = await db.collection('users').where('lotteryIds','array-contains',lotteryId)
+      .limit(CLEANUP_BATCH).get();
+    if (snap.empty) return nextPhase();
+    const batch = db.batch();
+    snap.forEach(item => batch.update(item.ref, { lotteryIds: FieldValue.arrayRemove(lotteryId) }));
+    await batch.commit();
+    return { ok:true, phase, processed:snap.size, deletedDocuments:0 };
+  }
+  if (phase === 'finish') {
+    // A previously issued signed Storage POST remains usable for up to 10
+    // minutes. Do a final incoming-file sweep only after those policies expire.
+    const started = data.cleanupStartedAt?.toMillis?.() || 0;
+    const safeAt = started + 11 * 60 * 1000;
+    if (started && Date.now() < safeAt) {
+      await lotteryRef.update({ cleanupPhase:'incomingProofs' });
+      return { ok:true, phase:'incomingProofs', paused:true,
+        waitingUntil:new Date(safeAt).toISOString(), processed:0, deletedDocuments:0 };
+    }
+    const proofBucket = getStorage().bucket('tigiray-lottery.firebasestorage.app');
+    const [requests, tickets, claims, notifications, admins, audit, finals, incoming] = await Promise.all([
+      db.collection('ticketRequests').where('lotteryId','==',lotteryId).limit(1).get(),
+      db.collection('tickets').where('lotteryId','==',lotteryId).limit(1).get(),
+      db.collection('receiptUploadClaims').where('lotteryId','==',lotteryId).limit(1).get(),
+      db.collection('buyerNotificationQueue').where('lotteryId','==',lotteryId).limit(1).get(),
+      db.collection('users').where('lotteryIds','array-contains',lotteryId).limit(1).get(),
+      db.collection('auditLogs').where('lotteryId','==',lotteryId).limit(1).get(),
+      proofBucket.getFiles({prefix:'payment-proofs/'+encodeURIComponent(lotteryId)+'/',autoPaginate:false,maxResults:1}),
+      proofBucket.getFiles({prefix:'payment-proof-incoming/'+encodeURIComponent(lotteryId)+'/',autoPaginate:false,maxResults:1})
+    ]);
+    if ([requests,tickets,claims,notifications,admins,audit].some(x => !x.empty) ||
+        finals[0].length || incoming[0].length) {
+      await lotteryRef.update({ cleanupPhase:'requests' });
+      return { ok:true, phase:'requests', advanced:true, processed:0, deletedDocuments:0 };
+    }
+    const batch = db.batch();
+    batch.delete(lotteryRef);
+    batch.create(db.collection('auditLogs').doc(), {
+      action:'fullLotteryCleanup', lotteryId, lotteryName:String(data.name || ''),
+      startedBy:String(data.cleanupStartedBy || ''), finishedAt:FieldValue.serverTimestamp(),
+      note:'Deleted linked lottery data, including historical lottery audit entries. Minimal deletion certificate retained.'
+    });
+    await batch.commit();
+    return { ok:true, done:true, phase:'done', processed:0, deletedDocuments:1 };
+  }
+  throw cleanupFailure('Unknown cleanup phase. Cleanup stopped.');
+}
+async function handleLotteryCleanup(req, res, body) {
+  res.setHeader('Cache-Control','no-store');
+  const action = String(body.action || '');
+  const lotteryId = String(body.lotteryId || '').trim();
+  if (!/^[a-zA-Z0-9_-]{1,128}$/.test(lotteryId)) throw cleanupFailure('Invalid lottery ID.');
+  const db = adminDb();
+  const { caller, profile } = await authenticateAdmin(req, db);
+  if (profile.role !== 'generalAdmin') throw cleanupFailure('Only General Admin can delete lotteries.', 403);
+  const lotteryRef = db.collection('lotteries').doc(lotteryId);
+  const snap = await lotteryRef.get();
+  if (!snap.exists) return res.status(404).json({ ok:false, error:'Lottery not found or already deleted.' });
+  if (action === 'lottery-cleanup-preview') {
+    return res.status(200).json({ ok:true, ...(await cleanupPreview(db,lotteryId,snap)) });
+  }
+  if (action === 'lottery-cleanup-start') {
+    if (body.confirm !== 'DELETE ' + lotteryId || body.acceptIrreversible !== true) {
+      throw cleanupFailure('Type DELETE and the full lottery ID to confirm irreversible deletion.');
+    }
+    await db.runTransaction(async tx => {
+      const current = await tx.get(lotteryRef);
+      if (!current.exists) throw cleanupFailure('Lottery no longer exists.',404);
+      if (current.data().cleanupInProgress) return;
+      tx.update(lotteryRef, {
+        cleanupInProgress:true, cleanupPhase:'requests', status:'closed',
+        cleanupStartedBy:caller.uid, cleanupStartedAt:FieldValue.serverTimestamp()
+      });
+    });
+    return res.status(200).json({ ok:true, started:true });
+  }
+  if (action === 'lottery-cleanup-step') {
+    if (snap.data().cleanupInProgress !== true) {
+      throw cleanupFailure('Cleanup was not started or the lottery has already been removed.',409);
+    }
+    return res.status(200).json(await cleanupStep(db,lotteryId,lotteryRef,snap.data()));
+  }
+  throw cleanupFailure('Unsupported cleanup action.');
+}
+
+// Preview-only match to a REAL pending purchase. All account and purchase details
+// come from Firestore; the browser cannot substitute a receiving account/amount.
+async function handleCheckEtPendingMatch(req, res, body) {
+  res.setHeader('Cache-Control','no-store');
+  if (process.env.VERCEL_ENV !== 'preview') {
+    return res.status(403).json({ok:false,error:'Payment matching tests are available only on a Vercel Preview deployment.'});
+  }
+  const db = adminDb();
+  const { profile } = await authenticateAdmin(req, db);
+  const lotteryId = String(body.lotteryId || '').trim();
+  if (!/^[a-zA-Z0-9_-]{1,128}$/.test(lotteryId)) {
+    return res.status(400).json({ok:false,error:'Select a valid lottery.'});
+  }
+  if (profile.role === 'lotteryAdmin' &&
+    !Array.isArray(profile.lotteryIds || []) ) {
+    return res.status(403).json({ok:false,error:'No assigned lotteries.'});
+  }
+  if (profile.role === 'lotteryAdmin' && !(profile.lotteryIds || []).includes(lotteryId)) {
+    return res.status(403).json({ok:false,error:'You are not assigned to this lottery.'});
+  }
+  const lotterySnap = await db.collection('lotteries').doc(lotteryId).get();
+  if (!lotterySnap.exists) return res.status(404).json({ok:false,error:'Lottery not found.'});
+  const lottery = lotterySnap.data() || {};
+  if (lottery.cleanupInProgress) return res.status(409).json({ok:false,error:'This lottery is being deleted.'});
+  const accounts = Array.isArray(lottery.paymentAccounts) ? lottery.paymentAccounts : [];
+  const cbeIndexes = accounts.map((a,i)=>({a,i})).filter(({a})=>/^(cbe|commercial bank of ethiopia)$/i.test(String(a.bank || '').trim()));
+  if (!cbeIndexes.length) return res.status(400).json({ok:false,error:'Configure a real CBE receiving account for this lottery before testing.'});
+  const index = body.accountIndex === undefined || body.accountIndex === null || body.accountIndex === ''
+    ? (cbeIndexes.length === 1 ? cbeIndexes[0].i : -1)
+    : Number(body.accountIndex);
+  if (!Number.isInteger(index) || index < 0 || index >= accounts.length ||
+    !cbeIndexes.some(x=>x.i===index)) {
+    return res.status(400).json({ok:false,error:'Select one of this lottery\'s configured CBE receiving accounts.'});
+  }
+  const account = String(accounts[index].number || '').replace(/\s+/g,'');
+  if (!/^\d{8,30}$/.test(account) || account === '1000000000000') {
+    return res.status(400).json({ok:false,error:'Replace the sample/missing CBE account with a real account in Payment Accounts.'});
+  }
+
+  let requestSnap;
+  const requestId = String(body.requestId || '').trim();
+  if (requestId) {
+    if (!/^[a-zA-Z0-9_-]{1,128}$/.test(requestId)) return res.status(400).json({ok:false,error:'Invalid request ID.'});
+    requestSnap = await db.collection('ticketRequests').doc(requestId).get();
+  } else {
+    const reference = String(body.reference || '').trim();
+    if (!/^[a-zA-Z0-9_-]{5,80}$/.test(reference)) {
+      return res.status(400).json({ok:false,error:'Enter the exact reference from a pending ticket.'});
+    }
+    const canonicalId = sha256('REF:' + reference.toUpperCase()).slice(0,40);
+    const direct = await db.collection('ticketRequests').doc(canonicalId).get();
+    if (direct.exists && direct.data().lotteryId === lotteryId &&
+        String(direct.data().reference || '').trim().toUpperCase() === reference.toUpperCase()) {
+      requestSnap = direct;
+    } else {
+      const queryMatches = await db.collection('ticketRequests').where('reference','==',reference).limit(21).get();
+      const matches = queryMatches.docs.filter(d=>d.data().lotteryId===lotteryId);
+      if (queryMatches.size >= 21) return res.status(409).json({ok:false,error:'Too many requests share this reference. Use the request ID.'});
+      if (matches.length !== 1) return res.status(matches.length?409:404).json({
+        ok:false,error:matches.length?'Reference is ambiguous. Use the request ID.':'No matching ticket request found in this lottery.'
+      });
+      requestSnap = matches[0];
+    }
+  }
+  if (!requestSnap?.exists || requestSnap.data().lotteryId !== lotteryId) {
+    return res.status(404).json({ok:false,error:'Pending ticket request not found in the selected lottery.'});
+  }
+  const purchase = requestSnap.data() || {};
+  if (purchase.status !== 'pending') return res.status(409).json({ok:false,error:'Only pending requests can be checked.'});
+  const storedReference = String(purchase.reference || '').trim();
+  const method = String(body.verificationMethod || 'reference').toLowerCase();
+  if (!['reference','receipt'].includes(method)) {
+    return res.status(400).json({ok:false,error:'Unsupported verification method.'});
+  }
+  if (method === 'reference' && !/^[a-zA-Z0-9_-]{5,80}$/.test(storedReference)) {
+    return res.status(400).json({ok:false,error:'This request has no supported CBE reference. Select the receipt method if it has a PDF/image.'});
+  }
+  if (method === 'receipt' && !purchase.proofPath) {
+    return res.status(400).json({ok:false,error:'No private PDF or screenshot is attached to this request.'});
+  }
+  const { verifyCheckEtPayment } = require('../../lib/checket-verify');
+  const { comparePaymentToRequest } = require('../../lib/checket-request-match');
+  let receiptFile = null;
+  if (method === 'receipt') {
+    const {readFinalReceipt}=require('../../lib/checket-private-receipt');
+    // Only server-owned finalized GCS objects; never send customer URLs to Check.et.
+    receiptFile=await readFinalReceipt(purchase);
+  }
+  // Check.et receives the full configured receiving account, and a reference
+  // OR the authenticated private file. PDF goes directly to Check.et: no OCR.
+  // Images are an experiment; Check.et may respond 422 without receipt_text.
+  const verification = await verifyCheckEtPayment({
+    bank:'cbe', accountNumber:account,
+    ...(method === 'receipt' ? {receiptFile} : {transactionNumber:storedReference})
+  });
+  const providerReference = String(verification.reportedTransactionNumber || '').trim().toUpperCase();
+  const effectiveReference = method === 'receipt'
+    ? (providerReference || storedReference.toUpperCase()) : storedReference;
+  // This lookup is advisory (exact legacy Firestore reference only). Persistent
+  // global paymentClaims is the stronger future protection. Neither writes data.
+  const claimRef = /^[A-Z0-9_-]{5,80}$/.test(effectiveReference)
+    ? paymentClaimRef(db,effectiveReference) : null;
+  const [sameRef, existingClaim] = await Promise.all([
+    claimRef
+      ? db.collection('ticketRequests').where('reference','==',effectiveReference).limit(21).get()
+      : Promise.resolve({docs:[],size:0}),
+    claimRef ? claimRef.get() : Promise.resolve(null)
+  ]);
+  const otherDocs = sameRef.docs.filter(x=>x.id!==requestSnap.id);
+  const duplicate = {
+    otherCount:otherDocs.length,
+    otherApprovedCount:otherDocs.filter(x=>x.data().status==='approved').length,
+    truncated:sameRef.size===21,
+    claimStatus:claimRef ? claimSnapshotStatus(existingClaim,requestSnap.id) : 'reference_not_returned'
+  };
+  // For receipt-only purchases, mark the bank-supplied reference as extracted,
+  // NOT as a customer reference match. Keep human review regardless.
+  const assessment = comparePaymentToRequest(
+    {...purchase,lotteryId}, verification, {id:lotteryId},duplicate
+  );
+  if (method === 'receipt') {
+    assessment.checks.receiptInput = receiptFile.mime === 'application/pdf' ? 'pdf' : 'image';
+    assessment.checks.bankExtractedReference = providerReference.length > 0;
+    if (!storedReference) {
+      assessment.recommendation='MANUAL_REVIEW';
+      assessment.concerns.push(providerReference
+        ? 'Reference was extracted from a receipt, not entered by the buyer. Reconcile it before approval.'
+        : 'Check.et did not return a usable reference. Approval requires a verified reference.');
+    }
+    if (storedReference && providerReference && storedReference.toUpperCase() !== providerReference) {
+      assessment.recommendation='MANUAL_REVIEW';
+      assessment.concerns.push('The PDF/image reference differs from the customer-entered reference.');
+    }
+  }
+  const {evaluateAutoPayment}=require('../../lib/cbe-auto-eligibility');
+  // Informative only: Preview uses the same production Firestore but will NEVER
+  // change tickets based on this eligibility report.
+  const autoEligibility=evaluateAutoPayment({
+    purchase,lottery,verification,duplicate
+  });
+  return res.status(200).json({
+    ok:true,readOnly:true,verificationInput:method,
+    autoEligibility,
+    request:{id:requestSnap.id,lotteryId,total:Number(purchase.total||0),
+      reference:storedReference,extractedReference:method==='receipt'?providerReference:''},
+    payment:{
+      bank:verification.bank,status:verification.status,amount:verification.amount,currency:verification.currency,
+      transactionDate:verification.transactionDate,payerName:verification.payerName,receiverName:verification.receiverName,
+      receiverAccountStatus:verification.receiverAccountStatus,
+      providerCbeAccountCheck:verification.providerCbeAccountCheck
+    },
+    assessment
+  });
+}
+
+// Preview-only manual verification: no Firestore mutations or ticket approval.
+async function handleCheckEtVerification(req, res, body) {
+  res.setHeader('Cache-Control', 'no-store');
+  if (process.env.VERCEL_ENV !== 'preview') {
+    return res.status(403).json({ ok:false, error:'Manual Check.et verification tests are available only on a Vercel Preview deployment.' });
+  }
+  const db = adminDb();
+  const { profile } = await authenticateAdmin(req, db);
+  if (profile.role !== 'generalAdmin') {
+    return res.status(403).json({ ok:false, error:'Only General Admin can test payment verification.' });
+  }
+  const { verifyCheckEtPayment } = require('../../lib/checket-verify');
+  const result = await verifyCheckEtPayment(body);
+  return res.status(200).json({ ok:true, ...result });
+}
+
+// Cron-only automatic CBE payment processor. No public caller and never from
+// Vercel Preview (which shares the production Firestore database).
+async function handleAutoCbeWorker(req,res){
+  res.setHeader('Cache-Control','no-store');
+  const {checkWorkerSecret,runBatch}=require('../../lib/cbe-auto-worker');
+  if(!checkWorkerSecret(req))return res.status(401).json({ok:false,error:'Unauthorized.'});
+  const {cutoverMs}=require('../../lib/cbe-auto-cutover');
+  if(process.env.VERCEL_ENV!=='production' ||
+     process.env.LOTTERY_CBE_AUTO_APPROVAL_ENABLED!=='true' ||
+     !Number.isFinite(cutoverMs()) || Date.now()<cutoverMs()) {
+    return res.status(403).json({ok:false,error:'CBE automatic approval is not enabled.'});
+  }
+  const db=adminDb();
+  const result=await runBatch(db,{
+    approve:async(requestId,lotteryId,reference,guard)=>{
+      await approveRequest(db,{uid:'system:checket-cbe'},{role:'generalAdmin'},
+        requestId,lotteryId,reference,guard);
+    }
+  });
+  return res.status(200).json({ok:true,...result});
+}
+
+module.exports = async (req, res) => {
+  if (req.method === 'GET' && String(req.query?.receipt || '') === '1') {
+    return servePaymentReceipt(req, res);
+  }
+  if (req.method !== 'POST') {
+    return res.status(405).json({ ok: false, error: 'Method not allowed.' });
+  }
+
+  try {
+    const body = readBody(req);
+    const action = String(body.action || '').trim().toLowerCase();
+    if (action === 'cbe-auto-worker') return await handleAutoCbeWorker(req, res);
+    if (action === 'checket-match-pending') return await handleCheckEtPendingMatch(req, res, body);
+    if (action === 'checket-verify') return await handleCheckEtVerification(req, res, body);
+    if (action === 'lookup-reference') return await lookupReference(req, res, body);
+    if (action.startsWith('lottery-cleanup-')) return await handleLotteryCleanup(req, res, body);
+    const requestId = String(body.requestId || '').trim();
+    const requestedLotteryId = String(body.lotteryId || '').trim();
+
+    if (!requestId) {
+      return res.status(400).json({ ok: false, error: 'requestId is required.' });
+    }
+
+    if (!['approve', 'reject', 'cancel'].includes(action)) {
+      return res.status(400).json({ ok: false, error: 'action must be approve, reject, or cancel.' });
+    }
+
+    const db = adminDb();
+    const { caller, profile } = await authenticateAdmin(req, db);
+
+    if (action === 'approve') {
+      const result = await approveRequest(
+        db,
+        caller,
+        profile,
+        requestId,
+        requestedLotteryId,
+        String(body.manualReference || '').trim()
+      );
+
+      return res.status(200).json({
+        ok: true,
+        approved: true,
+        request: result
+      });
+    }
+
+    if (action === 'reject') {
+      const reason = String(body.reason || '').trim().slice(0, 300);
+      if (!reason) return res.status(400).json({ ok: false, error: 'Rejection reason required.' });
+      await rejectRequest(db, caller, profile, requestId, requestedLotteryId, reason);
+      return res.status(200).json({ ok: true, rejected: true });
+    }
+    const reason = String(
+      body.reason || 'Approved in error.'
+    ).trim().slice(0, 300) || 'Approved in error.';
+
+    await cancelApproval(
+      db,
+      caller,
+      profile,
+      requestId,
+      reason
+    );
+
+    return res.status(200).json({
+      ok: true,
+      cancelled: true
+    });
+  } catch (error) {
+    console.error('admin approvals error:', error);
+
+    const message = String(
+      error?.message || 'Could not complete the approval action.'
+    );
+
+    const status = Number(error?.statusCode || 0);
+    if (status >= 400 && status < 500) {
+      return res.status(status).json({ ok: false, error: message });
+    }
+
+    if (
+      error?.code === 8 ||
+      message.includes('RESOURCE_EXHAUSTED') ||
+      message.includes('Quota exceeded')
+    ) {
+      return res.status(429).json({
+        ok: false,
+        error: 'Firestore is temporarily out of quota or capacity. Please try the approval again after the Firestore quota window resets.'
+      });
+    }
+
+    if (
+      message.includes('Already exists') ||
+      error?.code === 6 ||
+      error?.code === 'already-exists'
+    ) {
+      return res.status(409).json({
+        ok: false,
+        error: 'A ticket-number collision was detected. No existing ticket was overwritten. Please repair the lottery counter before approving this request.'
+      });
+    }
+
+    if (
+      message === 'Request not found.' ||
+      message === 'Lottery not found.' ||
+      message === 'This request has already been reviewed.' ||
+      message === 'Only approved requests can be cancelled.'
+    ) {
+      return res.status(409).json({ ok: false, error: message });
+    }
+
+    return res.status(500).json({
+      ok: false,
+      error: message
+    });
+  }
+};
+
+// Expose the same production transaction function only to Firebase emulator tests.
+// Never add an unauthenticated HTTP action for this helper.
+if (process.env.FIRESTORE_EMULATOR_HOST) module.exports._approveRequestForEmulator = approveRequest;
