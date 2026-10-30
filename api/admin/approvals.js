@@ -88,10 +88,12 @@ async function approveRequest(db, caller, profile, requestId, requestedLotteryId
     }
     const lotteryRef = db.collection('lotteries').doc(lotteryId);
     const claimRef = paymentClaimRef(db, reference);
-    // All reads finish before any transaction writes. The claim is global across
-    // lotteries and remains consumed after cancellation or lottery cleanup.
-    const [lotterySnap, claimSnap] = await Promise.all([
-      tx.get(lotteryRef), claimRef ? tx.get(claimRef) : Promise.resolve(null)
+    const queueRef=autoGuard ? db.collection('autoPaymentQueue').doc(requestId) : null;
+    // Read order, lottery, claim, and durably verified bank evidence before
+    // any writes. The receipt snapshot must belong to this precise purchase.
+    const [lotterySnap, claimSnap, queueSnap] = await Promise.all([
+      tx.get(lotteryRef), claimRef ? tx.get(claimRef) : Promise.resolve(null),
+      queueRef ? tx.get(queueRef) : Promise.resolve(null)
     ]);
     if (!lotterySnap.exists) throw new Error('Lottery not found.');
 
@@ -104,6 +106,12 @@ async function approveRequest(db, caller, profile, requestId, requestedLotteryId
       const {enabledFor}=require('../../lib/cbe-auto-worker');
       const {nameKey,cbeAccounts,timestampMs}=require('../../lib/cbe-auto-eligibility');
       const [configured]=cbeAccounts(lottery);
+      const {checkSavedEvidence,MAX_AGE_MS}=require('../../lib/cbe-verification-evidence');
+      const bankEvidence=queueSnap?.exists && configured
+        ? checkSavedEvidence(queueSnap.data()?.verifiedEvidence,
+            requestId,request,String(configured.number).replace(/\s/g,''))
+        : {status:'missing_queue'};
+      const stored=bankEvidence.payment||{};
       const guardTime=Number(autoGuard.verifiedAt||0);
       const createdAt=timestampMs(request.createdAt);
       const paidAt=timestampMs(autoGuard.transactionDate);
@@ -117,12 +125,23 @@ async function approveRequest(db, caller, profile, requestId, requestedLotteryId
         normalizePaymentReference(autoGuard.reference)===normalized &&
         (!request.reference || normalizePaymentReference(request.reference)===normalized) &&
         Number(autoGuard.expectedAmount)===Number(request.total) &&
+        bankEvidence.status==='usable' && queueSnap?.data()?.state==='processing' &&
+        bankEvidence.fingerprint===autoGuard.fingerprint &&
+        bankEvidence.verifiedAt===guardTime &&
+        stored.verified===true && stored.providerDuplicate===false &&
+        stored.providerCbeAccountCheck===true &&
+        stored.bank==='cbe' && stored.reportedBank==='cbe' &&
+        stored.verificationMethod==='official' && stored.status==='completed' &&
+        normalizePaymentReference(stored.reportedTransactionNumber)===normalized &&
+        stored.transactionDate===autoGuard.transactionDate &&
+        stored.receiverName===autoGuard.receiveName &&
+        stored.currency==='ETB' && Number(stored.amount)===Number(request.total) &&
         configured && cbeAccounts(lottery).length===1 &&
         String(configured.number).replace(/\s/g,'')===String(autoGuard.account) &&
         nameKey(configured.holderName)===nameKey(autoGuard.receiveName) &&
         Number.isFinite(createdAt) && Number.isFinite(paidAt) &&
         paidAt>=createdAt-30*60000 && paidAt<=createdAt+30*60000 &&
-        Date.now()-guardTime>=0 && Date.now()-guardTime<2*60000;
+        Date.now()-guardTime>=0 && Date.now()-guardTime<MAX_AGE_MS;
       if(!valid)throw Object.assign(new Error('CBE auto approval guard did not pass; send to manual review.'),{statusCode:409});
     }
 
