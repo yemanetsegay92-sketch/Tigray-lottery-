@@ -32,7 +32,7 @@ jobs:
           # The endpoint has its own production env, cutoff, allowlist,
           # authenticated request, and immutable payment-claim safeguards.
           curl --fail --silent --show-error --max-time 85 \
-            --request POST 'https://tigraylottery.com/api/admin/approvals' \
+            --request POST 'https://www.tigraylottery.com/api/admin/approvals' \
             --header 'Content-Type: application/json' \
             --header "Authorization: Bearer ${CBE_WORKER_SECRET}" \
             --data '{"action":"cbe-auto-worker"}' \
