@@ -857,13 +857,21 @@ async function handleAutoCbeWorker(req,res,body={}){
      !Number.isFinite(cutoverMs()) || Date.now()<cutoverMs()) {
     return res.status(403).json({ok:false,error:'CBE automatic approval is not enabled.'});
   }
+  const targeted=String(body.action||'').trim().toLowerCase()==='cbe-auto-worker-one';
+  const requestId=String(body.requestId||'').trim();
+  if(targeted && !/^[a-f0-9]{40}$/.test(requestId)){
+    return res.status(400).json({ok:false,error:'Invalid queue request ID.'});
+  }
   const db=adminDb();
-  const result=await runBatch(db,{
+  const options={
     approve:async(requestId,lotteryId,reference,guard)=>{
       await approveRequest(db,{uid:'system:checket-cbe'},{role:'generalAdmin'},
         requestId,lotteryId,reference,guard);
     }
-  });
+  };
+  const result=targeted
+    ? await runQueueItem(db,requestId,options)
+    : await runBatch(db,options);
   return res.status(200).json({ok:true,...result});
 }
 
