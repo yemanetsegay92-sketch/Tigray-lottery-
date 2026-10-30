@@ -1,0 +1,41 @@
+name: CBE Auto Approval Worker (production opt-in)
+
+on:
+  # Active only after this workflow is merged into the default branch AND
+  # an owner explicitly enables the repository variable below.
+  schedule:
+    - cron: '*/5 * * * *'
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: tigray-cbe-auto-approval-worker
+  cancel-in-progress: false
+
+jobs:
+  process:
+    if: ${{ vars.LOTTERY_CBE_CRON_ENABLED == 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Invoke production-only CBE worker
+        env:
+          CBE_WORKER_SECRET: ${{ secrets.LOTTERY_CBE_AUTO_APPROVAL_CRON_SECRET }}
+        run: |
+          set -euo pipefail
+          if [ ${#CBE_WORKER_SECRET} -lt 32 ]; then
+            echo 'Worker secret is missing. No request submitted.'
+            exit 1
+          fi
+          # The workflow never points to a Preview URL.
+          # The endpoint has its own production env, cutoff, allowlist,
+          # authenticated request, and immutable payment-claim safeguards.
+          curl --fail --silent --show-error --max-time 85 \
+            --request POST 'https://tigraylottery.com/api/admin/approvals' \
+            --header 'Content-Type: application/json' \
+            --header "Authorization: Bearer ${CBE_WORKER_SECRET}" \
+            --data '{"action":"cbe-auto-worker"}' \
+            --output /tmp/cbe-worker-result.json
+          # Do not output provider details or sensitive records in Actions logs.
+          node -e "const x=require('/tmp/cbe-worker-result.json');if(!x.ok)process.exit(1);console.log('CBE worker processed:',Number(x.processed)||0,'approved:',Number(x.approved)||0,'manual review:',Number(x.manual_review)||0)"
