@@ -68,7 +68,9 @@ test('only general admin can assign users and create lotteries',async()=>{
   await assertFails(setDoc(doc(anonymous.firestore(),'users','fake-admin'),{role:'generalAdmin'}));
   await assertSucceeds(setDoc(doc(general.firestore(),'lotteries','approved-lot'),{status:'active',price:100}));
 });
-test('public status reads work, but only backend/authorized admins can update status with current rules',async()=>{
+test('buyer status is public-readable but no browser role can forge approved status',async()=>{
   await assertSucceeds(getDoc(doc(anonymous.firestore(),'publicStatus','hashed-phone','requests','req-1')));
-  await assertFails(updateDoc(doc(unassigned.firestore(),'publicStatus','hashed-phone','requests','req-1'),{status:'approved'}));
+  for (const c of [general,assigned,unassigned,anonymous]) {
+    await assertFails(updateDoc(doc(c.firestore(),'publicStatus','hashed-phone','requests','req-1'),{status:'approved'}));
+  }
 });
