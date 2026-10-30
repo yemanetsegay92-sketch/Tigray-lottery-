@@ -886,7 +886,7 @@ module.exports = async (req, res) => {
   try {
     const body = readBody(req);
     const action = String(body.action || '').trim().toLowerCase();
-    if (action === 'cbe-auto-worker') return await handleAutoCbeWorker(req, res);
+    if (action === 'cbe-auto-worker' || action === 'cbe-auto-worker-one') return await handleAutoCbeWorker(req, res, body);
     if (action === 'checket-match-pending') return await handleCheckEtPendingMatch(req, res, body);
     if (action === 'checket-verify') return await handleCheckEtVerification(req, res, body);
     if (action === 'lookup-reference') return await lookupReference(req, res, body);
