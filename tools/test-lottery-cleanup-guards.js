@@ -5,6 +5,7 @@ const fs = require('node:fs');
 const api = fs.readFileSync('api/admin/approvals.js','utf8');
 const checkout = fs.readFileSync('api/customer/create-request.js','utf8');
 const ui = fs.readFileSync('admin/js/general.js','utf8');
+const html = fs.readFileSync('admin/general.html','utf8');
 function includes(text, pattern, description) {
   assert.match(text, pattern, description);
 }
@@ -30,6 +31,12 @@ includes(ui, /'lottery-cleanup-preview'/, 'Show confirmation preview');
 includes(ui, /'lottery-cleanup-start'/, 'Start confirmed cleanup');
 includes(ui, /'lottery-cleanup-step'/, 'Support resumable cleanup');
 includes(ui, /autoResumeCleanupOnLoad\(\)/, 'Resume after reload');
+includes(html, /id="deleteAllLotteries"/, 'Show bulk cleanup button');
+includes(ui, /'lottery-cleanup-preview', id/, 'Bulk preview every lottery before confirmation');
+includes(ui, /'DELETE ALL '\+ids\.length\+' LOTTERIES'/, 'Require exact bulk deletion phrase');
+includes(ui, /'lottery-cleanup-start', p\.lotteryId/, 'Close each selected lottery before bulk deletion');
+includes(ui, /await removeLottery\(id, true\)/, 'Reuse resumable safe cleanup for each lottery');
+includes(ui, /if \(!completed\) throw new Error/, 'Stop bulk deletion on unfinished cleanup');
 includes(ui, /await new Promise\(resolve=>setTimeout\(resolve,waitMs\)\)/, 'Automatic cooldown without repeated clicks');
 includes(ui, /e\.status !== 429 && e\.status !== 503/, 'Retry real Firebase quota pressure');
 assert.doesNotMatch(ui, /await deleteDoc\(doc\(db,'lotteries',id\)\)/, 'Old orphan-producing deletion removed');
