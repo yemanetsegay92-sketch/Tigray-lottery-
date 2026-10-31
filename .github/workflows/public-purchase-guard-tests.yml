@@ -1,0 +1,28 @@
+name: Public purchase abuse guard tests
+
+on:
+  pull_request:
+    paths:
+      - 'api/customer/create-request.js'
+      - 'lib/public-purchase-guard.js'
+      - 'tools/test-public-purchase-guard.cjs'
+      - '.github/workflows/public-purchase-guard-tests.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  abuse-guard:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Check production handler and guard syntax
+        run: |
+          node --check api/customer/create-request.js
+          node --check lib/public-purchase-guard.js
+      - name: Run deterministic abuse-guard tests
+        run: node --test tools/test-public-purchase-guard.cjs
