@@ -1,0 +1,54 @@
+name: Safe live rate-limit smoke test (no purchase)
+on:
+  push:
+    branches: ['test/safe-rate-limit-smoke-20261031']
+permissions:
+  contents: read
+concurrency:
+  group: safe-rate-limit-smoke
+  cancel-in-progress: true
+jobs:
+  live-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check live 15/minute guard using nonexistent lottery only
+        shell: bash
+        run: |
+          node <<'NODE'
+          'use strict';
+          const crypto = require('node:crypto');
+          const base = 'https://www.tigraylottery.com/api/customer/create-request';
+          const lotteryId = 'nonexistent-security-smoke-' + crypto.randomBytes(10).toString('hex');
+          // A never-existing lottery -> 404 before any ticketRequest, queue, bank
+          // verification, Storage receipt, or Telegram notification can be created.
+          // Only the rate-limit counter is written.
+          const payload = {
+            lotteryId, name:'INTERNAL SECURITY SMOKE - NO PURCHASE',
+            phone:'0000000000', reference:'FTSECURITYTEST00000001', quantity:1
+          };
+          (async () => {
+            const codes=[];
+            for(let i=0;i<16;i++){
+              const controller=new AbortController();
+              const t=setTimeout(()=>controller.abort(),10000);
+              let response;
+              try {
+                response=await fetch(base,{
+                  method:'POST',
+                  headers:{'content-type':'application/json','cache-control':'no-store'},
+                  body:JSON.stringify(payload),
+                  signal:controller.signal
+                });
+              } finally {clearTimeout(t);}
+              codes.push(response.status);
+              // Always discard body: no customer information in logs.
+              await response.arrayBuffer();
+              if(i<15 && response.status!==404)
+                throw new Error('Expected safe nonexistent-lottery 404 at request '+(i+1)+', got '+response.status+'. All codes: '+codes.join(','));
+            }
+            console.log('Safe test HTTP codes:',codes.join(','));
+            if(codes[15]!==429)throw new Error('Expected 429 on request 16, got '+codes[15]);
+            console.log('PASS: first 15 rejected as nonexistent lottery (404), request 16 rate limited (429). No ticket or bank verification was created.');
+          })().catch(e=>{console.error(e.message);process.exitCode=1;});
+          NODE
