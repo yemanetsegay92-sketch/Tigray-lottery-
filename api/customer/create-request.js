@@ -3,6 +3,7 @@ const { getStorage } = require('firebase-admin/storage');
 const { BUCKET: PRIVATE_BUCKET, TYPES, POLICY_TTL_MS, FINISH_TTL_MS, signToken, receiptPath, verifyToken, validateStagedFile, sha256: proofHash } = require('./_receipt-upload');
 const { adminDb, validateTelegramInitData, FieldValue } = require('../telegram/_lib');
 const { usesAutomaticApproval } = require('../../lib/lottery-approval-mode');
+const { assertReasonableBody, enforcePublicPurchaseLimit } = require('../../lib/public-purchase-guard');
 
 const BUCKET = 'tigiray-lottery.firebasestorage.app';
 
@@ -64,7 +65,11 @@ module.exports = async (req, res) => {
   try {
     const body = readBody(req);
     res.setHeader('Cache-Control','no-store');
-    if (body.action === 'authorize-receipt-upload') return await authorizeReceiptUpload(body, res);
+    assertReasonableBody(req, body);
+    if (body.action === 'authorize-receipt-upload') {
+      await enforcePublicPurchaseLimit(req, 'upload', adminDb);
+      return await authorizeReceiptUpload(body, res);
+    }
     const lotteryId = String(body.lotteryId || '').trim();
     const name = String(body.name || '').trim();
     const phone = normalizePhone(body.phone);
@@ -84,6 +89,7 @@ module.exports = async (req, res) => {
     let telegramUser = null;
     if (telegramInitData) telegramUser = validateTelegramInitData(telegramInitData).user;
 
+    await enforcePublicPurchaseLimit(req, 'submit', adminDb);
     const db = adminDb();
     const lotterySnap = await db.collection('lotteries').doc(lotteryId).get();
     if (!lotterySnap.exists) return res.status(404).json({ ok: false, error: 'Lottery not found.' });
@@ -194,7 +200,11 @@ module.exports = async (req, res) => {
     if (error?.message === 'DUPLICATE_REFERENCE' || error?.code === 6 || error?.code === 'already-exists') {
       return res.status(409).json({ ok: false, error: 'This payment reference or receipt has already been submitted.' });
     }
+    if (Number(error?.statusCode) === 429) {
+      res.setHeader('Retry-After', String(error.retryAfterSeconds || 60));
+    }
     if (Number(error?.statusCode) >= 400 && Number(error?.statusCode) < 500) return res.status(error.statusCode).json({ ok: false, error: error.message });
+    if (Number(error?.statusCode) === 503) return res.status(503).json({ ok: false, error: error.message });
     console.error('create-request error:', error);
     return res.status(500).json({ ok: false, error: 'Could not submit request. Please try again.' });
   }
