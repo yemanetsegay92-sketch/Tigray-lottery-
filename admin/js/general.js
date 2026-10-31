@@ -306,6 +306,7 @@ async function renderAdminList(){
 
 async function renderLotteries(){
   const ls=await getDocs(collection(db,'lotteries'));lots=ls.docs.map(d=>({id:d.id,...d.data()}));$('statLotteries').textContent=lots.length;
+  if ($('deleteAllLotteries')) $('deleteAllLotteries').disabled = !lots.length || cleanupBusy || bulkCleanupBusy;
   const opts=lots.map(x=>`<option value="${esc(x.id)}">${esc(x.name)}</option>`).join('');$('adminLottery').innerHTML=opts;$('assignLottery').innerHTML=opts;if($('drawLotterySelect'))$('drawLotterySelect').innerHTML=opts;if($('checketMatchLottery')){$('checketMatchLottery').innerHTML=opts;updateChecketMatchAccounts();void loadPendingChecketReceipts();}
   $('lotteries').innerHTML=lots.map(x=>{const mode=x.approvalMode==='automatic'?'Automatic CBE':'Manual';return `<div class="row"><b>${esc(x.name)}</b> <span class="badge ${esc(x.status)}">${esc(x.status)}</span><br><span class="muted">ID: ${esc(x.id)} · ${Number(x.price||0)} Birr · ${esc(x.min)}–${esc(x.max)} · Next: ${esc(x.nextTicketNumber??x.min)} · Approval: <b>${mode}</b></span><div class="actions"><button data-edit="${esc(x.id)}">Edit</button><button class="secondary" data-summary="${esc(x.id)}">Open Summary</button><button class="danger" data-delete="${esc(x.id)}">${x.cleanupInProgress?"Continue Cleanup":"Delete & Clear"}</button></div><div class="muted" data-cleanup-message="${esc(x.id)}">${esc(cleanupNotices.get(x.id) || (x.cleanupInProgress?'Cleanup already started: this lottery is closed. Click Continue Cleanup to resume.':'Click Delete & Clear to preview linked data; then type DELETE followed by the exact lottery ID to confirm.'))}</div></div>`}).join('')||'<p class="muted">No lotteries.</p>';
   document.querySelectorAll('[data-edit]').forEach(b=>b.addEventListener('click',()=>editLottery(b.dataset.edit)));
@@ -388,6 +389,88 @@ function safeFileName(s){return String(s||'lottery').replace(/[^a-z0-9_-]+/gi,'_
 async function editLottery(id){const x=lots.find(l=>l.id===id);if(!x)return;const name=prompt('Lottery name',x.name);if(name===null)return;const price=Number(prompt('Ticket price (Birr)',x.price));if(!price||price<=0)return alert('Invalid price.');const status=prompt('Status: active, upcoming, closed, drawn',x.status)||x.status;try{await updateDoc(doc(db,'lotteries',id),{name:name.trim(),price,status});await addDoc(collection(db,'auditLogs'),{action:'editLottery',lotteryId:id,adminId:auth.currentUser.uid,createdAt:serverTimestamp()});await renderLotteries();await renderSummaryOverview();setupDraw();}catch(e){alert(e.message)}}
 
 let cleanupBusy = false;
+let bulkCleanupBusy = false;
+$('deleteAllLotteries')?.addEventListener('click',clearAllLotteries);
+
+async function clearAllLotteries() {
+  if (cleanupBusy || bulkCleanupBusy) return;
+  const ids = lots.map(item => item.id);
+  if (!ids.length) return;
+  const button = $('deleteAllLotteries');
+  const status = $('bulkCleanupStatus');
+  bulkCleanupBusy = true;
+  button.disabled = true;
+  let started = false;
+  try {
+    status.textContent = 'Reading a deletion preview for all '+ids.length+' lotteries. Nothing has been deleted.';
+    const previews = [];
+    for (const id of ids) {
+      previews.push(await cleanupApi('lottery-cleanup-preview', id));
+    }
+    const totals = previews.reduce((v, p) => ({
+      requests:v.requests+Number(p.requests||0),
+      approved:v.approved+Number(p.approved||0),
+      tickets:v.tickets+Number(p.tickets||0),
+      autoPayments:v.autoPayments+Number(p.autoPayments||0)
+    }), {requests:0,approved:0,tickets:0,autoPayments:0});
+    const phrase = 'DELETE ALL '+ids.length+' LOTTERIES';
+    const detail =
+      'PERMANENTLY DELETE EVERY LOTTERY?\\n\\n'+
+      'Lotteries: '+ids.length+'\\n'+
+      'Purchase requests: '+totals.requests+'\\n'+
+      'Approved purchases: '+totals.approved+'\\n'+
+      'Issued tickets: '+totals.tickets+'\\n'+
+      'Automatic payment queue records: '+totals.autoPayments+'\\n\\n'+
+      'This includes any real buyer records in the listed lotteries, not just test records. '+
+      'Lottery receipt files, notifications and audit history will also be removed. '+
+      'Used bank-reference claims remain blocked, and admin accounts remain. '+
+      'Ensure the Firestore export is complete; uploaded receipt files are not in that export.\\n\\n'+
+      'Enter this exact phrase to continue:\\n'+phrase;
+    if (prompt(detail) !== phrase) {
+      status.textContent = 'Bulk cleanup cancelled. No new deletion was started.';
+      return;
+    }
+    if (!confirm('FINAL CONFIRMATION: Permanently clear ALL '+ids.length+
+      ' lotteries, including '+totals.approved+' approved purchases and '+totals.tickets+
+      ' tickets? This cannot be undone from the dashboard.')) {
+      status.textContent = 'Bulk cleanup cancelled at final confirmation.';
+      return;
+    }
+    // Close all lotteries first, so interrupted bulk cleanup is recoverable
+    // through the existing per-lottery auto-resume flow after a page refresh.
+    for (const p of previews) {
+      if (!p.cleanupInProgress) {
+        await cleanupApi('lottery-cleanup-start', p.lotteryId, {
+          confirm:'DELETE '+p.lotteryId, acceptIrreversible:true
+        });
+      }
+      started = true;
+      const item = lots.find(x => x.id === p.lotteryId);
+      if (item) item.cleanupInProgress = true;
+    }
+    for (let i = 0; i < ids.length; i++) {
+      const id = ids[i];
+      status.textContent = 'Bulk cleanup: lottery '+(i+1)+' of '+ids.length+
+        '. Keep this tab open. Closing it will not erase progress.';
+      const completed = await removeLottery(id, true);
+      if (!completed) throw new Error('Cleanup paused at lottery '+(i+1)+
+        '. Refresh General Admin to resume remaining confirmed deletions.');
+    }
+    status.textContent = 'Bulk cleanup finished. All '+ids.length+
+      ' selected lotteries were removed. Used bank references and admin accounts were preserved.';
+  } catch (error) {
+    console.error('Bulk lottery cleanup stopped:',error);
+    status.textContent = (started ? 'Bulk cleanup partially completed. ' : 'No new bulk cleanup confirmed. ')+
+      (error.message || 'Unknown error')+
+      ' If any lotteries show Continue Cleanup, refresh General Admin to resume them.';
+  } finally {
+    bulkCleanupBusy = false;
+    try { await renderLotteries(); await renderSummaryOverview(); setupDraw(); }
+    catch (error) { console.warn('Refresh after bulk cleanup:', error); }
+    button.disabled = !lots.length || cleanupBusy;
+  }
+}
+
 async function cleanupApi(action, lotteryId, extras={}) {
   const token = await auth.currentUser.getIdToken();
   const res = await fetch('/api/admin/approvals', {
@@ -414,8 +497,9 @@ async function autoResumeCleanupOnLoad() {
 async function removeLottery(id, alreadyConfirmed=false) {
   if (cleanupBusy) return;
   const lottery = lots.find(item=>item.id===id);
-  if (!lottery) return;
+  if (!lottery) return true;
   cleanupBusy = true;
+  let completed = false;
   const banner = $('message');
   try {
     if (!lottery.cleanupInProgress) {
@@ -509,6 +593,7 @@ async function removeLottery(id, alreadyConfirmed=false) {
         continue;
       }
       if (step.done) {
+        completed = true;
         cleanupNotices.delete(id);
         banner.innerHTML='<div class="success">Lottery '+esc(lottery.name)+
           ' and its linked records were deleted. Audit logs preserved.</div>';
@@ -527,6 +612,7 @@ async function removeLottery(id, alreadyConfirmed=false) {
     try { await renderLotteries(); await renderSummaryOverview(); setupDraw(); }
     catch(error) { console.warn('Dashboard refresh after cleanup:',error); }
   }
+  return completed;
 }
 
 
