@@ -16,6 +16,8 @@ assert.doesNotMatch(api, /CLEANUP_DAILY_DELETE_LIMIT/, 'No artificial per-day de
 includes(api, /const batch = db\.batch\(\);/, 'Delete in small Firebase batches');
 includes(api, /await batch\.commit\(\)/, 'Await each delete batch');
 includes(api, /auditLogs:'auditLogs'/, 'Delete old lottery audit entries');
+includes(api, /autoPayments:'autoPaymentQueue'/, 'Delete the queued automatic payments');
+includes(api, /autoPayments,notifications,admins,audit/, 'Verify queue is drained before removing lottery');
 includes(api, /where\('lotteryId','==',lotteryId\)/, 'Scope deletions to selected lottery');
 includes(api, /db\.collection\('publicStatus'\)\.doc\(phoneHash\)\.collection\('requests'\)\.doc\(item\.id\)/, 'Remove linked public request');
 includes(api, /phase === 'finalProofs' \|\| phase === 'incomingProofs'/, 'Sweep finalized and incoming Storage files');
@@ -107,6 +109,7 @@ async function send(uid,body) {
   r=await send('general',{action:'lottery-cleanup-preview',lotteryId:'sandbox'});
   assert.equal(r.code,200,'General Admin can preview');
   assert.equal(r.output.requests,0);
+  assert.equal(r.output.autoPayments,0);
   r=await send('general',{action:'lottery-cleanup-start',lotteryId:'sandbox',confirm:'WRONG',acceptIrreversible:true});
   assert.equal(r.code,400,'Incorrect typed confirmation blocks deletion');
   assert.equal(lottery.status,'active','Bad confirmation cannot close lottery');
@@ -118,13 +121,14 @@ async function send(uid,body) {
   assert.equal(r.code,200,'Empty phase advances successfully');
   assert.equal(lottery.cleanupPhase,'tickets','Cleanup progress remains resumable');
   const phases=[];
-  for (let i=0; i<12 && lottery; i++) {
+  for (let i=0; i<16 && lottery; i++) {
     const step=await send('general',{action:'lottery-cleanup-step',lotteryId:'sandbox'});
     assert.equal(step.code,200,'Next cleanup phase succeeds without a new confirmation');
     phases.push(step.output.phase);
   }
   assert.equal(lottery,null,'Lottery document is gone after all data phases');
   assert.ok(phases.includes('auditLogs'),'Historical lottery audit records are considered');
+  assert.ok(phases.includes('autoPayments'),'Automatic payment queue is considered');
   assert.ok(phases.includes('finalProofs'),'Final receipts are considered');
   assert.ok(phases.includes('incomingProofs'),'Temporary receipts are considered');
   assert.equal(phases.at(-1),'done','Completion is confirmed by backend');

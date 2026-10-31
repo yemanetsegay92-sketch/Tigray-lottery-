@@ -429,10 +429,12 @@ async function removeLottery(id, alreadyConfirmed=false) {
         'Approved requests: '+p.approved+'\n'+
         'Issued tickets: '+p.tickets+'\n'+
         'Receipt claims: '+p.claims+'\n'+
+        'Queued auto-payments: '+p.autoPayments+'\n'+
         'Queued notifications: '+p.notifications+'\n\n'+
         'This PERMANENTLY removes its requests, ticket numbers, receipts and admin assignments. '+
         'All customers in this lottery, including any real buyers, will lose their records. '+
         'Lottery-specific audit history is also cleared, leaving a minimal deletion certificate. '+
+        'Previously used bank references remain blocked to prevent the same payment being approved twice. '+
         'Firebase quotas or billing may apply. '+
         'The lottery remains closed throughout cleanup. To proceed type:\nDELETE '+id;
       const confirmation = prompt(detail);
