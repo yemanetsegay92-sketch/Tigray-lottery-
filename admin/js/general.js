@@ -415,17 +415,17 @@ async function clearAllLotteries() {
     }), {requests:0,approved:0,tickets:0,autoPayments:0});
     const phrase = 'DELETE ALL '+ids.length+' LOTTERIES';
     const detail =
-      'PERMANENTLY DELETE EVERY LOTTERY?\\n\\n'+
-      'Lotteries: '+ids.length+'\\n'+
-      'Purchase requests: '+totals.requests+'\\n'+
-      'Approved purchases: '+totals.approved+'\\n'+
-      'Issued tickets: '+totals.tickets+'\\n'+
-      'Automatic payment queue records: '+totals.autoPayments+'\\n\\n'+
+      'PERMANENTLY DELETE EVERY LOTTERY?\n\n'+
+      'Lotteries: '+ids.length+'\n'+
+      'Purchase requests: '+totals.requests+'\n'+
+      'Approved purchases: '+totals.approved+'\n'+
+      'Issued tickets: '+totals.tickets+'\n'+
+      'Automatic payment queue records: '+totals.autoPayments+'\n\n'+
       'This includes any real buyer records in the listed lotteries, not just test records. '+
       'Lottery receipt files, notifications and audit history will also be removed. '+
       'Used bank-reference claims remain blocked, and admin accounts remain. '+
-      'Ensure the Firestore export is complete; uploaded receipt files are not in that export.\\n\\n'+
-      'Enter this exact phrase to continue:\\n'+phrase;
+      'Ensure the Firestore export is complete; uploaded receipt files are not in that export.\n\n'+
+      'Enter this exact phrase to continue:\n'+phrase;
     if (prompt(detail) !== phrase) {
       status.textContent = 'Bulk cleanup cancelled. No new deletion was started.';
       return;
