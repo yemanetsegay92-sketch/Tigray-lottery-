@@ -31,11 +31,6 @@ const cutoff=new Date(now-5*60000).toISOString();
 Object.assign(process.env,{
   VERCEL_ENV:'production',LOTTERY_CBE_AUTO_APPROVAL_ENABLED:'true',
   LOTTERY_CBE_AUTO_APPROVAL_START_AT:cutoff,
-  LOTTERY_CBE_AUTO_APPROVAL_LOTTERY_IDS:'emul-same,emul-different,emul-proof,emul-forged,emul-missing',
-  LOTTERY_CBE_AUTO_APPROVAL_ACCOUNT_BINDINGS:JSON.stringify({
-    'emul-same':account,'emul-different':account,'emul-proof':account,
-    'emul-forged':account,'emul-missing':account
-  }),
   LOTTERY_CBE_AUTO_APPROVAL_CRON_SECRET:'A'.repeat(45),
   CHECK_ET_API_KEY:'FAKE_NON_NETWORK_KEY'
 });
@@ -48,6 +43,7 @@ const verified=(ref)=>({
 });
 async function setup(lotteryId,orders) {
   await db.collection('lotteries').doc(lotteryId).set(lotteryBase);
+  await db.collection('autoApprovalActivations').doc(lotteryId).set({version:1,enabled:true,account,holderKey:holder,activatedAt:new Date()});
   for(const [id,ref,overrides] of orders){
     const order={
       lotteryId,status:'pending',quantity:1,total:100,price:100,
@@ -160,4 +156,12 @@ test('duplicate Firestore event delivery leases a queue record only once',async(
   const record=(await ref.get()).data();
   assert.equal(record.attempts,1);
   assert.equal(record.state,'processing');
+});
+
+test('emulator rejects issuance after an automatic approval pause',async()=>{
+  const lotteryId='emul-paused',reference='FTEMULATORPAUSE19';
+  await setup(lotteryId,[['paused-a',reference]]);
+  await db.collection('autoApprovalActivations').doc(lotteryId).update({enabled:false});
+  await assert.rejects(run('paused-a',lotteryId,reference),/guard did not pass/);
+  assert.equal((await rows('tickets',lotteryId)).length,0);
 });

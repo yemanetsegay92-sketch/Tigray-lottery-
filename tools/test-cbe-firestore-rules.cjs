@@ -120,6 +120,8 @@ test('buyer status is public-readable but no browser role can forge approved sta
 test('server-owned queues and replay records reject every browser role',async()=>{
   for (const c of [general,assigned,unassigned,anonymous]) {
     await assertFails(setDoc(doc(c.firestore(),'autoPaymentQueue','req-1'),{state:'pending'}));
+    await assertFails(getDoc(doc(c.firestore(),'autoApprovalActivations','lot-a')));
+    await assertFails(setDoc(doc(c.firestore(),'autoApprovalActivations','lot-a'),{enabled:true}));
     await assertFails(setDoc(doc(c.firestore(),'buyerNotificationQueue','req-1'),{state:'pending'}));
     await assertFails(setDoc(doc(c.firestore(),'receiptUploadClaims','claim-2'),{requestId:'req-1'}));
   }

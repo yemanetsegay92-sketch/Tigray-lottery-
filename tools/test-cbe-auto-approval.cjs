@@ -2,7 +2,8 @@
 const {test}=require('node:test');
 const assert=require('node:assert/strict');
 const {evaluateAutoPayment,nameKey}=require('../lib/cbe-auto-eligibility');
-const {productionAccountFor,enabledFor,checkWorkerSecret,inspectRequest,processOne,runQueueItem}=require('../lib/cbe-auto-worker');
+const {checkWorkerSecret,inspectRequest,processOne,runQueueItem}=require('../lib/cbe-auto-worker');
+const {enabledFor,configuredCbe}=require('../lib/cbe-auto-activation');
 const {cutoverMs,isAfterCutover}=require('../lib/cbe-auto-cutover');
 const {approvalModeFor,usesAutomaticApproval}=require('../lib/lottery-approval-mode');
 const created=new Date(Date.now()-10*60000).toISOString();
@@ -18,6 +19,7 @@ const verification={bank:'cbe',reportedBank:'cbe',verified:true,status:'complete
   reportedTransactionNumber:'FTTEST12345',
   transactionDate:new Date(Date.now()-9*60000).toISOString()};
 const unused={claimStatus:'unused',otherCount:0,otherApprovedCount:0,truncated:false};
+const activation={version:1,enabled:true,account:'1000123456789',holderKey:'MAHLIET TSEGAY GIDEY'};
 const env={VERCEL_ENV:'production',LOTTERY_CBE_AUTO_APPROVAL_ENABLED:'true',
   LOTTERY_CBE_AUTO_APPROVAL_START_AT:new Date(Date.now()-40*60000).toISOString(),
   LOTTERY_CBE_AUTO_APPROVAL_LOTTERY_IDS:'safe-lottery',
@@ -27,7 +29,7 @@ const env={VERCEL_ENV:'production',LOTTERY_CBE_AUTO_APPROVAL_ENABLED:'true',
 function assess(v={},p=purchase,l=lottery,d=unused){
   return evaluateAutoPayment({purchase:p,lottery:l,verification:{...verification,...v},duplicate:d});
 }
-function fakeDb({p=purchase,l=lottery,claim=false,other=[],queueState='processing',attempts=1}={}){
+function fakeDb({p=purchase,l=lottery,activationState=activation,claim=false,other=[],queueState='processing',attempts=1}={}){
   const logs=[];
   const queue=new Map();
   const requests=new Map();
@@ -51,6 +53,7 @@ function fakeDb({p=purchase,l=lottery,claim=false,other=[],queueState='processin
             async get(){
               if(name==='ticketRequests')return {id,exists:!!p,data:()=>requests.get(id)||copyRequest};
               if(name==='lotteries')return {id,exists:!!l,data:()=>l};
+              if(name==='autoApprovalActivations')return {id,exists:!!activationState,data:()=>activationState};
               if(name==='paymentClaims')return {id,exists:!!claim,data:()=>({requestId:'different'})};
               if(name==='autoPaymentQueue')return {id,exists:true,data:()=>getQueue(id)};
               throw Error('unexpected collection '+name);
@@ -109,18 +112,27 @@ test('claim consumed or another pending purchase with reference blocks auto appr
   assert.equal(assess({},purchase,lottery,{...unused,claimStatus:'used_by_another_request'}).eligible,false);
   assert.equal(assess({},purchase,lottery,{...unused,otherCount:1}).eligible,false);
 });
-test('automation is disabled absent explicit production, backfill, key and allowlist gates',()=>{
-  assert.equal(enabledFor('safe-lottery',env),true);
-  assert.equal(productionAccountFor('safe-lottery',env),'1000123456789');
+test('CBE automation requires server-owned activation and global worker gates',()=>{
+  assert.equal(enabledFor(lottery,activation,env),true);
+  assert.equal(configuredCbe(lottery).account,activation.account);
+  assert.equal(enabledFor(lottery,null,env),false);
+  assert.equal(enabledFor(lottery,{...activation,enabled:false},env),false);
+  assert.equal(enabledFor(lottery,{...activation,account:'1000999999999'},env),false);
+  assert.equal(enabledFor(lottery,{...activation,holderKey:'OTHER HOLDER'},env),false);
   for(const overrides of [
-    {VERCEL_ENV:'preview'}, {LOTTERY_CBE_AUTO_APPROVAL_ENABLED:'false'},
-    {LOTTERY_CBE_AUTO_APPROVAL_START_AT:''},
-    {LOTTERY_CBE_AUTO_APPROVAL_LOTTERY_IDS:'other-lottery'}, {CHECK_ET_API_KEY:''},
-    {LOTTERY_CBE_AUTO_APPROVAL_ACCOUNT_BINDINGS:''},
-    {LOTTERY_CBE_AUTO_APPROVAL_ACCOUNT_BINDINGS:'not-json'},
-    {LOTTERY_CBE_AUTO_APPROVAL_ACCOUNT_BINDINGS:JSON.stringify({'safe-lottery':'invalid'})},
+    {VERCEL_ENV:'preview'},{LOTTERY_CBE_AUTO_APPROVAL_ENABLED:'false'},
+    {LOTTERY_CBE_AUTO_APPROVAL_START_AT:''},{CHECK_ET_API_KEY:''},
     {LOTTERY_CBE_AUTO_APPROVAL_CRON_SECRET:'short'}
-  ])assert.equal(enabledFor('safe-lottery',{...env,...overrides}),false);
+  ])assert.equal(enabledFor(lottery,activation,{...env,...overrides}),false);
+});
+test('no activation, pause, or changed CBE account never contacts Check.et',async()=>{
+  for(const activationState of [null,{...activation,enabled:false},
+    {...activation,account:'1000999999999'}]) {
+    const db=fakeDb({activationState});
+    const result=await inspectRequest(db,'req-disabled',{env,
+      verify:()=>{throw Error('must not verify without matching activation')}});
+    assert.equal(result.decision,'disabled');
+  }
 });
 test('legacy or explicitly manual lotteries always resolve to manual approval',async()=>{
   assert.equal(approvalModeFor({}), 'manual');
@@ -135,13 +147,13 @@ test('legacy or explicitly manual lotteries always resolve to manual approval',a
     assert.deepEqual(result.reasons,['lottery_uses_manual_approval']);
   }
 });
-test('configured Firestore receiver must equal the production-only account binding',async()=>{
+test('changed receiving account must invalidate existing activation',async()=>{
   const changed={...lottery,paymentAccounts:[{...lottery.paymentAccounts[0],number:'1000999999999'}]};
   const db=fakeDb({l:changed});
   const result=await inspectRequest(db,'req-bound',{env,
     verify:()=>{throw Error('must not contact Check.et for an unbound receiving account')}});
-  assert.equal(result.decision,'manual_review');
-  assert.deepEqual(result.reasons,['purchase_lottery_or_receiver_not_eligible']);
+  assert.equal(result.decision,'disabled');
+  assert.deepEqual(result.reasons,['automatic_activation_missing_paused_or_global_off']);
 });
 test('cron requires constant-time matching secret and cannot run with missing secret',()=>{
   assert.equal(checkWorkerSecret({headers:{authorization:'Bearer '+env.LOTTERY_CBE_AUTO_APPROVAL_CRON_SECRET}},env),true);

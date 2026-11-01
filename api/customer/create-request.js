@@ -159,8 +159,9 @@ module.exports = async (req, res) => {
     }
     try {
       await db.runTransaction(async tx => {
-        const [existing, currentLottery] = await Promise.all([
-          tx.get(requestRef), tx.get(db.collection('lotteries').doc(lotteryId))
+        const [existing, currentLottery, activationSnap] = await Promise.all([
+          tx.get(requestRef), tx.get(db.collection('lotteries').doc(lotteryId)),
+          tx.get(require('../../lib/cbe-auto-activation').activationRef(db,lotteryId))
         ]);
         if (!currentLottery.exists || currentLottery.data().status !== 'active' ||
             currentLottery.data().cleanupInProgress === true) {
@@ -171,13 +172,13 @@ module.exports = async (req, res) => {
           requestId, lotteryId, createdAt: FieldValue.serverTimestamp()
         });
         tx.create(requestRef, requestData);
-        // A CBE request is queued only when the site owner has explicitly
-        // enabled production automation for THIS lottery, and historical
-        // payment references have been reconciled. Preview never queues.
-        const {enabledFor}=require('../../lib/cbe-auto-worker');
+        // Queue only with matching server-owned CBE activation and the
+        // global emergency shutdown still enabled. Preview never queues.
+        const {enabledFor}=require('../../lib/cbe-auto-activation');
         const {cbeAccounts}=require('../../lib/cbe-auto-eligibility');
         const cbe=cbeAccounts(currentLottery.data());
-        if(usesAutomaticApproval(currentLottery.data()) && enabledFor(lotteryId) && cbe.length===1 &&
+        if(usesAutomaticApproval(currentLottery.data()) &&
+          enabledFor(currentLottery.data(),activationSnap.exists?activationSnap.data():null) && cbe.length===1 &&
           String(cbe[0].holderName||'').trim()) {
           tx.create(db.collection('autoPaymentQueue').doc(requestId),{
             lotteryId,requestId,state:'pending',attempts:0,
