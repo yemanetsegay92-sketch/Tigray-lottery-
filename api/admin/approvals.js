@@ -631,7 +631,7 @@ async function cleanupStep(db, lotteryId, lotteryRef, data) {
     }
     const batch = db.batch();
     batch.delete(lotteryRef);
-    batch.delete(require('../../lib/cbe-auto-activation').activationRef(db,lotteryId));
+    batch.delete(db.collection('autoApprovalActivations').doc(lotteryId));
     batch.create(db.collection('auditLogs').doc(), {
       action:'fullLotteryCleanup', lotteryId, lotteryName:String(data.name || ''),
       startedBy:String(data.cleanupStartedBy || ''), finishedAt:FieldValue.serverTimestamp(),
