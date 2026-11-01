@@ -157,3 +157,11 @@ test('duplicate Firestore event delivery leases a queue record only once',async(
   assert.equal(record.attempts,1);
   assert.equal(record.state,'processing');
 });
+
+test('emulator rejects issuance after an automatic approval pause',async()=>{
+  const lotteryId='emul-paused',reference='FTEMULATORPAUSE19';
+  await setup(lotteryId,[['paused-a',reference]]);
+  await db.collection('autoApprovalActivations').doc(lotteryId).update({enabled:false});
+  await assert.rejects(run('paused-a',lotteryId,reference),/guard did not pass/);
+  assert.equal((await rows('tickets',lotteryId)).length,0);
+});
