@@ -9,7 +9,7 @@
 <form id="checketForm"><div class="grid2">
 <label>Bank<select id="checketBank" required><option value="cbe">CBE</option><option value="boa">Bank of Abyssinia</option><option value="dashen">Dashen</option><option value="awash">Awash</option><option value="telebirr">Telebirr</option><option value="zemen">Zemen</option><option value="cbebirr">CBE Birr</option><option value="mpesa">M-Pesa</option><option value="sinqee">Siinqee</option><option value="amhara">Amhara Bank</option></select></label>
 <label>Transaction reference<input id="checketReference" type="text" minlength="5" maxlength="80" autocomplete="off" required placeholder="Bank transaction reference"></label>
-<label class="span2">Receiving account number (required for CBE/BOA)<input id="checketAccount" type="text" inputmode="numeric" pattern="[0-9]{8,30}" autocomplete="off" placeholder="Enter the receiving account used for this payment"></label></div>
+<label class="span2"><span id="checketAccountLabel">Receiving account number (CBE)</span><input id="checketAccount" type="text" inputmode="numeric" pattern="[0-9]{8,30}" autocomplete="off" placeholder="Enter the receiving account used for this payment"><span class="muted small-note" id="checketAccountNote">For CBE, use the receiving account. BOA may require the sender account instead.</span></label></div>
 <button id="checketSubmit" type="submit">Verify with Check.et</button></form>
 <div id="checketResult" aria-live="polite"></div><hr><h3>Match an EXISTING pending ticket (Preview only)</h3>
 <p class="muted">No new lottery or ticket purchase is needed. Select an existing lottery, and enter the exact CBE reference from a pending request. The configured CBE account and expected amount come from Firestore; no tickets will be approved.</p>

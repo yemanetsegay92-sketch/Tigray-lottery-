@@ -144,3 +144,25 @@ test('provider queue response 202 is not mistaken for a confirmed payment', asyn
   await assert.rejects(verifyCheckEtPayment(base,options(mock(202,{success:true,exists:true}))),
     err=>err.statusCode===502 && err.providerHttpStatus===202);
 });
+
+test('BOA reference can be checked with five-digit SENDER account suffix',async()=>{
+  const body={bank:'boa',transactionNumber:'FTTESTBOA123',accountNumber:'59016'};
+  const response={success:true,exists:true,duplicate:false,data:{
+    bank:'boa',transaction_number:'FTTESTBOA123',verification_method:'official',
+    receipt:{status:'completed',amount:100,currency:'ETB',
+      receiver_name:'Test Recipient',receiver_account:'1********2968'}
+  }};
+  const result=await verifyCheckEtPayment(body,options(mock(200,response,payload=>{
+    assert.equal(payload.bank,'boa');
+    assert.equal(payload.account_number,'59016');
+  })));
+  assert.equal(result.verified,true);
+  assert.equal(result.receiverAccountMatches,null);
+  assert.equal(result.receiverAccountStatus,'not_checked_sender_account');
+  assert.equal(result.providerCbeAccountCheck,false);
+});
+test('BOA sender account must be five digits or a full account',async()=>{
+  await assert.rejects(verifyCheckEtPayment({
+    bank:'boa',transactionNumber:'FTTESTBOA123',accountNumber:'016'
+  },options(()=>{throw Error('should not be called')})),/BOA sender account/);
+});
