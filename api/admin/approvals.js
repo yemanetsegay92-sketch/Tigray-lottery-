@@ -882,6 +882,9 @@ async function handleCbeActivation(req,res,body) {
       accountLast4:configured?.account.slice(-4)||''
     });
   }
+  if(process.env.VERCEL_ENV!=='production') {
+    return res.status(403).json({ok:false,error:'CBE activation changes are allowed only from production.'});
+  }
   if(body.action!=='cbe-activation-set' || typeof body.enabled!=='boolean') {
     return res.status(400).json({ok:false,error:'Invalid automatic approval command.'});
   }
