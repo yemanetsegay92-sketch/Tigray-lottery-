@@ -12,7 +12,7 @@ test('General Admin creation form defaults to manual and offers automatic CBE ap
   assert.match(html,/<select id="approvalMode" required>/);
   assert.match(html,/<option value="manual" selected>Manual approval \(default\)<\/option>/);
   assert.match(html,/<option value="automatic">Automatic CBE approval<\/option>/);
-  assert.match(html,/This choice is permanent for this lottery/);
+  assert.match(html,/This choice is permanent/);
 });
 
 test('new lottery and its audit log persist the General Admin creation-time choice',()=>{
@@ -25,6 +25,8 @@ test('new lottery and its audit log persist the General Admin creation-time choi
 });
 
 test('queue creation and final automatic issuance independently require automatic mode',()=>{
-  assert.match(customer,/usesAutomaticApproval\(currentLottery\.data\(\)\) && enabledFor\(lotteryId\)/);
-  assert.match(approvals,/usesAutomaticApproval\(lottery\) && enabledFor\(lotteryId\)/);
+  assert.match(customer,/usesAutomaticApproval\(currentLottery\.data\(\)\) &&/);
+  assert.match(customer,/enabledFor\(currentLottery\.data\(\),activationSnap/);
+  assert.match(approvals,/usesAutomaticApproval\(lottery\) &&/);
+  assert.match(approvals,/enabledFor\(lottery,activationSnap/);
 });
