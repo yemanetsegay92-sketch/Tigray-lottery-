@@ -48,6 +48,7 @@ const verified=(ref)=>({
 });
 async function setup(lotteryId,orders) {
   await db.collection('lotteries').doc(lotteryId).set(lotteryBase);
+  await db.collection('autoApprovalActivations').doc(lotteryId).set({version:1,enabled:true,account,holderKey:holder,activatedAt:new Date()});
   for(const [id,ref,overrides] of orders){
     const order={
       lotteryId,status:'pending',quantity:1,total:100,price:100,
