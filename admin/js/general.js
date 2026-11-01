@@ -129,6 +129,31 @@ $('checketMatchForm')?.addEventListener('submit', async event => {
 
 
 
+// This general Check.et test is deliberately read-only. For a BOA
+// reference, provider lookup may need the sender's BOA account/suffix.
+function updateChecketAccountInput() {
+  const bank=$('checketBank')?.value;
+  const input=$('checketAccount');
+  const label=$('checketAccountLabel');
+  const note=$('checketAccountNote');
+  if(!input||!label||!note)return;
+  input.value=''; // Never accidentally reuse a receiver number as a BOA sender.
+  const boa=bank==='boa';
+  label.textContent=boa?'Sender BOA account (last 5 digits or full account)'
+    :bank==='cbe'?'Receiving CBE account number'
+    :bank==='cbebirr'?'CBE Birr required account/phone'
+    :'Account number (if required by this bank)';
+  input.pattern=boa?'(?:[0-9]{5}|[0-9]{8,30})':'[0-9]{8,30}';
+  input.placeholder=boa?'Enter the sender BOA account or its last 5 digits'
+    :'Enter the receiving account number';
+  input.required=['boa','cbe','cbebirr'].includes(bank);
+  note.textContent=boa
+    ? 'BOA reference lookups may require the payer’s BOA account. Do not enter the receiving CBE account here. The receiver must be checked separately.'
+    :'The number is used by Check.et for bank verification; do not assume that a masked receiver proves an exact account match.';
+}
+$('checketBank')?.addEventListener('change',updateChecketAccountInput);
+updateChecketAccountInput();
+
 // Read-only Check.et test; deliberately does not call approveRequest.
 $('checketForm')?.addEventListener('submit', async event => {
   event.preventDefault();
@@ -142,6 +167,8 @@ $('checketForm')?.addEventListener('submit', async event => {
     const transactionNumber = $('checketReference').value.trim();
     const accountNumber = $('checketAccount').value.trim();
     if (['cbe','boa','cbebirr'].includes(bank) && !accountNumber) throw new Error('Enter the account number for this bank.');
+    if(bank==='boa' && !/^(?:[0-9]{5}|[0-9]{8,30})$/.test(accountNumber))
+      throw new Error('For BOA, enter the sender account or its last five digits.');
     const token = await auth.currentUser.getIdToken();
     const response = await fetch('/api/admin/approvals', {
       method: 'POST',
@@ -152,9 +179,11 @@ $('checketForm')?.addEventListener('submit', async event => {
     if (!response.ok || !data.ok) throw new Error(data.error || 'Verification failed.');
     const exactMatch = data.verified && data.receiverAccountMatches === true;
     const status = exactMatch ? 'PROVIDER CONFIRMED — RECEIVER ACCOUNT MATCHES'
-      : data.verified ? 'PAYMENT FOUND — RECEIVING ACCOUNT NOT CONFIRMED'
+      : data.verified ? 'PAYMENT VERIFIED — RECEIVER ACCOUNT NOT INDEPENDENTLY MATCHED'
       : 'PAYMENT NOT CONFIRMED';
-    const account = data.receiverAccountStatus === 'exact_match'
+    const account = data.receiverAccountStatus === 'not_checked_sender_account'
+      ? 'BOA sender account was used for the provider lookup. Check the receiving account and recipient separately on the official receipt.'
+      : data.receiverAccountStatus === 'exact_match'
       ? 'Full receiving account matches the number entered'
       : data.receiverAccountStatus === 'mismatch'
       ? 'WARNING — returned full receiving account differs. STOP and investigate.'
@@ -162,7 +191,7 @@ $('checketForm')?.addEventListener('submit', async event => {
       ? 'Bank returned a MASKED receiver account. Full account match cannot be confirmed.'
       : 'Receiver account not returned; independent account match unavailable';
     const amount = data.amount === null ? 'Not returned' : Number(data.amount).toLocaleString('en-US') + ' ' + esc(data.currency || '');
-    result.innerHTML = `<div class="${exactMatch?'success':'error'}"><strong>${esc(status)}</strong>
+    result.innerHTML = `<div class="${data.verified?'success':'error'}"><strong>${esc(status)}</strong>
       <p>Amount: ${amount} · Status: ${esc(data.status)} · Bank: ${esc(data.bank)}</p>
       <p>Sender: ${esc(data.payerName || 'Not returned')}</p>
       <p>Recipient: ${esc(data.receiverName || 'Not returned')}</p>
