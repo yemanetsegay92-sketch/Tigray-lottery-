@@ -201,15 +201,25 @@ $('createForm').addEventListener('submit',async e=>{
     if(paymentAccounts.some(x=>!x.bank||!x.number||x.number.length<4))throw new Error('Complete each payment account.');
     const approvalMode=$('approvalMode').value;
     if(!['manual','automatic'].includes(approvalMode))throw new Error('Choose manual or automatic approval.');
+    if(approvalMode==='automatic' && !validAutomaticCbeAccounts(paymentAccounts))
+      throw new Error('For automatic approval, configure exactly one real CBE receiving account with its correct account-holder name.');
     const newLottery=doc(collection(db,'lotteries'));
     const batch=writeBatch(db);
     batch.set(newLottery,{name:$('name').value.trim(),price,min,max,status:$('status').value,approvalMode,description:$('description').value.trim(),createdAt:serverTimestamp(),adminIds:[],nextTicketNumber:min,awards:['First Prize'],paymentAccounts});
     batch.set(doc(collection(db,'auditLogs')),{action:'createLottery',lotteryId:newLottery.id,approvalMode,adminId:auth.currentUser.uid,createdAt:serverTimestamp(),paymentAccountBanks:paymentAccounts.map(x=>x.bank)});
     await batch.commit();
+    let activationError='';
+    if(approvalMode==='automatic') {
+      try { await updateCbeActivation(newLottery.id,true); }
+      catch(error) { activationError=error.message||'Could not activate CBE automatic approval.'; }
+    }
     e.target.reset();
     createPaymentAccounts=DEFAULT_PAYMENT_ACCOUNTS.map(x=>({...x}));
     renderCreatePaymentAccountsEditor();
-    $('message').innerHTML='<div class="success">Lottery created with '+esc(approvalMode)+' approval.</div>';await renderLotteries();await renderSummaryOverview();setupDraw();
+    $('message').innerHTML=activationError
+      ? '<div class="error">Lottery created, but CBE automatic approval is NOT ACTIVE: '+esc(activationError)+'. Use the Activate button beside the lottery to retry.</div>'
+      : '<div class="success">Lottery created with '+esc(approvalMode)+(approvalMode==='automatic'?' CBE automatic approval activated.':' approval.')+'</div>';
+    await renderLotteries();await renderSummaryOverview();setupDraw();
   }catch(err){console.error(err);$('message').innerHTML=`<div class="error">${esc(err.message)}</div>`;}
 });
 
@@ -304,15 +314,75 @@ async function renderAdminList(){
   }
 }
 
+function validAutomaticCbeAccounts(accounts){
+  const cbe=accounts.filter(a=>/^(CBE|COMMERCIAL BANK OF ETHIOPIA)$/i.test(String(a.bank||'').trim()) &&
+    /^\d{8,30}$/.test(String(a.number||'').replace(/\s/g,'')) &&
+    String(a.number).replace(/\s/g,'')!=='1000000000000');
+  return cbe.length===1 && /[A-Za-z]/.test(String(cbe[0].holderName||'')) &&
+    String(cbe[0].holderName||'').trim().length>2;
+}
+async function cbeActivationApi(action,lotteryId,extras={}){
+  const token=await auth.currentUser.getIdToken();
+  const response=await fetch('/api/admin/approvals',{
+    method:'POST',headers:{'content-type':'application/json',authorization:'Bearer '+token},
+    body:JSON.stringify({action,lotteryId,...extras})
+  });
+  const result=await response.json().catch(()=>({}));
+  if(!response.ok||!result.ok)throw new Error(result.error||'Could not update automatic approval.');
+  return result;
+}
+async function updateCbeActivation(id,enabled){
+  return cbeActivationApi('cbe-activation-set',id,{enabled});
+}
+async function refreshCbeApprovalStatus(){
+  const automatic=lots.filter(x=>x.approvalMode==='automatic' && !x.cleanupInProgress);
+  await Promise.all(automatic.map(async lottery=>{
+    const host=[...document.querySelectorAll('[data-auto-status]')].find(x=>x.dataset.autoStatus===lottery.id);
+    if(!host)return;
+    try{
+      const result=await cbeActivationApi('cbe-activation-status',lottery.id);
+      if(!host.isConnected)return;
+      const status=result.enabled?'LIVE — CBE automatic approval enabled'
+        :result.activated?'ACTIVATED — global worker disabled or lottery not open'
+        :result.paused?'PAUSED — new purchases require manual review'
+        :'NOT ACTIVATED — new purchases require manual review';
+      const button=document.createElement('button');
+      button.type='button';
+      button.className=result.activated?'secondary small-btn':'small-btn';
+      button.textContent=result.activated?'Pause CBE Auto Approval':'Activate CBE Auto Approval';
+      button.disabled=!result.configured && !result.activated;
+      button.addEventListener('click',async()=>{
+        const enable=!result.activated;
+        const question=enable
+          ? 'Activate real-money CBE automatic approval for '+lottery.name+'? Only verified matching payments can issue tickets.'
+          : 'Pause CBE automatic approval for '+lottery.name+'? New purchases will require manual review.';
+        if(!confirm(question))return;
+        button.disabled=true;
+        try{
+          await updateCbeActivation(lottery.id,enable);
+          await refreshCbeApprovalStatus();
+        }catch(error){host.textContent='CBE approval change failed: '+(error.message||'Unknown error');}
+        finally{button.disabled=false;}
+      });
+      host.textContent=status+(result.accountLast4?' · CBE account ending '+result.accountLast4:'');
+      host.appendChild(document.createTextNode(' '));
+      host.appendChild(button);
+    }catch(error){
+      host.textContent='CBE approval status unavailable: '+(error.message||'Unknown error');
+    }
+  }));
+}
+
 async function renderLotteries(){
   const ls=await getDocs(collection(db,'lotteries'));lots=ls.docs.map(d=>({id:d.id,...d.data()}));$('statLotteries').textContent=lots.length;
   if ($('deleteAllLotteries')) $('deleteAllLotteries').disabled = !lots.length || cleanupBusy || bulkCleanupBusy;
   const opts=lots.map(x=>`<option value="${esc(x.id)}">${esc(x.name)}</option>`).join('');$('adminLottery').innerHTML=opts;$('assignLottery').innerHTML=opts;if($('drawLotterySelect'))$('drawLotterySelect').innerHTML=opts;if($('checketMatchLottery')){$('checketMatchLottery').innerHTML=opts;updateChecketMatchAccounts();void loadPendingChecketReceipts();}
-  $('lotteries').innerHTML=lots.map(x=>{const mode=x.approvalMode==='automatic'?'Automatic CBE':'Manual';return `<div class="row"><b>${esc(x.name)}</b> <span class="badge ${esc(x.status)}">${esc(x.status)}</span><br><span class="muted">ID: ${esc(x.id)} · ${Number(x.price||0)} Birr · ${esc(x.min)}–${esc(x.max)} · Next: ${esc(x.nextTicketNumber??x.min)} · Approval: <b>${mode}</b></span><div class="actions"><button data-edit="${esc(x.id)}">Edit</button><button class="secondary" data-summary="${esc(x.id)}">Open Summary</button><button class="danger" data-delete="${esc(x.id)}">${x.cleanupInProgress?"Continue Cleanup":"Delete & Clear"}</button></div><div class="muted" data-cleanup-message="${esc(x.id)}">${esc(cleanupNotices.get(x.id) || (x.cleanupInProgress?'Cleanup already started: this lottery is closed. Click Continue Cleanup to resume.':'Click Delete & Clear to preview linked data; then type DELETE followed by the exact lottery ID to confirm.'))}</div></div>`}).join('')||'<p class="muted">No lotteries.</p>';
+  $('lotteries').innerHTML=lots.map(x=>{const mode=x.approvalMode==='automatic'?'Automatic CBE':'Manual';return `<div class="row"><b>${esc(x.name)}</b> <span class="badge ${esc(x.status)}">${esc(x.status)}</span><br><span class="muted">ID: ${esc(x.id)} · ${Number(x.price||0)} Birr · ${esc(x.min)}–${esc(x.max)} · Next: ${esc(x.nextTicketNumber??x.min)} · Approval: <b>${mode}</b></span><div class="actions"><button data-edit="${esc(x.id)}">Edit</button><button class="secondary" data-summary="${esc(x.id)}">Open Summary</button><button class="danger" data-delete="${esc(x.id)}">${x.cleanupInProgress?"Continue Cleanup":"Delete & Clear"}</button></div>${x.approvalMode==='automatic'?`<div class="muted" data-auto-status="${esc(x.id)}">Checking CBE auto approval…</div>`:''}<div class="muted" data-cleanup-message="${esc(x.id)}">${esc(cleanupNotices.get(x.id) || (x.cleanupInProgress?'Cleanup already started: this lottery is closed. Click Continue Cleanup to resume.':'Click Delete & Clear to preview linked data; then type DELETE followed by the exact lottery ID to confirm.'))}</div></div>`}).join('')||'<p class="muted">No lotteries.</p>';
   document.querySelectorAll('[data-edit]').forEach(b=>b.addEventListener('click',()=>editLottery(b.dataset.edit)));
   document.querySelectorAll('[data-delete]').forEach(b=>b.addEventListener('click',()=>removeLottery(b.dataset.delete)));
   document.querySelectorAll('[data-summary]').forEach(b=>b.addEventListener('click',()=>openLotterySummary(b.dataset.summary)));
   await renderAdminList();
+  void refreshCbeApprovalStatus();
 }
 
 async function renderSummaryOverview(){
