@@ -91,9 +91,10 @@ async function approveRequest(db, caller, profile, requestId, requestedLotteryId
     const queueRef=autoGuard ? db.collection('autoPaymentQueue').doc(requestId) : null;
     // Read order, lottery, claim, and durably verified bank evidence before
     // any writes. The receipt snapshot must belong to this precise purchase.
-    const [lotterySnap, claimSnap, queueSnap] = await Promise.all([
+    const [lotterySnap, claimSnap, queueSnap, activationSnap] = await Promise.all([
       tx.get(lotteryRef), claimRef ? tx.get(claimRef) : Promise.resolve(null),
-      queueRef ? tx.get(queueRef) : Promise.resolve(null)
+      queueRef ? tx.get(queueRef) : Promise.resolve(null),
+      autoGuard ? tx.get(require('../../lib/cbe-auto-activation').activationRef(db,lotteryId)) : Promise.resolve(null)
     ]);
     if (!lotterySnap.exists) throw new Error('Lottery not found.');
 
@@ -103,7 +104,7 @@ async function approveRequest(db, caller, profile, requestId, requestedLotteryId
     if (claimRef) assertClaimFree(claimSnapshotStatus(claimSnap, requestId));
     if(autoGuard){
       const {isAfterCutover,cutoverMs}=require('../../lib/cbe-auto-cutover');
-      const {enabledFor,productionAccountFor}=require('../../lib/cbe-auto-worker');
+      const {enabledFor}=require('../../lib/cbe-auto-activation');
       const {usesAutomaticApproval}=require('../../lib/lottery-approval-mode');
       const {nameKey,cbeAccounts,timestampMs}=require('../../lib/cbe-auto-eligibility');
       const [configured]=cbeAccounts(lottery);
@@ -116,7 +117,8 @@ async function approveRequest(db, caller, profile, requestId, requestedLotteryId
       const guardTime=Number(autoGuard.verifiedAt||0);
       const createdAt=timestampMs(request.createdAt);
       const paidAt=timestampMs(autoGuard.transactionDate);
-      const valid = usesAutomaticApproval(lottery) && enabledFor(lotteryId) && lottery.status==='active' &&
+      const valid = usesAutomaticApproval(lottery) &&
+        enabledFor(lottery,activationSnap?.exists?activationSnap.data():null) && lottery.status==='active' &&
         String(autoGuard.requestId)===requestId &&
         String(autoGuard.lotteryId)===lotteryId &&
         autoGuard.policy==='CBE_UNATTENDED_V1' &&
@@ -143,7 +145,7 @@ async function approveRequest(db, caller, profile, requestId, requestedLotteryId
             String(autoGuard.account).endsWith(String(stored.maskedReceiverSuffix)))) &&
         configured && cbeAccounts(lottery).length===1 &&
         String(configured.number).replace(/\s/g,'')===String(autoGuard.account) &&
-        productionAccountFor(lotteryId)===String(autoGuard.account) &&
+        activationSnap?.data()?.account===String(autoGuard.account) &&
         nameKey(configured.holderName)===nameKey(autoGuard.receiveName) &&
         Number.isFinite(createdAt) && Number.isFinite(paidAt) &&
         paidAt>=createdAt-30*60000 && paidAt<=createdAt+30*60000 &&
@@ -629,6 +631,7 @@ async function cleanupStep(db, lotteryId, lotteryRef, data) {
     }
     const batch = db.batch();
     batch.delete(lotteryRef);
+    batch.delete(require('../../lib/cbe-auto-activation').activationRef(db,lotteryId));
     batch.create(db.collection('auditLogs').doc(), {
       action:'fullLotteryCleanup', lotteryId, lotteryName:String(data.name || ''),
       startedBy:String(data.cleanupStartedBy || ''), finishedAt:FieldValue.serverTimestamp(),
@@ -848,6 +851,64 @@ async function handleCheckEtVerification(req, res, body) {
   return res.status(200).json({ ok:true, ...result });
 }
 
+
+// Server-owned CBE approval activation. All mutations require a General Admin
+// token; Firebase client rules deny this collection for every browser user.
+async function handleCbeActivation(req,res,body) {
+  res.setHeader('Cache-Control','no-store');
+  const db=adminDb();
+  const {caller,profile}=await authenticateAdmin(req,db);
+  if(profile.role!=='generalAdmin') {
+    return res.status(403).json({ok:false,error:'Only General Admin can manage automatic approval.'});
+  }
+  const lotteryId=String(body.lotteryId||'').trim();
+  if(!/^[a-zA-Z0-9_-]{1,128}$/.test(lotteryId)) {
+    return res.status(400).json({ok:false,error:'Invalid lottery ID.'});
+  }
+  const {activationRef,configuredCbe,activationMatches,globallyEnabled,enabledFor}=require('../../lib/cbe-auto-activation');
+  const lotteryRef=db.collection('lotteries').doc(lotteryId);
+  const ref=activationRef(db,lotteryId);
+  if(body.action==='cbe-activation-status') {
+    const [lot,record]=await Promise.all([lotteryRef.get(),ref.get()]);
+    if(!lot.exists)return res.status(404).json({ok:false,error:'Lottery not found.'});
+    const lottery=lot.data()||{};
+    const activation=record.exists?record.data():null;
+    const configured=configuredCbe(lottery);
+    return res.status(200).json({
+      ok:true,mode:lottery.approvalMode||'manual',
+      configured:!!configured,activated:activationMatches(lottery,activation),
+      enabled:enabledFor(lottery,activation),globalEnabled:globallyEnabled(),
+      paused:activation?.enabled===false,
+      accountLast4:configured?.account.slice(-4)||''
+    });
+  }
+  if(body.action!=='cbe-activation-set' || typeof body.enabled!=='boolean') {
+    return res.status(400).json({ok:false,error:'Invalid automatic approval command.'});
+  }
+  await db.runTransaction(async tx=>{
+    const [lot,previous]=await Promise.all([tx.get(lotteryRef),tx.get(ref)]);
+    if(!lot.exists)throw Object.assign(new Error('Lottery not found.'),{statusCode:404});
+    const lottery=lot.data()||{};
+    if(body.enabled) {
+      if(lottery.approvalMode!=='automatic' ||
+        lottery.cleanupInProgress===true ||
+        !['active','upcoming'].includes(lottery.status)) {
+        throw Object.assign(new Error('Only active/upcoming automatic lotteries not being deleted may be activated.'),{statusCode:409});
+      }
+      const configured=configuredCbe(lottery);
+      if(!configured)throw Object.assign(new Error('Configure exactly one real CBE account with its account-holder name before enabling automatic approval.'),{statusCode:409});
+      tx.set(ref,{
+        version:1,enabled:true,account:configured.account,
+        holderKey:configured.holderKey,
+        activatedAt:FieldValue.serverTimestamp(),activatedBy:caller.uid
+      },{merge:true});
+    } else if(previous.exists) {
+      tx.update(ref,{enabled:false,pausedAt:FieldValue.serverTimestamp(),pausedBy:caller.uid});
+    }
+  });
+  return res.status(200).json({ok:true,activated:body.enabled});
+}
+
 // Secret-authenticated CBE processor for scheduled recovery AND Firebase
 // events. No browser caller and never from Vercel Preview.
 async function handleAutoCbeWorker(req,res,body={}){
@@ -890,6 +951,7 @@ module.exports = async (req, res) => {
     const body = readBody(req);
     const action = String(body.action || '').trim().toLowerCase();
     if (action === 'cbe-auto-worker' || action === 'cbe-auto-worker-one') return await handleAutoCbeWorker(req, res, body);
+    if (action === 'cbe-activation-status' || action === 'cbe-activation-set') return await handleCbeActivation(req,res,body);
     if (action === 'checket-match-pending') return await handleCheckEtPendingMatch(req, res, body);
     if (action === 'checket-verify') return await handleCheckEtVerification(req, res, body);
     if (action === 'lookup-reference') return await lookupReference(req, res, body);
