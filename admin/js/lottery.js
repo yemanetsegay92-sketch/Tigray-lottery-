@@ -1,5 +1,6 @@
+import {openReview} from './paymentReview.mjs';
 import { TICKET_HEADERS, expandApprovedTicketRows, ticketRowsToTsv, ticketRowsToCsv } from './ticketRows.mjs';
-import { renderChecketMatch, cbeAccounts } from './checketMatchUI.mjs';
+import { cbeAccounts } from './checketMatchUI.mjs';
 import { db, auth } from '../../firebase.js';
 import { onAuthStateChanged, signOut } from 'https://www.gstatic.com/firebasejs/12.2.1/firebase-auth.js';
 import { collection, getDocs, doc, getDoc, updateDoc, addDoc, query, where, orderBy, limit, getCountFromServer, serverTimestamp } from 'https://www.gstatic.com/firebasejs/12.2.1/firebase-firestore.js';
@@ -89,7 +90,7 @@ async function connectTelegram(){
   }catch(e){$('telegramMessage').innerHTML=`<div class="error">${esc(e.message)}</div>`;}
 }
 
-$('logoutBtn').addEventListener('click',async()=>{await signOut(auth);location.href='login.html'});
+$('logoutBtn').addEventListener('click',async()=>{document.documentElement.classList.remove('admin-verified');await signOut(auth);location.href='login.html'});
 $('refreshBtn').addEventListener('click',renderAll);
 $('refreshTelegramStatus')?.addEventListener('click',refreshTelegram);
 $('connectTelegram').addEventListener('click',connectTelegram);
@@ -103,12 +104,17 @@ $('findPaymentForm')?.addEventListener('submit',findPaymentByReference);
 $('findPhoneForm')?.addEventListener('submit',findPaymentByPhone);
 
 
+let accessGeneration=0;
 onAuthStateChanged(auth,async u=>{
+  const generation=++accessGeneration;
+  document.documentElement.classList.remove('admin-verified');
+  $('adminAccessCheck').textContent='Verifying administrator access…';
   if(!u){location.href='login.html';return}
   me=u;
   try{
     const p=await getDoc(doc(db,'users',u.uid));
-    if(!p.exists()||p.data().role!=='lotteryAdmin'){location.href='login.html';return}
+    if(generation!==accessGeneration || auth.currentUser?.uid!==u.uid)return;
+    if(!p.exists()||p.data().role!=='lotteryAdmin'){location.replace(p.exists() && p.data().role==='generalAdmin' ? 'general.html' : 'login.html');return;}
     profile=p.data();
     refreshTelegramStatus();
     const ids=profile.lotteryIds||[];
@@ -119,7 +125,8 @@ onAuthStateChanged(auth,async u=>{
     $('lotterySelect').innerHTML=lots.map(x=>`<option value="${esc(x.id)}">${esc(x.name)}</option>`).join('');
     lot=lots[0];
     await renderAll();
-  }catch(e){console.error(e);$('message').innerHTML=`<div class="error">${esc(e.message)}</div>`;}
+    if(generation===accessGeneration && auth.currentUser?.uid===u.uid)document.documentElement.classList.add('admin-verified');
+  }catch(e){$('adminAccessCheck').textContent='Unable to verify administrator access. Please sign in again.';console.error(e);$('message').innerHTML=`<div class="error">${esc(e.message)}</div>`;}
 });
 
 // Reference-based request IDs are SHA-256('REF:' + uppercase(reference))
@@ -379,61 +386,32 @@ async function openPrivateReceipt(id,mime){
 
 function renderPending(items,hasMore=false){
   const availableCbe = cbeAccounts(lot);
-  const verificationControls = item => {
-    if (!item.reference && !item.proofPath) return '<p class="muted">Check.et: No reference or supported private receipt available.</p>';
-    if (!availableCbe.length) return '<p class="muted">Check.et: Configure this lottery\'s real CBE payment account first.</p>';
-    const id = esc(item.id);
-    const opts = availableCbe.map(a=>`<option value="${a.index}">${esc(a.label)}</option>`).join('');
-    const buttons=[
-      item.reference ? `<button class="secondary" type="button" data-match-pending="${id}" data-match-method="reference">🔎 Verify reference</button>` : '',
-      item.proofPath ? `<button class="secondary" type="button" data-match-pending="${id}" data-match-method="receipt">📎 Verify ${item.proofMime==='application/pdf'?'PDF':'screenshot'} (test)</button>` : ''
-    ].join('');
-    return `<div class="actions" style="align-items:flex-end"><label>CBE receiving account
-      <select data-checket-account="${id}">${opts}</select></label>
-      ${buttons}</div>
-      <div data-checket-pending-result="${id}" aria-live="polite"></div>`;
-  };
-
   ensureScreenshotModal();
   window.__screenshotData=Object.create(null);
   items.forEach(x=>{if(x.screenshotData)window.__screenshotData[x.id]=x.screenshotData;});
   $('pendingCount').textContent=hasMore?`${items.length} shown · more pending requests`:`${items.length} pending`;
-  $('requests').innerHTML=items.map(x=>`<div class="request-card"><div class="card-head"><div><b>${esc(x.name)}</b> · ${esc(x.phone)}</div><span class="badge pending">PENDING</span></div><p>${Number(x.quantity||1)} ticket(s) · <b>${Number(x.total||0)} Birr</b>${x.reference?` · Ref ${esc(x.reference)}`:''}</p>${x.screenshotData?`<div class="screenshot-wrap"><button type="button" class="screenshot-preview" data-view-screenshot="${esc(x.id)}"><img src="${esc(normalizeScreenshot(x.screenshotData))}" alt="Payment screenshot"><span>Tap to view full size</span></button></div>`:''}${x.proofPath?`<div class="actions"><button type="button" class="secondary" data-private-proof="${esc(x.id)}" data-proof-mime="${esc(x.proofMime||'')}">📎 ${x.proofMime==='application/pdf'?'Download PDF receipt':'View payment screenshot'}</button></div>`:''}${verificationControls(x)}<div class="actions"><button data-approve="${esc(x.id)}" data-reference-missing="${x.reference?'0':'1'}">✓ Approve & Assign</button><button class="danger" data-reject="${esc(x.id)}">✕ Reject</button></div></div>`).join('')||'<div class="success">No pending requests.</div>';
-  document.querySelectorAll('[data-approve]').forEach(b=>b.addEventListener('click',()=>approve(b.dataset.approve)));
-  document.querySelectorAll('[data-reject]').forEach(b=>b.addEventListener('click',()=>reject(b.dataset.reject)));
-  document.querySelectorAll('[data-match-pending]').forEach(b=>b.addEventListener('click',()=>verifyPendingPayment(b)));
+  $('requests').innerHTML=items.map(x=>`<div class="request-card"><div class="card-head"><div><b>${esc(x.name)}</b> · ${esc(x.phone)}</div><span class="badge pending">PENDING</span></div><p>${Number(x.quantity||1)} ticket(s) · <b>${Number(x.total||0)} Birr</b>${x.reference?` · Ref ${esc(x.reference)}`:''}</p>${x.screenshotData?`<div class="screenshot-wrap"><button type="button" class="screenshot-preview" data-view-screenshot="${esc(x.id)}"><img src="${esc(normalizeScreenshot(x.screenshotData))}" alt="Payment screenshot"><span>Tap to view full size</span></button></div>`:''}${x.proofPath?`<button type="button" class="secondary" data-private-proof="${esc(x.id)}" data-proof-mime="${esc(x.proofMime)}">View / Download original receipt</button><div data-receipt></div>`:''}<details data-review="${esc(x.id)}"><summary>Review payment</summary><div data-panel></div></details></div>`).join('')||'<div class="success">No pending requests.</div>';
+  const selectedLotteryId=lot.id;
+  for(const details of $('requests').querySelectorAll('[data-review]')){
+    details.ontoggle=async()=>{
+      if(!details.open)return;
+      const id=details.dataset.review;
+      const item=items.find(x=>x.id===id);
+      const send=async(action,fields)=>{
+        const token=await auth.currentUser.getIdToken();
+        const response=await fetch('/api/admin/approvals',{method:'POST',cache:'no-store',
+          headers:{'content-type':'application/json',authorization:'Bearer '+token},
+          body:JSON.stringify({action,requestId:id,lotteryId:selectedLotteryId,...fields})});
+        const result=await response.json();
+        if(!response.ok || !result.ok)throw Error(result.error||'Payment review failed.');
+        return result;
+      };
+      await openReview(details.querySelector('[data-panel]'),item,availableCbe,send,
+        input=>approve(id,input,details),input=>reject(id,input));
+    };
+  }
   document.querySelectorAll('[data-view-screenshot]').forEach(b=>b.addEventListener('click',()=>openScreenshotModal(b.dataset.viewScreenshot)));
   document.querySelectorAll('[data-private-proof]').forEach(b=>b.addEventListener('click',()=>openPrivateReceipt(b.dataset.privateProof,b.dataset.proofMime)));
-}
-
-async function verifyPendingPayment(button) {
-  const requestId = button.dataset.matchPending;
-  const parent = button.closest('.request-card');
-  const accountSelect = parent?.querySelector('[data-checket-account]');
-  const target = parent?.querySelector('[data-checket-pending-result]');
-  if (!requestId || !target || !accountSelect || !lot) return;
-  const selectedLotteryId = lot.id;
-  const method=button.dataset.matchMethod==='receipt'?'receipt':'reference';
-  button.disabled = true;
-  target.textContent = method==='receipt'
-    ? 'Sending the private PDF/image to Check.et for a read-only test…'
-    : 'Checking reference and matching to the pending ticket…';
-  try {
-    const token = await auth.currentUser.getIdToken();
-    const response = await fetch('/api/admin/approvals', {
-      method:'POST',
-      headers:{'content-type':'application/json',authorization:'Bearer '+token},
-      body:JSON.stringify({action:'checket-match-pending',
-        requestId,lotteryId:selectedLotteryId,accountIndex:Number(accountSelect.value),verificationMethod:method})
-    });
-    const data = await response.json();
-    if (!response.ok || !data.ok) throw new Error(data.error || 'Check.et verification failed.');
-    target.innerHTML = renderChecketMatch(data);
-  } catch (error) {
-    target.innerHTML = '<div class="error">'+esc(error.message||'Verification failed.')+'</div>';
-  } finally {
-    button.disabled = false;
-  }
 }
 
 function renderSummary(items,hasMore=false){
@@ -559,7 +537,7 @@ async function savePaymentAccounts(){
 
 async function editLottery(){const name=prompt('Lottery name',lot.name);if(name===null)return;const price=Number(prompt('Ticket price (Birr)',lot.price));if(!price||price<=0)return alert('Invalid price.');const status=prompt('Status: active, upcoming, closed, drawn',lot.status)||lot.status;try{await updateDoc(doc(db,'lotteries',lot.id),{name:name.trim(),price,status});lot={...lot,name:name.trim(),price,status};$('lotterySelect').selectedOptions[0].textContent=lot.name;await renderAll();await addDoc(collection(db,'auditLogs'),{action:'editLottery',lotteryId:lot.id,adminId:me.uid,createdAt:serverTimestamp()});$('message').innerHTML='<div class="success">Lottery updated.</div>'}catch(e){alert(e.message)}}
 
-async function reject(id){
+async function reject(id,review){
   if(!confirm('Reject this payment request?'))return;
   const reason=prompt('Reason for rejection (for the customer):\n1. Reference not found\n2. Payment amount incorrect\n3. Screenshot unclear\n4. Duplicate request\n5. Other','Reference not found');
   if(reason===null)return;
@@ -570,7 +548,7 @@ async function reject(id){
     const response=await fetch('/api/admin/approvals',{
       method:'POST',
       headers:{'content-type':'application/json','authorization':'Bearer '+token},
-      body:JSON.stringify({action:'reject',requestId:id,lotteryId:lot.id,reason:cleaned})
+      body:JSON.stringify({action:'reject',requestId:id,lotteryId:lot.id,reason:cleaned,...review})
     });
     const result=await response.json();
     if(!response.ok||!result.ok)throw new Error(result.error||'Could not reject request.');
@@ -595,20 +573,8 @@ async function cancelApproval(id){
   }catch(e){console.error(e);$('message').innerHTML=`<div class="error">${esc(e.message)}</div>`}
 }
 
-async function approve(id){
-  const button=document.querySelector(`[data-approve="${CSS.escape(id)}"]`);
-  // A receipt-only submission still needs a bank transaction reference to
-  // claim the payment once. No reference => no approval.
-  let manualReference='';
-  if(button?.dataset.referenceMissing==='1'){
-    const entered=prompt('Enter the bank transaction reference printed on this receipt. Required to prevent payment reuse:');
-    if(entered===null)return;
-    manualReference=entered.trim();
-    if(!/^[a-zA-Z0-9_-]{5,80}$/.test(manualReference)){
-      alert('Enter a valid transaction reference (5–80 letters/numbers). No ticket was approved.');
-      return;
-    }
-  }
+async function approve(id,review,details){
+  const button=details.querySelector('[data-act="approve"]');
   if(!confirm('Approve this payment and permanently mark its transaction reference as used?'))return;
   if(button) button.disabled=true;
 
@@ -620,7 +586,7 @@ async function approve(id){
         'content-type':'application/json',
         'authorization':`Bearer ${token}`
       },
-      body:JSON.stringify({action:'approve',requestId:id,lotteryId:lot.id,manualReference})
+      body:JSON.stringify({action:'approve',requestId:id,lotteryId:lot.id,...review})
     });
 
     const j=await r.json();

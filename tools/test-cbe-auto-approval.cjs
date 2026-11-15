@@ -172,15 +172,18 @@ test('inspector safely verifies a reference and checks global claim',async()=>{
   assert.equal(result.decision,'eligible');
   assert.equal(result.immutableGuard.reference,'FTTEST12345');
 });
-test('inspector uses previously stored private image/PDF only when buyer omitted reference',async()=>{
-  const db=fakeDb({p:{...purchase,reference:'',proofPath:'payment-proofs/safe-lottery/final.pdf'}});
-  let downloaded=0;
-  const result=await inspectRequest(db,'req-2',{env,
-    readReceipt:async()=>{downloaded++;return {buffer:Buffer.from('%PDF test'),mime:'application/pdf'}},
-    verify:async input=>{assert.equal(input.transactionNumber,undefined);assert.equal(input.receiptFile.mime,'application/pdf');return verification}
-  });
-  assert.equal(downloaded,1);
-  assert.equal(result.decision,'eligible');
+test('receipt-only purchase sends only server-extracted reference to provider',async()=>{
+ const db=fakeDb({p:{...purchase,reference:'',proofPath:'payment-proofs/safe-lottery/final.pdf',receiptExtraction:{ok:true,reference:'FTTEST12345'}}});
+ let calls=0;
+ const result=await inspectRequest(db,'req-2',{env,verify:async input=>{
+  calls++;assert.equal(input.transactionNumber,'FTTEST12345');assert.equal(input.receiptFile,undefined);return verification;
+ }});
+ assert.equal(calls,1);assert.equal(result.decision,'eligible');
+});
+test('failed receipt extraction never calls provider',async()=>{
+ const db=fakeDb({p:{...purchase,reference:'',proofPath:'payment-proofs/safe-lottery/final.pdf',receiptExtraction:{ok:false,reason:'reference_not_found'}}});
+ const result=await inspectRequest(db,'req-ocr-fail',{env,verify:()=>{throw Error('must never call')}});
+ assert.deepEqual(result.reasons,['receipt_extraction_failed']);
 });
 test('a saved successful bank result is reused with zero repeat Check.et calls',async()=>{
   const db=fakeDb();let calls=0;
@@ -317,4 +320,17 @@ test('event dispatch fails closed for preview or malformed queue IDs',async()=>{
   assert.equal(disabled.processed,0);
   assert.equal(disabled.disabled,true);
   assert.equal(db.logs.length,0);
+});
+test('consumed database reference blocks provider before an attempt marker',async()=>{
+ let calls=0;const db=fakeDb({claim:true});const r=await inspectRequest(db,'consumed-before-call',{env,verify:async()=>{calls++;return verification;}});
+ assert.equal(calls,0);assert.equal(r.decision,'manual_review');assert.ok(!db.queue.get('consumed-before-call').verificationAttemptStartedAt);
+});
+for(const [name,response] of [
+ ['insufficient amount',{...verification,amount:80}],
+ ['HTTP 404',{...verification,verified:false,exists:false,providerHttpStatus:404,providerCode:'not_found'}],
+ ['HTTP 409',{...verification,verified:false,exists:true,providerDuplicate:true,providerCbeAccountCheck:false,providerHttpStatus:409,providerCode:'duplicate'}]
+])test(name+' remains manual review with one call and no automatic retry',async()=>{
+ const db=fakeDb();let calls=0;const options={env,verify:async()=>{calls++;return response}};
+ assert.equal((await inspectRequest(db,'manual-'+name,options)).decision,'manual_review');
+ assert.equal((await inspectRequest(db,'manual-'+name,options)).decision,'manual_review');assert.equal(calls,1);
 });

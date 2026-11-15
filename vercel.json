@@ -1,4 +1,19 @@
 {
   "cleanUrls": true,
-  "trailingSlash": false
+  "trailingSlash": false,
+  "functions": {
+    "api/admin/approvals.js": {
+      "maxDuration": 300,
+      "includeFiles": "{node_modules/tesseract.js/**,node_modules/tesseract.js-core/**,node_modules/@tesseract.js-data/eng/**,node_modules/pdf-parse/**,node_modules/@napi-rs/canvas/**,node_modules/@napi-rs/canvas-linux-x64-gnu/**}"
+    },
+    "api/customer/create-request.js": {
+      "maxDuration": 60,
+      "includeFiles": "{node_modules/tesseract.js/**,node_modules/tesseract.js-core/**,node_modules/@tesseract.js-data/eng/**,node_modules/pdf-parse/**,node_modules/@napi-rs/canvas/**,node_modules/@napi-rs/canvas-linux-x64-gnu/**}"
+    }
+  },
+  "git": {
+    "deploymentEnabled": {
+      "feat/yoas-payment-workflow-upgrade": false
+    }
+  }
 }

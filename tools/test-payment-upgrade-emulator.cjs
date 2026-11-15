@@ -1,0 +1,74 @@
+'use strict';
+const {test,after}=require('node:test');const assert=require('node:assert/strict');
+if(!process.env.FIRESTORE_EMULATOR_HOST||!/^demo-/.test(process.env.GCLOUD_PROJECT||''))throw Error('Isolated demo emulator required');
+const {initializeApp,deleteApp}=require('firebase-admin/app');const {getFirestore}=require('firebase-admin/firestore');
+const app=initializeApp({projectId:process.env.GCLOUD_PROJECT});const db=getFirestore(app);after(()=>deleteApp(app));
+global.fetch=()=>{throw Error('NETWORK FORBIDDEN: inject mocked Check.et')};
+const {paymentClaimRef,assertReferenceUnusedAtCheckout}=require('../lib/payment-claims');
+const {reviewAction}=require('../lib/admin-payment-review');const {_approveRequestForEmulator:approve}=require('../api/admin/approvals');
+const checkout=require('../api/customer/create-request');
+async function submit(lotteryId,reference){let status,result;const res={setHeader(){},status(n){status=n;return this},json(x){result=x;return this}};await checkout({method:'POST',headers:{},body:{lotteryId,reference,name:'Synthetic',phone:'0912345678',quantity:1}},res);return {status,result};}
+const lottery={status:'active',price:100,min:1,max:100,nextTicketNumber:1,paymentAccounts:[{bank:'CBE',number:'1000123456789',holderName:'TEST RECEIVER'}]};
+test('checkout rejects consumed cross-lottery reference before provider, accepts unused and preserves idempotency under concurrency',async()=>{
+ await db.collection('lotteries').doc('upgrade-checkout').set(lottery);
+ await paymentClaimRef(db,'FTUPGRADEUSED01').set({requestId:'approved-in-deleted-lottery',lotteryId:'deleted',status:'consumed'});
+ const used=await submit('upgrade-checkout',' ftupgradeused01 ');assert.equal(used.status,409);
+ const results=await Promise.all([submit('upgrade-checkout','FTUPGRADEUNUSED01'),submit('upgrade-checkout','FTUPGRADEUNUSED01')]);
+ assert.deepEqual(results.map(r=>r.status).sort(),[200,409]);
+ assert.equal((await db.collection('ticketRequests').doc(results.find(r=>r.status===200).result.requestId).get()).data().originalCustomerReference,'FTUPGRADEUNUSED01');
+ assert.equal((await paymentClaimRef(db,'FTUPGRADEUSED01').get()).exists,true);
+});
+test('receipt-extracted reference uses identical global checkout ledger and conflicts with concurrent consumption',async()=>{
+ await assert.rejects(db.runTransaction(tx=>assertReferenceUnusedAtCheckout(tx,db,'FTUPGRADEUSED01')),e=>e.statusCode===409);
+ await db.runTransaction(tx=>assertReferenceUnusedAtCheckout(tx,db,'FTUPGRADERECEIPT02'));
+});
+test('verify again requires explicit credit confirmation, reserves atomically and retains first result',async()=>{
+ const lotteryId='upgrade-review',requestId='upgrade-review-request';await db.collection('lotteries').doc(lotteryId).set(lottery);
+ await db.collection('ticketRequests').doc(requestId).set({lotteryId,status:'pending',reference:'FTCUSTOMERORIG01',total:100});
+ const first={providerHttpStatus:404,providerCode:'not_found',verified:false};
+ await db.collection('autoPaymentQueue').doc(requestId).set({state:'manual_review',firstSubmittedReference:'FTCUSTOMERORIG01',verificationAttemptStartedAt:new Date(),firstCheckEtResult:first});
+ const body={action:'review-verify',requestId,lotteryId,bank:'cbe',correctedReference:'FTCORRECTEDREF01',revision:0,accountIndex:0};
+ const deps={env:{VERCEL_ENV:'production',LOTTERY_CHECKET_READ_ONLY_ENABLED:'true'},budget:async()=>{}};
+ await assert.rejects(reviewAction(db,{uid:'admin'},body,deps),/not confirmed/);
+ let release,calls=0;const gate=new Promise(r=>release=r);
+ const running=reviewAction(db,{uid:'admin'},{...body,confirmCharge:true},{...deps,verify:async input=>{calls++;assert.equal(input.transactionNumber,'FTCORRECTEDREF01');assert.equal(input.accountNumber,lottery.paymentAccounts[0].number);await gate;return {verified:false,exists:true,providerDuplicate:true,providerHttpStatus:409,providerCode:'duplicate'};}});
+ // Wait for durable provider reservation, not an arbitrary timing delay.
+ for(let i=0;i<100;i++){const snap=await db.collection('ticketRequests').doc(requestId).get();if(snap.data().reviewRevision===1)break;}
+ await assert.rejects(reviewAction(db,{uid:'admin'},{...body,confirmCharge:true},deps),/changed|running/);release();await running;assert.equal(calls,1);
+ const details=await reviewAction(db,{uid:'admin'},{action:'review-details',requestId,lotteryId},deps);
+ assert.deepEqual(details.automatic.result,first);assert.equal(details.attempts.length,1);assert.equal(details.attempts[0].result.providerCode,'duplicate');assert.equal(details.correction.reference,'FTCORRECTEDREF01');
+});
+test('corrected manual approval preserves original and atomically claims corrected bank reference',async()=>{
+ const lotteryId='upgrade-manual';await db.collection('lotteries').doc(lotteryId).set(lottery);
+ for(const id of ['correct-a','correct-b'])await db.collection('ticketRequests').doc(id).set({lotteryId,status:'pending',reference:'FTORIGINAL'+id,quantity:1,total:100,phone:'0912345678',name:'Synthetic',reviewRevision:0});
+ const review={bank:'cbe',reference:'FTUPGRADECORRECT01',revision:0};
+ const results=await Promise.allSettled(['correct-a','correct-b'].map(id=>approve(db,{uid:'admin'},{role:'lotteryAdmin',lotteryIds:[lotteryId]},id,lotteryId,'',null,review)));
+ assert.equal(results.filter(r=>r.status==='fulfilled').length,1);
+ const claim=(await paymentClaimRef(db,review.reference).get()).data();assert.equal(claim.bankCategory,'cbe');assert.equal(claim.normalizedReference,review.reference);
+ const order=(await db.collection('ticketRequests').doc(claim.requestId).get()).data();assert.ok(order.originalCustomerReference.startsWith('FTORIGINAL'));assert.equal(order.paymentCorrection.reference,review.reference);
+ assert.equal((await db.collection('buyerNotificationQueue').doc(claim.requestId+'_approved').get()).exists,true);
+ await assert.rejects(approve(db,{uid:'other'},{role:'lotteryAdmin',lotteryIds:[]},'correct-b',lotteryId,'',null,{...review,reference:'FTDIFFERENTFREE01'}),/assigned|reviewed/);
+});
+test('actual receipt-only checkout checks server OCR claim, ignores browser OCR and cleans rejected finalized file',async()=>{
+ const vm=require('node:vm'),fs=require('node:fs');const {createRequire}=require('node:module');
+ const filename=require.resolve('../api/customer/create-request');const localRequire=createRequire(filename);
+ const lotteryId='upgrade-receipt-checkout';await db.collection('lotteries').doc(lotteryId).set(lottery);
+ const consumed='FTUPGRADERECEIPTUSED';await paymentClaimRef(db,consumed).set({requestId:'approved-elsewhere',lotteryId:'deleted'});
+ let chosen=consumed,finalDeleted=0,stagedDeleted=0,sequence=0;
+ const bucket={file:()=>({delete:async()=>{finalDeleted++}})};
+ const staged={file:{copy:async()=>{},delete:async()=>{stagedDeleted++}},bytes:100,md5:'unique-proof',generation:'1'};
+ const module={exports:{}};
+ vm.runInNewContext(fs.readFileSync(filename,'utf8'),{module,exports:module.exports,Buffer,console,process:{env:{LOTTERY_CBE_RECEIPT_OCR_ENABLED:'true'}},require:spec=>{
+  if(spec==='../telegram/_lib')return {...localRequire(spec),adminDb:()=>new Proxy(db,{get(target,key){if(key==='runTransaction')return callback=>target.runTransaction(tx=>Promise.resolve(callback(tx)));const value=target[key];return typeof value==='function'?value.bind(target):value;}})};
+  if(spec==='firebase-admin/storage')return {getStorage:()=>({bucket:()=>bucket})};
+  if(spec==='./_receipt-upload')return {...localRequire(spec),verifyToken:()=>({lotteryId,mime:'image/png',session:'synthetic-'+(++sequence)}),validateStagedFile:async()=>staged};
+  if(spec==='../../lib/checket-private-receipt')return {readFinalReceipt:async()=>({buffer:Buffer.from('synthetic'),mime:'image/png'})};
+  if(spec==='../../lib/cbe-receipt-reference')return {extractReferenceFromReceipt:async()=>({ok:true,reference:chosen,originalReference:chosen,candidates:[{original:chosen,reference:chosen}]})};
+  return localRequire(spec);
+ }},{filename});
+ async function receiptSubmit(){let status,result;const res={setHeader(){},status(n){status=n;return this},json(v){result=v;return this}};
+  await module.exports({method:'POST',headers:{},body:{lotteryId,name:'Synthetic',phone:'0912345678',quantity:1,proofUploadToken:'fixture',receiptExtraction:{ok:true,reference:'FTMALICIOUSIGNORED'}}},res);return {status,result};}
+ assert.equal((await receiptSubmit()).status,409);assert.equal(finalDeleted,1);assert.equal(stagedDeleted,1);
+ chosen='FTUPGRADERECEIPTFREE';const accepted=await receiptSubmit();assert.equal(accepted.status,200);
+ const request=(await db.collection('ticketRequests').doc(accepted.result.requestId).get()).data();assert.equal(request.reference,'');assert.equal(request.receiptExtraction.reference,chosen);assert.equal(finalDeleted,1);
+});

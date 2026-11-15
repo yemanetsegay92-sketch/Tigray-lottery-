@@ -1,5 +1,4 @@
 import { expandApprovedTicketRows, ticketRowsToCsv, ticketRowsToTsv } from './ticketRows.mjs';
-import {renderChecketMatch, cbeAccounts} from './checketMatchUI.mjs';
 import { db, auth, createSecondaryAuth } from '../../firebase.js';
 import { onAuthStateChanged, signOut, createUserWithEmailAndPassword, updateProfile, signOut as authSignOut } from 'https://www.gstatic.com/firebasejs/12.2.1/firebase-auth.js';
 import { collection, getDocs, doc, getDoc, addDoc, updateDoc, setDoc, writeBatch, serverTimestamp, query, where, limit, getCountFromServer, arrayUnion } from 'https://www.gstatic.com/firebasejs/12.2.1/firebase-firestore.js';
@@ -19,7 +18,7 @@ let drawBusy=false;
 const DEFAULT_PAYMENT_ACCOUNTS=[{bank:'CBE',number:'1000000000000',holderName:''}];
 let createPaymentAccounts=DEFAULT_PAYMENT_ACCOUNTS.map(x=>({...x}));
 
-$('logoutBtn').addEventListener('click',async()=>{await signOut(auth);location.href='login.html';});
+$('logoutBtn').addEventListener('click',async()=>{document.documentElement.classList.remove('admin-verified');await signOut(auth);location.href='login.html';});
 $('generatePassword')?.addEventListener('click',()=>{$('resetPassword').value=generateTempPassword();$('resetPassword').focus();});
 $('resetPasswordForm')?.addEventListener('submit',resetLotteryAdminPassword);
 $('drawLotterySelect')?.addEventListener('change',()=>setupDraw());
@@ -30,186 +29,16 @@ $('closeSummary')?.addEventListener('click',()=>{$('summaryPanel').style.display
 $('contactForm')?.addEventListener('submit',saveContactSettings);
 $('whatsappNumber')?.addEventListener('input',updateContactPreview);
 $('addCreatePaymentAccount')?.addEventListener('click',addCreatePaymentAccount);
-$('checketMatchLottery')?.addEventListener('change',()=>{
-  updateChecketMatchAccounts();
-  void loadPendingChecketReceipts();
-});
-function updateChecketMatchAccounts(){
-  const lotto = lots.find(x=>x.id===$('checketMatchLottery')?.value);
-  const options = cbeAccounts(lotto);
-  const select = $('checketMatchAccount');
-  if(!select)return;
-  select.innerHTML = options.length
-    ? options.map(x=>`<option value="${x.index}">${esc(x.label)}</option>`).join('')
-    : '<option value="">No real CBE receiving account configured</option>';
-  $('checketMatchButton').disabled = !options.length;
-}
-// Find existing pending receipts — the original file stays in private Storage.
-async function loadPendingChecketReceipts(){
-  const select=$('checketReceiptRequestId');
-  const button=$('checketReceiptButton');
-  const lotteryId=$('checketMatchLottery')?.value;
-  if(!select || !button)return;
-  button.disabled=true;
-  select.innerHTML='<option value="">Loading pending receipts…</option>';
-  if(!lotteryId){select.innerHTML='<option value="">Choose a lottery first</option>';return;}
-  try{
-    const results=await getDocs(query(collection(db,'ticketRequests'),
-      where('lotteryId','==',lotteryId),where('status','==','pending'),limit(50)));
-    if($('checketMatchLottery').value!==lotteryId)return;
-    const receipts=results.docs.filter(d=>Boolean(d.data().proofPath)&&
-      ['application/pdf','image/jpeg','image/png','image/webp'].includes(String(d.data().proofMime||'')));
-    select.innerHTML=receipts.length
-      ? '<option value="">Choose a pending PDF/image receipt</option>'+receipts.map(d=>{
-          const item=d.data();
-          const suffix=item.proofMime==='application/pdf'?'PDF':'Screenshot';
-          return `<option value="${esc(d.id)}">${esc(suffix)} · ${esc(Number(item.total||0))} ETB · ${esc(String(item.name||'Buyer').slice(0,35))} · ${esc(d.id.slice(0,8))}</option>`;
-        }).join('')
-      : '<option value="">No pending PDF/image receipts in the first 50 requests</option>';
-    button.disabled=true; // Require explicit selection of a particular pending purchase.
-  }catch(error){
-    select.innerHTML='<option value="">Could not load pending receipts</option>';
-    $('checketReceiptResult').innerHTML='<div class="error">'+esc(error.message||'Receipt lookup failed.')+'</div>';
-  }
-}
-$('checketReceiptRequestId')?.addEventListener('change',()=>{
-  $('checketReceiptButton').disabled=!$('checketReceiptRequestId').value || $('checketMatchButton').disabled;
-});
-$('checketReceiptRefresh')?.addEventListener('click',loadPendingChecketReceipts);
-$('checketReceiptForm')?.addEventListener('submit',async event=>{
-  event.preventDefault();
-  const target=$('checketReceiptResult');
-  const button=$('checketReceiptButton');
-  const requestId=$('checketReceiptRequestId').value;
-  const lotteryId=$('checketMatchLottery').value;
-  const accountIndex=$('checketMatchAccount').value;
-  if(!requestId || accountIndex==='')return;
-  button.disabled=true;
-  target.textContent='Sending existing private receipt to Check.et (no OCR)…';
-  try{
-    const token=await auth.currentUser.getIdToken();
-    const response=await fetch('/api/admin/approvals',{
-      method:'POST',headers:{'content-type':'application/json',authorization:'Bearer '+token},
-      body:JSON.stringify({action:'checket-match-pending',lotteryId,requestId,
-        verificationMethod:'receipt',accountIndex:Number(accountIndex)})
-    });
-    const data=await response.json();
-    if(!response.ok || !data.ok) throw new Error(data.error||'The receipt could not be verified.');
-    target.innerHTML=renderChecketMatch(data);
-  }catch(error){
-    target.innerHTML='<div class="error">'+esc(error.message||'Receipt test failed.')+'</div>';
-  }finally{
-    button.disabled=!$('checketReceiptRequestId').value || $('checketMatchButton').disabled;
-  }
-});
-
-$('checketMatchForm')?.addEventListener('submit', async event => {
-  event.preventDefault();
-  const target = $('checketMatchResult');
-  const button = $('checketMatchButton');
-  const lotteryId = $('checketMatchLottery').value;
-  const reference = $('checketMatchReference').value.trim();
-  const accountIndex = $('checketMatchAccount').value;
-  button.disabled = true;
-  target.textContent = 'Finding pending ticket and verifying CBE payment…';
-  try {
-    const token = await auth.currentUser.getIdToken();
-    const response = await fetch('/api/admin/approvals', {
-      method:'POST',
-      headers:{'content-type':'application/json',authorization:'Bearer '+token},
-      body:JSON.stringify({action:'checket-match-pending',lotteryId,reference,accountIndex:Number(accountIndex)})
-    });
-    const data = await response.json();
-    if(!response.ok||!data.ok)throw new Error(data.error||'Could not match pending payment.');
-    target.innerHTML = renderChecketMatch(data);
-  }catch(error){
-    target.innerHTML = '<div class="error">'+esc(error.message||'Verification unavailable.')+'</div>';
-  }finally{button.disabled=false;}
-});
-
-
-
-// This general Check.et test is deliberately read-only. For a BOA
-// reference, provider lookup may need the sender's BOA account/suffix.
-function updateChecketAccountInput() {
-  const bank=$('checketBank')?.value;
-  const input=$('checketAccount');
-  const label=$('checketAccountLabel');
-  const note=$('checketAccountNote');
-  if(!input||!label||!note)return;
-  input.value=''; // Never accidentally reuse a receiver number as a BOA sender.
-  const boa=bank==='boa';
-  label.textContent=boa?'Sender BOA account (last 5 digits or full account)'
-    :bank==='cbe'?'Receiving CBE account number'
-    :bank==='cbebirr'?'CBE Birr required account/phone'
-    :'Account number (if required by this bank)';
-  input.pattern=boa?'(?:[0-9]{5}|[0-9]{8,30})':'[0-9]{8,30}';
-  input.placeholder=boa?'Enter the sender BOA account or its last 5 digits'
-    :'Enter the receiving account number';
-  input.required=['boa','cbe','cbebirr'].includes(bank);
-  note.textContent=boa
-    ? 'BOA reference lookups may require the payer’s BOA account. Do not enter the receiving CBE account here. The receiver must be checked separately.'
-    :'The number is used by Check.et for bank verification; do not assume that a masked receiver proves an exact account match.';
-}
-$('checketBank')?.addEventListener('change',updateChecketAccountInput);
-updateChecketAccountInput();
-
-// Read-only Check.et test; deliberately does not call approveRequest.
-$('checketForm')?.addEventListener('submit', async event => {
-  event.preventDefault();
-  const button = $('checketSubmit');
-  const result = $('checketResult');
-  button.disabled = true;
-  result.textContent = 'Checking with Check.et…';
-  try {
-    if (!auth.currentUser) throw new Error('Sign in as General Admin first.');
-    const bank = $('checketBank').value;
-    const transactionNumber = $('checketReference').value.trim();
-    const accountNumber = $('checketAccount').value.trim();
-    if (['cbe','boa','cbebirr'].includes(bank) && !accountNumber) throw new Error('Enter the account number for this bank.');
-    if(bank==='boa' && !/^(?:[0-9]{5}|[0-9]{8,30})$/.test(accountNumber))
-      throw new Error('For BOA, enter the sender account or its last five digits.');
-    const token = await auth.currentUser.getIdToken();
-    const response = await fetch('/api/admin/approvals', {
-      method: 'POST',
-      headers: {'content-type':'application/json', authorization:'Bearer ' + token},
-      body: JSON.stringify({action:'checket-verify',bank,transactionNumber,accountNumber})
-    });
-    const data = await response.json();
-    if (!response.ok || !data.ok) throw new Error(data.error || 'Verification failed.');
-    const exactMatch = data.verified && data.receiverAccountMatches === true;
-    const status = exactMatch ? 'PROVIDER CONFIRMED — RECEIVER ACCOUNT MATCHES'
-      : data.verified ? 'PAYMENT VERIFIED — RECEIVER ACCOUNT NOT INDEPENDENTLY MATCHED'
-      : 'PAYMENT NOT CONFIRMED';
-    const account = data.receiverAccountStatus === 'not_checked_sender_account'
-      ? 'BOA sender account was used for the provider lookup. Check the receiving account and recipient separately on the official receipt.'
-      : data.receiverAccountStatus === 'exact_match'
-      ? 'Full receiving account matches the number entered'
-      : data.receiverAccountStatus === 'mismatch'
-      ? 'WARNING — returned full receiving account differs. STOP and investigate.'
-      : data.receiverAccountStatus === 'masked_unverifiable'
-      ? 'Bank returned a MASKED receiver account. Full account match cannot be confirmed.'
-      : 'Receiver account not returned; independent account match unavailable';
-    const amount = data.amount === null ? 'Not returned' : Number(data.amount).toLocaleString('en-US') + ' ' + esc(data.currency || '');
-    result.innerHTML = `<div class="${data.verified?'success':'error'}"><strong>${esc(status)}</strong>
-      <p>Amount: ${amount} · Status: ${esc(data.status)} · Bank: ${esc(data.bank)}</p>
-      <p>Sender: ${esc(data.payerName || 'Not returned')}</p>
-      <p>Recipient: ${esc(data.receiverName || 'Not returned')}</p>
-      <p>${esc(account)}</p>
-      <p>Previously verified in Check.et branch: ${data.providerDuplicate?'Yes':'No'}</p>
-      <p><strong>Read-only result. No ticket or payment was approved.</strong></p></div>`;
-  } catch (error) {
-    result.innerHTML = `<div class="error">${esc(error.message || 'Check.et verification failed.')}</div>`;
-  } finally {
-    button.disabled = false;
-  }
-});
-
+let accessGeneration=0;
 onAuthStateChanged(auth,async u=>{
+  const generation=++accessGeneration;
+  document.documentElement.classList.remove('admin-verified');
+  $('adminAccessCheck').textContent='Verifying administrator access…';
   if(!u){location.href='login.html';return;}
   try{
     const p=await getDoc(doc(db,'users',u.uid));
-    if(!p.exists()||p.data().role!=='generalAdmin'){location.href='login.html';return;}
+    if(generation!==accessGeneration || auth.currentUser?.uid!==u.uid)return;
+    if(!p.exists()||p.data().role!=='generalAdmin'){location.replace(p.exists() && p.data().role==='lotteryAdmin' ? 'lottery.html' : 'login.html');return;}
     await renderLotteries();
     await renderSummaryOverview();
     await loadContactSettings();
@@ -217,7 +46,8 @@ onAuthStateChanged(auth,async u=>{
     setupDraw();
     // Previously confirmed cleanups resume automatically after refresh/sign-in.
     void autoResumeCleanupOnLoad();
-  }catch(e){console.error(e);$('message').innerHTML=`<div class="error">${esc(e.message||'Could not load the General Admin dashboard.')}</div>`;}
+    if(generation===accessGeneration && auth.currentUser?.uid===u.uid)document.documentElement.classList.add('admin-verified');
+  }catch(e){$('adminAccessCheck').textContent='Unable to verify administrator access. Please sign in again.';console.error(e);$('message').innerHTML=`<div class="error">${esc(e.message||'Could not load the General Admin dashboard.')}</div>`;}
 });
 
 $('createForm').addEventListener('submit',async e=>{
@@ -405,7 +235,7 @@ async function refreshCbeApprovalStatus(){
 async function renderLotteries(){
   const ls=await getDocs(collection(db,'lotteries'));lots=ls.docs.map(d=>({id:d.id,...d.data()}));$('statLotteries').textContent=lots.length;
   if ($('deleteAllLotteries')) $('deleteAllLotteries').disabled = !lots.length || cleanupBusy || bulkCleanupBusy;
-  const opts=lots.map(x=>`<option value="${esc(x.id)}">${esc(x.name)}</option>`).join('');$('adminLottery').innerHTML=opts;$('assignLottery').innerHTML=opts;if($('drawLotterySelect'))$('drawLotterySelect').innerHTML=opts;if($('checketMatchLottery')){$('checketMatchLottery').innerHTML=opts;updateChecketMatchAccounts();void loadPendingChecketReceipts();}
+  const opts=lots.map(x=>`<option value="${esc(x.id)}">${esc(x.name)}</option>`).join('');$('adminLottery').innerHTML=opts;$('assignLottery').innerHTML=opts;if($('drawLotterySelect'))$('drawLotterySelect').innerHTML=opts;
   $('lotteries').innerHTML=lots.map(x=>{const mode=x.approvalMode==='automatic'?'Automatic CBE':'Manual';return `<div class="row"><b>${esc(x.name)}</b> <span class="badge ${esc(x.status)}">${esc(x.status)}</span><br><span class="muted">ID: ${esc(x.id)} · ${Number(x.price||0)} Birr · ${esc(x.min)}–${esc(x.max)} · Next: ${esc(x.nextTicketNumber??x.min)} · Approval: <b>${mode}</b></span><div class="actions"><button data-edit="${esc(x.id)}">Edit</button><button class="secondary" data-summary="${esc(x.id)}">Open Summary</button><button class="danger" data-delete="${esc(x.id)}">${x.cleanupInProgress?"Continue Cleanup":"Delete & Clear"}</button></div>${x.approvalMode==='automatic'?`<div class="muted" data-auto-status="${esc(x.id)}">Checking CBE auto approval…</div>`:''}<div class="muted" data-cleanup-message="${esc(x.id)}">${esc(cleanupNotices.get(x.id) || (x.cleanupInProgress?'Cleanup already started: this lottery is closed. Click Continue Cleanup to resume.':'Click Delete & Clear to preview linked data; then type DELETE followed by the exact lottery ID to confirm.'))}</div></div>`}).join('')||'<p class="muted">No lotteries.</p>';
   document.querySelectorAll('[data-edit]').forEach(b=>b.addEventListener('click',()=>editLottery(b.dataset.edit)));
   document.querySelectorAll('[data-delete]').forEach(b=>b.addEventListener('click',()=>removeLottery(b.dataset.delete)));
