@@ -65,7 +65,7 @@ async function sendWelcome(chatId) {
     text: '🎟️ Welcome to Tigray Lottery\n\nBuy tickets and check your lottery status directly from Telegram.',
     reply_markup: {
       inline_keyboard: [
-        [{ text: '🎟 ቲኬት ይግዙ', web_app: { url: telegramMiniAppUrl() } }],
+        [{ text: '🎟 ቲኬት ይግዙኡ', web_app: { url: telegramMiniAppUrl() } }],
         [{ text: '🌐 Open Website', url: 'https://tigraylottery.com' }]
       ]
     }
@@ -221,7 +221,7 @@ module.exports = async function webhook(req, res) {
 
     if (command === '/help') {
       await sendText(chatId, 'Use the button below to open the Tigray Lottery Mini App.', {
-        inline_keyboard: [[{ text: '🎟 ቲኬት ይግዙ', web_app: { url: telegramMiniAppUrl() } }]]
+        inline_keyboard: [[{ text: '🎟 ቲኬት ይግዙኡ', web_app: { url: telegramMiniAppUrl() } }]]
       });
       return res.status(200).json({ ok: true, type: 'help' });
     }
