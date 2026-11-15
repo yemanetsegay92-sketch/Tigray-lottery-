@@ -125,10 +125,11 @@ test('a masked receiver with wrong visible suffix is explicitly flagged',async()
   assert.equal(result.receiverAccountStatus,'masked_suffix_mismatch');
 });
 
-test('previously verified/conflicting references return an explicit safe 409, never verified', async()=>{
-  await assert.rejects(verifyCheckEtPayment(base,options(mock(409,{message:'sensitive reference 123'}))),
-    err=>err.statusCode===409 && err.providerHttpStatus===409 &&
-      /conflict/.test(err.message) && !err.message.includes('123'));
+test('409 preserves safe original fields without treating provider duplicate as a consumed ticket',async()=>{
+ const r=await verifyCheckEtPayment(base,options(mock(409,{success:false,exists:true,duplicate:true,code:'duplicate',message:'PRIVATE bank details'})));
+ assert.equal(r.providerHttpStatus,409);assert.equal(r.providerCode,'duplicate');
+ assert.equal(r.verified,false);assert.equal(r.exists,true);assert.equal(r.providerDuplicate,true);
+ assert.equal(r.providerCbeAccountCheck,false);assert.ok(!JSON.stringify(r).includes('PRIVATE'));
 });
 test('provider 403 shows permission/billing problem instead of unexpected response', async()=>{
   await assert.rejects(verifyCheckEtPayment(base,options(mock(403,{message:'PRIVATE bank info'}))),

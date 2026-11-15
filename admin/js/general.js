@@ -19,7 +19,7 @@ let drawBusy=false;
 const DEFAULT_PAYMENT_ACCOUNTS=[{bank:'CBE',number:'1000000000000',holderName:''}];
 let createPaymentAccounts=DEFAULT_PAYMENT_ACCOUNTS.map(x=>({...x}));
 
-$('logoutBtn').addEventListener('click',async()=>{await signOut(auth);location.href='login.html';});
+$('logoutBtn').addEventListener('click',async()=>{document.documentElement.classList.remove('admin-verified');await signOut(auth);location.href='login.html';});
 $('generatePassword')?.addEventListener('click',()=>{$('resetPassword').value=generateTempPassword();$('resetPassword').focus();});
 $('resetPasswordForm')?.addEventListener('submit',resetLotteryAdminPassword);
 $('drawLotterySelect')?.addEventListener('change',()=>setupDraw());
@@ -85,12 +85,17 @@ $('checketReceiptForm')?.addEventListener('submit',async event=>{
   const accountIndex=$('checketMatchAccount').value;
   if(!requestId || accountIndex==='')return;
   button.disabled=true;
-  target.textContent='Sending existing private receipt to Check.et (no OCR)…';
+  target.textContent='Loading server-extracted receipt reference…';
   try{
     const token=await auth.currentUser.getIdToken();
+    const reference='';
+    if(!confirm('Verify this payment with Check.et? This may use one verification credit.'))return;
+    const evidenceResponse=await fetch('/api/admin/approvals',{method:'POST',headers:{'content-type':'application/json',authorization:'Bearer '+token},body:JSON.stringify({action:'review-details',lotteryId,requestId})});
+    const review=await evidenceResponse.json();
+    if(!evidenceResponse.ok || !review.ok)throw Error(review.error||'Could not load payment evidence.');
     const response=await fetch('/api/admin/approvals',{
       method:'POST',headers:{'content-type':'application/json',authorization:'Bearer '+token},
-      body:JSON.stringify({action:'checket-match-pending',lotteryId,requestId,
+      body:JSON.stringify({action:'checket-match-pending',confirmCharge:true,revision:review.revision,correctedReference:review.correction?.reference || review.ocr?.reference || reference,lotteryId,requestId,
         verificationMethod:'receipt',accountIndex:Number(accountIndex)})
     });
     const data=await response.json();
@@ -114,10 +119,18 @@ $('checketMatchForm')?.addEventListener('submit', async event => {
   target.textContent = 'Finding pending ticket and verifying CBE payment…';
   try {
     const token = await auth.currentUser.getIdToken();
+    if(!confirm('Verify this payment with Check.et? This may use one verification credit.'))return;
+    const headers={'content-type':'application/json',authorization:'Bearer '+token};
+    const lookupResponse=await fetch('/api/admin/approvals',{method:'POST',headers,body:JSON.stringify({action:'lookup-reference',lotteryId,reference})});
+    const lookup=await lookupResponse.json();
+    if(!lookupResponse.ok || !lookup.ok)throw Error(lookup.error||'Pending payment not found.');
+    const evidenceResponse=await fetch('/api/admin/approvals',{method:'POST',headers,body:JSON.stringify({action:'review-details',lotteryId,requestId:lookup.requestId || lookup.request?.id})});
+    const review=await evidenceResponse.json();
+    if(!evidenceResponse.ok || !review.ok)throw Error(review.error||'Could not load payment evidence.');
     const response = await fetch('/api/admin/approvals', {
       method:'POST',
       headers:{'content-type':'application/json',authorization:'Bearer '+token},
-      body:JSON.stringify({action:'checket-match-pending',lotteryId,reference,accountIndex:Number(accountIndex)})
+      body:JSON.stringify({action:'checket-match-pending',confirmCharge:true,revision:review.revision,correctedReference:review.correction?.reference || review.ocr?.reference || reference,lotteryId,reference,accountIndex:Number(accountIndex)})
     });
     const data = await response.json();
     if(!response.ok||!data.ok)throw new Error(data.error||'Could not match pending payment.');
@@ -165,6 +178,7 @@ $('checketForm')?.addEventListener('submit', async event => {
     if (!auth.currentUser) throw new Error('Sign in as General Admin first.');
     const bank = $('checketBank').value;
     const transactionNumber = $('checketReference').value.trim();
+    if(!confirm('Verify this reference with Check.et? This may use one verification credit.'))return;
     const accountNumber = $('checketAccount').value.trim();
     if (['cbe','boa','cbebirr'].includes(bank) && !accountNumber) throw new Error('Enter the account number for this bank.');
     if(bank==='boa' && !/^(?:[0-9]{5}|[0-9]{8,30})$/.test(accountNumber))
@@ -173,7 +187,7 @@ $('checketForm')?.addEventListener('submit', async event => {
     const response = await fetch('/api/admin/approvals', {
       method: 'POST',
       headers: {'content-type':'application/json', authorization:'Bearer ' + token},
-      body: JSON.stringify({action:'checket-verify',bank,transactionNumber,accountNumber})
+      body: JSON.stringify({action:'checket-verify',bank,transactionNumber,accountNumber,confirmCharge:true})
     });
     const data = await response.json();
     if (!response.ok || !data.ok) throw new Error(data.error || 'Verification failed.');
@@ -205,11 +219,16 @@ $('checketForm')?.addEventListener('submit', async event => {
   }
 });
 
+let accessGeneration=0;
 onAuthStateChanged(auth,async u=>{
+  const generation=++accessGeneration;
+  document.documentElement.classList.remove('admin-verified');
+  $('adminAccessCheck').textContent='Verifying administrator access…';
   if(!u){location.href='login.html';return;}
   try{
     const p=await getDoc(doc(db,'users',u.uid));
-    if(!p.exists()||p.data().role!=='generalAdmin'){location.href='login.html';return;}
+    if(generation!==accessGeneration || auth.currentUser?.uid!==u.uid)return;
+    if(!p.exists()||p.data().role!=='generalAdmin'){location.replace(p.exists() && p.data().role==='lotteryAdmin' ? 'lottery.html' : 'login.html');return;}
     await renderLotteries();
     await renderSummaryOverview();
     await loadContactSettings();
@@ -217,7 +236,8 @@ onAuthStateChanged(auth,async u=>{
     setupDraw();
     // Previously confirmed cleanups resume automatically after refresh/sign-in.
     void autoResumeCleanupOnLoad();
-  }catch(e){console.error(e);$('message').innerHTML=`<div class="error">${esc(e.message||'Could not load the General Admin dashboard.')}</div>`;}
+    if(generation===accessGeneration && auth.currentUser?.uid===u.uid)document.documentElement.classList.add('admin-verified');
+  }catch(e){$('adminAccessCheck').textContent='Unable to verify administrator access. Please sign in again.';console.error(e);$('message').innerHTML=`<div class="error">${esc(e.message||'Could not load the General Admin dashboard.')}</div>`;}
 });
 
 $('createForm').addEventListener('submit',async e=>{

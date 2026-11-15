@@ -95,6 +95,7 @@ const sandbox = {
     }};
     if (spec==='firebase-admin/auth') return {getAuth:()=>({verifyIdToken:async token=>({uid:token})})};
     if (spec==='firebase-admin/storage') return {getStorage:()=>({bucket:()=>({getFiles:async()=>[[]]})})};
+    if(spec==='../../lib/admin-payment-review')return require('../lib/admin-payment-review');
     throw new Error('Unexpected require: '+spec);
   }
 };

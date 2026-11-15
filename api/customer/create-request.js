@@ -1,3 +1,4 @@
+const {normalizePaymentReference,assertReferenceUnusedAtCheckout}=require('../../lib/payment-claims');
 const crypto = require('crypto');
 const { getStorage } = require('firebase-admin/storage');
 const { BUCKET: PRIVATE_BUCKET, TYPES, POLICY_TTL_MS, FINISH_TTL_MS, signToken, receiptPath, verifyToken, validateStagedFile, sha256: proofHash } = require('./_receipt-upload');
@@ -98,10 +99,16 @@ module.exports = async (req, res) => {
     const price = Number(lottery.price || 0);
     if (!Number.isFinite(price) || price <= 0) throw badRequest('Lottery price is not configured correctly.');
     const total = price * quantity;
+    // Fast reject before any receipt work; the acceptance transaction repeats this read.
     // Validate a private GCS object with metadata and small byte-range reads.
-    // Large receipt bytes do not cross Vercel's origin.
+    // Browser uploads bypass Vercel; bounded finalized bytes are read server-side for OCR.
     const bucket = proof ? getStorage().bucket(BUCKET) : null;
     const staged = proof ? await validateStagedFile(bucket, proof) : null;
+    try{await db.runTransaction(tx=>assertReferenceUnusedAtCheckout(tx,db,reference));}
+    catch(error){
+      if(staged)await staged.file.delete({ignoreNotFound:true,ifGenerationMatch:staged.generation}).catch(()=>{});
+      throw error;
+    }
     // Reference-based duplicate detection is unchanged. Proof-only duplicates
     // use GCS MD5 if present, otherwise the per-upload random session ID.
     const requestId = reference
@@ -158,7 +165,16 @@ module.exports = async (req, res) => {
       uploadClaimRef = db.collection('receiptUploadClaims').doc(proofHash(proof.session));
     }
     try {
+      let receiptExtraction=null;
+      if(proof && process.env.LOTTERY_CBE_RECEIPT_OCR_ENABLED==='true' && require('../../lib/cbe-auto-eligibility').cbeAccounts(lottery).length){
+        const receipt=await require('../../lib/checket-private-receipt').readFinalReceipt(requestData);
+        receiptExtraction=await require('../../lib/cbe-receipt-reference').extractReferenceFromReceipt({...receipt,bank:'cbe'});
+        requestData.receiptExtraction=receiptExtraction;
+      }
+      requestData.originalCustomerReference=reference;
       await db.runTransaction(async tx => {
+        await assertReferenceUnusedAtCheckout(tx,db,normalizePaymentReference(reference));
+        if(receiptExtraction?.ok)await assertReferenceUnusedAtCheckout(tx,db,receiptExtraction.reference);
         const [existing, currentLottery, activationSnap] = await Promise.all([
           tx.get(requestRef), tx.get(db.collection('lotteries').doc(lotteryId)),
           tx.get(require('../../lib/cbe-auto-activation').activationRef(db,lotteryId))

@@ -1,3 +1,4 @@
+const {reviewInput,checkRevision,reviewAction}=require('../../lib/admin-payment-review');
 const crypto = require('crypto');
 const { adminDb, FieldValue } = require('../telegram/_lib');
 const { getAuth } = require('firebase-admin/auth');
@@ -50,11 +51,11 @@ function assertLotteryAccess(profile, lotteryId) {
   if (profile.role !== 'lotteryAdmin') return;
   const ids = Array.isArray(profile.lotteryIds) ? profile.lotteryIds : [];
   if (!ids.includes(lotteryId)) {
-    throw new Error('You are not assigned to this lottery.');
+    throw Object.assign(new Error('You are not assigned to this lottery.'),{statusCode:403});
   }
 }
 
-async function approveRequest(db, caller, profile, requestId, requestedLotteryId, manualReference = '', autoGuard = null) {
+async function approveRequest(db, caller, profile, requestId, requestedLotteryId, manualReference = '', autoGuard = null, review = null) {
   let result = null;
 
   await db.runTransaction(async tx => {
@@ -77,12 +78,16 @@ async function approveRequest(db, caller, profile, requestId, requestedLotteryId
     // For screenshot/PDF-only requests the admin must transcribe the verified
     // bank transaction reference before approving. Without a reference it is
     // impossible to guarantee that the same payment cannot be spent again.
-    const reference = String(request.reference || manualReference || '').trim();
+    if(review){
+      checkRevision(request,review.revision);
+      if(Number(request.reviewCallUntil)>Date.now())throw Object.assign(new Error('Verification is running.'),{statusCode:409});
+    }
+    const reference = review ? review.reference : String(request.reference || manualReference || '').trim();
     const normalized = normalizePaymentReference(reference);
     if (!/^[A-Z0-9_-]{5,80}$/.test(normalized)) {
       throw Object.assign(new Error('Approval requires a bank transaction reference. For receipt-only purchases, enter the reference printed on the receipt.'),{statusCode:400});
     }
-    if (request.reference && manualReference &&
+    if (!review && !autoGuard && request.reference && manualReference &&
       normalizePaymentReference(request.reference) !== normalizePaymentReference(manualReference)) {
       throw Object.assign(new Error('Cannot replace the original payment reference.'),{statusCode:400});
     }
@@ -181,7 +186,7 @@ async function approveRequest(db, caller, profile, requestId, requestedLotteryId
     // Atomic with ticket assignment: two concurrent purchases cannot spend the
     // same normalized reference, including references extracted from proof uploads.
     const hasPaymentClaim = createPaymentClaim(tx, claimRef, {
-      requestId, lotteryId, createdBy:caller.uid, at:now
+      requestId, lotteryId, createdBy:caller.uid, at:now,reference:normalized,bankCategory:review?.bank || (autoGuard ? 'cbe' : 'other')
     });
 
     // The lottery counter is the sole allocator for new approvals.
@@ -204,6 +209,8 @@ async function approveRequest(db, caller, profile, requestId, requestedLotteryId
       reviewedAt: now,
       lotteryName: String(lottery.name || lotteryId),
       phoneHash,
+      originalCustomerReference:request.originalCustomerReference ?? request.reference ?? '',
+      ...(review ? {paymentCorrection:{bank:review.bank,reference:normalized},paymentConfirmedBy:caller.uid} : {}),
       reference,
       paymentClaimProtection: 'consumed_reference'
     });
@@ -353,7 +360,7 @@ async function cancelApproval(db, caller, profile, requestId, reason) {
 }
 
 
-async function rejectRequest(db, caller, profile, requestId, requestedLotteryId, reason) {
+async function rejectRequest(db, caller, profile, requestId, requestedLotteryId, reason, review=null) {
   await db.runTransaction(async tx => {
     const ref = db.collection('ticketRequests').doc(requestId);
     const snap = await tx.get(ref);
@@ -369,8 +376,10 @@ async function rejectRequest(db, caller, profile, requestId, requestedLotteryId,
       throw new Error('Lottery cleanup is in progress. Payment decisions are disabled.');
     }
     if (request.status !== 'pending') throw new Error('This request has already been reviewed.');
+    if(review)checkRevision(request,review.revision);
     const now = FieldValue.serverTimestamp();
     tx.update(ref, {
+      ...(review ? {paymentCorrection:{bank:review.bank,reference:review.reference}} : {}),
       status: 'rejected', rejectionReason: reason,
       reviewedBy: caller.uid, reviewedAt: now
     });
@@ -749,90 +758,18 @@ async function handleCheckEtPendingMatch(req, res, body) {
   }
   const purchase = requestSnap.data() || {};
   if (purchase.status !== 'pending') return res.status(409).json({ok:false,error:'Only pending requests can be checked.'});
-  const storedReference = String(purchase.reference || '').trim();
-  const method = String(body.verificationMethod || 'reference').toLowerCase();
-  if (!['reference','receipt'].includes(method)) {
-    return res.status(400).json({ok:false,error:'Unsupported verification method.'});
-  }
-  if (method === 'reference' && !/^[a-zA-Z0-9_-]{5,80}$/.test(storedReference)) {
-    return res.status(400).json({ok:false,error:'This request has no supported CBE reference. Select the receipt method if it has a PDF/image.'});
-  }
-  if (method === 'receipt' && !purchase.proofPath) {
-    return res.status(400).json({ok:false,error:'No private PDF or screenshot is attached to this request.'});
-  }
-  const { verifyCheckEtPayment } = require('../../lib/checket-verify');
-  const { comparePaymentToRequest } = require('../../lib/checket-request-match');
-  let receiptFile = null;
-  if (method === 'receipt') {
-    const {readFinalReceipt}=require('../../lib/checket-private-receipt');
-    // Only server-owned finalized GCS objects; never send customer URLs to Check.et.
-    receiptFile=await readFinalReceipt(purchase);
-  }
-  // Check.et receives the full configured receiving account, and a reference
-  // OR the authenticated private file. PDF goes directly to Check.et: no OCR.
-  // Images are an experiment; Check.et may respond 422 without receipt_text.
-  const verification = await verifyCheckEtPayment({
-    bank:'cbe', accountNumber:account,
-    ...(method === 'receipt' ? {receiptFile} : {transactionNumber:storedReference})
-  });
-  const providerReference = String(verification.reportedTransactionNumber || '').trim().toUpperCase();
-  const effectiveReference = method === 'receipt'
-    ? (providerReference || storedReference.toUpperCase()) : storedReference;
-  // This lookup is advisory (exact legacy Firestore reference only). Persistent
-  // global paymentClaims is the stronger future protection. Neither writes data.
-  const claimRef = /^[A-Z0-9_-]{5,80}$/.test(effectiveReference)
-    ? paymentClaimRef(db,effectiveReference) : null;
-  const [sameRef, existingClaim] = await Promise.all([
-    claimRef
-      ? db.collection('ticketRequests').where('reference','==',effectiveReference).limit(21).get()
-      : Promise.resolve({docs:[],size:0}),
-    claimRef ? claimRef.get() : Promise.resolve(null)
-  ]);
-  const otherDocs = sameRef.docs.filter(x=>x.id!==requestSnap.id);
-  const duplicate = {
-    otherCount:otherDocs.length,
-    otherApprovedCount:otherDocs.filter(x=>x.data().status==='approved').length,
-    truncated:sameRef.size===21,
-    claimStatus:claimRef ? claimSnapshotStatus(existingClaim,requestSnap.id) : 'reference_not_returned'
-  };
-  // For receipt-only purchases, mark the bank-supplied reference as extracted,
-  // NOT as a customer reference match. Keep human review regardless.
-  const assessment = comparePaymentToRequest(
-    {...purchase,lotteryId}, verification, {id:lotteryId},duplicate
-  );
-  if (method === 'receipt') {
-    assessment.checks.receiptInput = receiptFile.mime === 'application/pdf' ? 'pdf' : 'image';
-    assessment.checks.bankExtractedReference = providerReference.length > 0;
-    if (!storedReference) {
-      assessment.recommendation='MANUAL_REVIEW';
-      assessment.concerns.push(providerReference
-        ? 'Reference was extracted from a receipt, not entered by the buyer. Reconcile it before approval.'
-        : 'Check.et did not return a usable reference. Approval requires a verified reference.');
-    }
-    if (storedReference && providerReference && storedReference.toUpperCase() !== providerReference) {
-      assessment.recommendation='MANUAL_REVIEW';
-      assessment.concerns.push('The PDF/image reference differs from the customer-entered reference.');
-    }
-  }
-  const {evaluateAutoPayment}=require('../../lib/cbe-auto-eligibility');
-  // Informative only: Preview uses the same production Firestore but will NEVER
-  // change tickets based on this eligibility report.
-  const autoEligibility=evaluateAutoPayment({
-    purchase,lottery,verification,duplicate
-  });
-  return res.status(200).json({
-    ok:true,readOnly:true,verificationInput:method,
-    autoEligibility,
-    request:{id:requestSnap.id,lotteryId,total:Number(purchase.total||0),
-      reference:storedReference,extractedReference:method==='receipt'?providerReference:''},
-    payment:{
-      bank:verification.bank,status:verification.status,amount:verification.amount,currency:verification.currency,
-      transactionDate:verification.transactionDate,payerName:verification.payerName,receiverName:verification.receiverName,
-      receiverAccountStatus:verification.receiverAccountStatus,
-      providerCbeAccountCheck:verification.providerCbeAccountCheck
-    },
-    assessment
-  });
+  const {caller}=await authenticateAdmin(req,db);
+  const correctedReference=body.correctedReference || purchase.paymentCorrection?.reference || purchase.receiptExtraction?.reference || purchase.reference;
+  const attempt=await reviewAction(db,caller,{...body,action:'review-verify',requestId:requestSnap.id,
+    lotteryId,bank:'cbe',correctedReference,revision:body.revision});
+  const verification=attempt.result;
+  if(!verification)return res.status(409).json({ok:false,error:attempt.message || 'Verification uncertain; review the saved attempt.'});
+  const claim=paymentClaimRef(db,correctedReference);
+  const duplicate={claimStatus:claimSnapshotStatus(await claim.get(),requestSnap.id)};
+  const assessment=require('../../lib/checket-request-match').comparePaymentToRequest(
+    purchase,verification,{id:lotteryId},duplicate);
+  return res.status(200).json({ok:true,readOnly:true,request:{id:requestSnap.id,lotteryId,total:purchase.total,reference:purchase.reference},
+    payment:verification,assessment,autoEligibility:require('../../lib/cbe-auto-eligibility').evaluateAutoPayment({purchase,lottery,verification,duplicate})});
 }
 
 // Preview-only manual verification: no Firestore mutations or ticket approval.
@@ -847,6 +784,10 @@ async function handleCheckEtVerification(req, res, body) {
     return res.status(403).json({ ok:false, error:'Only General Admin can test payment verification.' });
   }
   const { verifyCheckEtPayment } = require('../../lib/checket-verify');
+  if(body.confirmCharge!==true || !require('../../lib/checket-manual-gate').manualCheckEtAllowed())throw Object.assign(new Error('Explicit verification confirmation and opt-in are required.'),{statusCode:403});
+  await db.runTransaction(tx=>require('../../lib/payment-claims').assertReferenceUnusedAtCheckout(tx,db,body.transactionNumber));
+  const {caller}=await authenticateAdmin(req,db);
+  await require('../../lib/checket-manual-budget').enforceReadOnlyCheckEtBudget(db,caller.uid);
   const result = await verifyCheckEtPayment(body);
   return res.status(200).json({ ok:true, ...result });
 }
@@ -966,6 +907,15 @@ module.exports = async (req, res) => {
       return res.status(400).json({ ok: false, error: 'requestId is required.' });
     }
 
+    if (['review-details','review-save','review-duplicate','review-verify'].includes(action)) {
+      if (!/^[a-zA-Z0-9_-]{1,128}$/.test(requestId) || !/^[a-zA-Z0-9_-]{1,128}$/.test(requestedLotteryId))
+        return res.status(400).json({ok:false,error:'Select a valid pending request.'});
+      const db = adminDb();
+      const {caller,profile} = await authenticateAdmin(req,db);
+      assertLotteryAccess(profile,requestedLotteryId);
+      res.setHeader('Cache-Control','no-store');
+      return res.status(200).json({ok:true,...await reviewAction(db,caller,{...body,action,requestId,lotteryId:requestedLotteryId})});
+    }
     if (!['approve', 'reject', 'cancel'].includes(action)) {
       return res.status(400).json({ ok: false, error: 'action must be approve, reject, or cancel.' });
     }
@@ -980,7 +930,7 @@ module.exports = async (req, res) => {
         profile,
         requestId,
         requestedLotteryId,
-        String(body.manualReference || '').trim()
+        '', null, {...reviewInput(body,true),revision:body.revision}
       );
 
       return res.status(200).json({
@@ -993,7 +943,7 @@ module.exports = async (req, res) => {
     if (action === 'reject') {
       const reason = String(body.reason || '').trim().slice(0, 300);
       if (!reason) return res.status(400).json({ ok: false, error: 'Rejection reason required.' });
-      await rejectRequest(db, caller, profile, requestId, requestedLotteryId, reason);
+      await rejectRequest(db, caller, profile, requestId, requestedLotteryId, reason,body.correctedReference ? {...reviewInput(body),revision:body.revision} : null);
       return res.status(200).json({ ok: true, rejected: true });
     }
     const reason = String(
@@ -1013,7 +963,7 @@ module.exports = async (req, res) => {
       cancelled: true
     });
   } catch (error) {
-    console.error('admin approvals error:', error);
+    console.error('admin approvals error', {code:error?.code,statusCode:error?.statusCode});
 
     const message = String(
       error?.message || 'Could not complete the approval action.'
