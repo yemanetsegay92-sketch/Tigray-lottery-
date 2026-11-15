@@ -1,0 +1,75 @@
+{
+  "functions": 12,
+  "results": [
+    {
+      "function": "api/admin/approvals.func",
+      "runtime": "nodejs24.x",
+      "MiB": 136.5,
+      "smoke": {
+        "OCR": "PASS",
+        "elapsedMs": 3053,
+        "maxRSSMiB": 425
+      }
+    },
+    {
+      "function": "api/admin/reset-password.func",
+      "runtime": "nodejs24.x",
+      "MiB": 8.4
+    },
+    {
+      "function": "api/customer/create-request.func",
+      "runtime": "nodejs24.x",
+      "MiB": 135.7,
+      "smoke": {
+        "OCR": "PASS",
+        "elapsedMs": 2343,
+        "maxRSSMiB": 420
+      }
+    },
+    {
+      "function": "api/telegram/admin-status.func",
+      "runtime": "nodejs24.x",
+      "MiB": 8.4
+    },
+    {
+      "function": "api/telegram/admin-webhook.func",
+      "runtime": "nodejs24.x",
+      "MiB": 7.5
+    },
+    {
+      "function": "api/telegram/buyer-link.func",
+      "runtime": "nodejs24.x",
+      "MiB": 7.5
+    },
+    {
+      "function": "api/telegram/link-admin.func",
+      "runtime": "nodejs24.x",
+      "MiB": 8.4
+    },
+    {
+      "function": "api/telegram/notify-admins.func",
+      "runtime": "nodejs24.x",
+      "MiB": 0
+    },
+    {
+      "function": "api/telegram/notify-buyer.func",
+      "runtime": "nodejs24.x",
+      "MiB": 8.4
+    },
+    {
+      "function": "api/telegram/setup-admin.func",
+      "runtime": "nodejs24.x",
+      "MiB": 7.5
+    },
+    {
+      "function": "api/telegram/setup.func",
+      "runtime": "nodejs24.x",
+      "MiB": 7.5
+    },
+    {
+      "function": "api/telegram/webhook.func",
+      "runtime": "nodejs24.x",
+      "MiB": 7.5
+    }
+  ]
+}

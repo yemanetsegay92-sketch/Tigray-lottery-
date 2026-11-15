@@ -321,3 +321,16 @@ test('event dispatch fails closed for preview or malformed queue IDs',async()=>{
   assert.equal(disabled.disabled,true);
   assert.equal(db.logs.length,0);
 });
+test('consumed database reference blocks provider before an attempt marker',async()=>{
+ let calls=0;const db=fakeDb({claim:true});const r=await inspectRequest(db,'consumed-before-call',{env,verify:async()=>{calls++;return verification;}});
+ assert.equal(calls,0);assert.equal(r.decision,'manual_review');assert.ok(!db.queue.get('consumed-before-call').verificationAttemptStartedAt);
+});
+for(const [name,response] of [
+ ['insufficient amount',{...verification,amount:80}],
+ ['HTTP 404',{...verification,verified:false,exists:false,providerHttpStatus:404,providerCode:'not_found'}],
+ ['HTTP 409',{...verification,verified:false,exists:true,providerDuplicate:true,providerCbeAccountCheck:false,providerHttpStatus:409,providerCode:'duplicate'}]
+])test(name+' remains manual review with one call and no automatic retry',async()=>{
+ const db=fakeDb();let calls=0;const options={env,verify:async()=>{calls++;return response}};
+ assert.equal((await inspectRequest(db,'manual-'+name,options)).decision,'manual_review');
+ assert.equal((await inspectRequest(db,'manual-'+name,options)).decision,'manual_review');assert.equal(calls,1);
+});

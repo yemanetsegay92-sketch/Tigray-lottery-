@@ -28,7 +28,7 @@ test('verify again requires explicit credit confirmation, reserves atomically an
  const first={providerHttpStatus:404,providerCode:'not_found',verified:false};
  await db.collection('autoPaymentQueue').doc(requestId).set({state:'manual_review',firstSubmittedReference:'FTCUSTOMERORIG01',verificationAttemptStartedAt:new Date(),firstCheckEtResult:first});
  const body={action:'review-verify',requestId,lotteryId,bank:'cbe',correctedReference:'FTCORRECTEDREF01',revision:0,accountIndex:0};
- const deps={env:{VERCEL_ENV:'preview',LOTTERY_CHECKET_READ_ONLY_ENABLED:'true'},budget:async()=>{}};
+ const deps={env:{VERCEL_ENV:'production',LOTTERY_CHECKET_READ_ONLY_ENABLED:'true'},budget:async()=>{}};
  await assert.rejects(reviewAction(db,{uid:'admin'},body,deps),/not confirmed/);
  let release,calls=0;const gate=new Promise(r=>release=r);
  const running=reviewAction(db,{uid:'admin'},{...body,confirmCharge:true},{...deps,verify:async input=>{calls++;assert.equal(input.transactionNumber,'FTCORRECTEDREF01');assert.equal(input.accountNumber,lottery.paymentAccounts[0].number);await gate;return {verified:false,exists:true,providerDuplicate:true,providerHttpStatus:409,providerCode:'duplicate'};}});

@@ -689,109 +689,15 @@ async function handleLotteryCleanup(req, res, body) {
   throw cleanupFailure('Unsupported cleanup action.');
 }
 
-// Preview-only match to a REAL pending purchase. All account and purchase details
-// come from Firestore; the browser cannot substitute a receiving account/amount.
-async function handleCheckEtPendingMatch(req, res, body) {
+// Legacy Preview diagnostics are retired. Never initialize Firebase, mutate
+// buyer/audit/queue records or spend provider credits through these routes.
+function disabledPreviewDiagnostic(res) {
   res.setHeader('Cache-Control','no-store');
-  if (process.env.VERCEL_ENV !== 'preview') {
-    return res.status(403).json({ok:false,error:'Payment matching tests are available only on a Vercel Preview deployment.'});
-  }
-  const db = adminDb();
-  const { profile } = await authenticateAdmin(req, db);
-  const lotteryId = String(body.lotteryId || '').trim();
-  if (!/^[a-zA-Z0-9_-]{1,128}$/.test(lotteryId)) {
-    return res.status(400).json({ok:false,error:'Select a valid lottery.'});
-  }
-  if (profile.role === 'lotteryAdmin' &&
-    !Array.isArray(profile.lotteryIds || []) ) {
-    return res.status(403).json({ok:false,error:'No assigned lotteries.'});
-  }
-  if (profile.role === 'lotteryAdmin' && !(profile.lotteryIds || []).includes(lotteryId)) {
-    return res.status(403).json({ok:false,error:'You are not assigned to this lottery.'});
-  }
-  const lotterySnap = await db.collection('lotteries').doc(lotteryId).get();
-  if (!lotterySnap.exists) return res.status(404).json({ok:false,error:'Lottery not found.'});
-  const lottery = lotterySnap.data() || {};
-  if (lottery.cleanupInProgress) return res.status(409).json({ok:false,error:'This lottery is being deleted.'});
-  const accounts = Array.isArray(lottery.paymentAccounts) ? lottery.paymentAccounts : [];
-  const cbeIndexes = accounts.map((a,i)=>({a,i})).filter(({a})=>/^(cbe|commercial bank of ethiopia)$/i.test(String(a.bank || '').trim()));
-  if (!cbeIndexes.length) return res.status(400).json({ok:false,error:'Configure a real CBE receiving account for this lottery before testing.'});
-  const index = body.accountIndex === undefined || body.accountIndex === null || body.accountIndex === ''
-    ? (cbeIndexes.length === 1 ? cbeIndexes[0].i : -1)
-    : Number(body.accountIndex);
-  if (!Number.isInteger(index) || index < 0 || index >= accounts.length ||
-    !cbeIndexes.some(x=>x.i===index)) {
-    return res.status(400).json({ok:false,error:'Select one of this lottery\'s configured CBE receiving accounts.'});
-  }
-  const account = String(accounts[index].number || '').replace(/\s+/g,'');
-  if (!/^\d{8,30}$/.test(account) || account === '1000000000000') {
-    return res.status(400).json({ok:false,error:'Replace the sample/missing CBE account with a real account in Payment Accounts.'});
-  }
-
-  let requestSnap;
-  const requestId = String(body.requestId || '').trim();
-  if (requestId) {
-    if (!/^[a-zA-Z0-9_-]{1,128}$/.test(requestId)) return res.status(400).json({ok:false,error:'Invalid request ID.'});
-    requestSnap = await db.collection('ticketRequests').doc(requestId).get();
-  } else {
-    const reference = String(body.reference || '').trim();
-    if (!/^[a-zA-Z0-9_-]{5,80}$/.test(reference)) {
-      return res.status(400).json({ok:false,error:'Enter the exact reference from a pending ticket.'});
-    }
-    const canonicalId = sha256('REF:' + reference.toUpperCase()).slice(0,40);
-    const direct = await db.collection('ticketRequests').doc(canonicalId).get();
-    if (direct.exists && direct.data().lotteryId === lotteryId &&
-        String(direct.data().reference || '').trim().toUpperCase() === reference.toUpperCase()) {
-      requestSnap = direct;
-    } else {
-      const queryMatches = await db.collection('ticketRequests').where('reference','==',reference).limit(21).get();
-      const matches = queryMatches.docs.filter(d=>d.data().lotteryId===lotteryId);
-      if (queryMatches.size >= 21) return res.status(409).json({ok:false,error:'Too many requests share this reference. Use the request ID.'});
-      if (matches.length !== 1) return res.status(matches.length?409:404).json({
-        ok:false,error:matches.length?'Reference is ambiguous. Use the request ID.':'No matching ticket request found in this lottery.'
-      });
-      requestSnap = matches[0];
-    }
-  }
-  if (!requestSnap?.exists || requestSnap.data().lotteryId !== lotteryId) {
-    return res.status(404).json({ok:false,error:'Pending ticket request not found in the selected lottery.'});
-  }
-  const purchase = requestSnap.data() || {};
-  if (purchase.status !== 'pending') return res.status(409).json({ok:false,error:'Only pending requests can be checked.'});
-  const {caller}=await authenticateAdmin(req,db);
-  const correctedReference=body.correctedReference || purchase.paymentCorrection?.reference || purchase.receiptExtraction?.reference || purchase.reference;
-  const attempt=await reviewAction(db,caller,{...body,action:'review-verify',requestId:requestSnap.id,
-    lotteryId,bank:'cbe',correctedReference,revision:body.revision});
-  const verification=attempt.result;
-  if(!verification)return res.status(409).json({ok:false,error:attempt.message || 'Verification uncertain; review the saved attempt.'});
-  const claim=paymentClaimRef(db,correctedReference);
-  const duplicate={claimStatus:claimSnapshotStatus(await claim.get(),requestSnap.id)};
-  const assessment=require('../../lib/checket-request-match').comparePaymentToRequest(
-    purchase,verification,{id:lotteryId},duplicate);
-  return res.status(200).json({ok:true,readOnly:true,request:{id:requestSnap.id,lotteryId,total:purchase.total,reference:purchase.reference},
-    payment:verification,assessment,autoEligibility:require('../../lib/cbe-auto-eligibility').evaluateAutoPayment({purchase,lottery,verification,duplicate})});
+  return res.status(403).json({ok:false,code:'PREVIEW_DIAGNOSTIC_DISABLED',
+    error:'Preview payment diagnostics are disabled. Use authorized payment review on the production dashboard.'});
 }
-
-// Preview-only manual verification: no Firestore mutations or ticket approval.
-async function handleCheckEtVerification(req, res, body) {
-  res.setHeader('Cache-Control', 'no-store');
-  if (process.env.VERCEL_ENV !== 'preview') {
-    return res.status(403).json({ ok:false, error:'Manual Check.et verification tests are available only on a Vercel Preview deployment.' });
-  }
-  const db = adminDb();
-  const { profile } = await authenticateAdmin(req, db);
-  if (profile.role !== 'generalAdmin') {
-    return res.status(403).json({ ok:false, error:'Only General Admin can test payment verification.' });
-  }
-  const { verifyCheckEtPayment } = require('../../lib/checket-verify');
-  if(body.confirmCharge!==true || !require('../../lib/checket-manual-gate').manualCheckEtAllowed())throw Object.assign(new Error('Explicit verification confirmation and opt-in are required.'),{statusCode:403});
-  await db.runTransaction(tx=>require('../../lib/payment-claims').assertReferenceUnusedAtCheckout(tx,db,body.transactionNumber));
-  const {caller}=await authenticateAdmin(req,db);
-  await require('../../lib/checket-manual-budget').enforceReadOnlyCheckEtBudget(db,caller.uid);
-  const result = await verifyCheckEtPayment(body);
-  return res.status(200).json({ ok:true, ...result });
-}
-
+async function handleCheckEtPendingMatch(req,res) { return disabledPreviewDiagnostic(res); }
+async function handleCheckEtVerification(req,res) { return disabledPreviewDiagnostic(res); }
 
 // Server-owned CBE approval activation. All mutations require a General Admin
 // token; Firebase client rules deny this collection for every browser user.
@@ -900,6 +806,12 @@ module.exports = async (req, res) => {
     if (action === 'checket-verify') return await handleCheckEtVerification(req, res, body);
     if (action === 'lookup-reference') return await lookupReference(req, res, body);
     if (action.startsWith('lottery-cleanup-')) return await handleLotteryCleanup(req, res, body);
+    // Preview may share production Firebase configuration. Never let a Preview
+    // dashboard invoke the purchase-review write path (including OCR caching).
+    if(process.env.VERCEL_ENV!=='production' &&
+      ['review-details','review-save','review-duplicate','review-verify','approve','reject','cancel'].includes(action)) {
+      return res.status(403).json({ok:false,error:'Payment review is available only on the production dashboard.'});
+    }
     const requestId = String(body.requestId || '').trim();
     const requestedLotteryId = String(body.lotteryId || '').trim();
 

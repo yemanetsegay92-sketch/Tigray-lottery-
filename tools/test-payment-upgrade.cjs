@@ -57,3 +57,11 @@ test('real text PDF parses without invoking image OCR',async()=>{
  let pdf='%PDF-1.4\n';const offsets=[0];objects.forEach((obj,i)=>{offsets.push(Buffer.byteLength(pdf));pdf+=(i+1)+' 0 obj\n'+obj+'\nendobj\n';});const start=Buffer.byteLength(pdf);pdf+='xref\n0 6\n0000000000 65535 f \n'+offsets.slice(1).map(n=>String(n).padStart(10,'0')+' 00000 n \n').join('')+'trailer\n<< /Size 6 /Root 1 0 R >>\nstartxref\n'+start+'\n%%EOF';
  const r=await extract({buffer:Buffer.from(pdf),mime:'application/pdf',bank:'cbe',recognizeImage:()=>{throw Error('text PDF must not OCR')}});assert.equal(r.reference,'FT26318BTKTO');
 });
+for(const [text,expected,reason] of [
+ ['FT26318BTKTO FT26318BTKTO','FT26318BTKTO',undefined],
+ ['FT263194G9Q5 FT2631946905',undefined,'ambiguous_reference'],
+ ['FT26318BTKTO FT26318BTKT0',undefined,'ambiguous_reference']
+])test('real text PDF preserves repeated embedded references safely: '+text,async()=>{
+ const r=await extract({buffer:require('./fixtures/text-pdf.cjs')(text),mime:'application/pdf',bank:'cbe',recognizeImage:()=>{throw Error('must not OCR embedded text')}});
+ assert.equal(r.reference,expected);assert.equal(r.reason,reason);assert.equal(r.ok,!reason);assert.equal(r.candidates.length,2);
+});

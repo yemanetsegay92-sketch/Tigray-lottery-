@@ -26,7 +26,7 @@ test('successful verification is read-only and reports matching account', async 
   assert.equal(result.verified, true);
   assert.equal(result.amount, 1280);
   assert.equal(result.receiverAccountMatches, true);
-  assert.match(result.note, /No tickets approved/);
+  assert.match(result.note, /Approval requires/);
   assert.ok(!JSON.stringify(result).includes('chk_test_only'));
 });
 
@@ -67,7 +67,7 @@ test('a genuinely different fully specified receiver account is marked mismatch'
 test('provider duplicate is not silently treated as proof of ticket reuse', async () => {
   const result = await verifyCheckEtPayment(base, options(mock(200, {...official, duplicate:true})));
   assert.equal(result.providerDuplicate,true);
-  assert.match(result.note,/No tickets approved/);
+  assert.match(result.note,/Approval requires/);
 });
 
 test('unconfirmed or pending receipts never report verified', async () => {
