@@ -20,3 +20,19 @@
 /* Compact expandable lottery payment accounts */
 .payment-accounts{margin:14px 0;padding:12px 14px;border:1px solid var(--line);border-radius:14px;background:#fbfcfe}.payment-title{font-size:.8rem;font-weight:950;color:var(--navy);letter-spacing:.04em;margin-bottom:8px}.payment-account{display:flex;align-items:center;gap:10px;padding:8px 0;border-top:1px solid var(--line)}.payment-account:first-of-type{border-top:0}.payment-account-main{flex:1;min-width:0;display:grid;gap:3px}.bank-name{font-weight:950;color:var(--navy)}.payment-account code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.95rem;letter-spacing:.02em;overflow-wrap:anywhere}.account-holder{font-size:.82rem;color:var(--muted);font-weight:700}.copy-account{border:1px solid var(--navy);background:#fff;color:var(--navy);border-radius:9px;padding:7px 10px;font-weight:900;cursor:pointer;white-space:nowrap}.payment-toggle{width:100%;display:flex;align-items:center;justify-content:center;gap:7px;border:0;background:transparent;color:var(--navy2);padding:7px 6px 3px;font-weight:900;cursor:pointer}.payment-toggle-arrow{font-size:1.1rem;line-height:1}.payment-others[hidden]{display:none!important}
 @media(max-width:700px){.payment-account{align-items:center}.copy-account{padding:7px 9px}.account-holder{font-size:.78rem}}
+
+/* PWA install affordance and embedded-browser receipt guidance */
+.pwa-install{border:1px solid #ffffffa6;background:#ffffff1c;color:#fff;border-radius:999px;font:inherit;font-size:.82rem;font-weight:850;min-height:42px;padding:8px 12px;cursor:pointer;white-space:nowrap}
+.pwa-install[hidden]{display:none!important}
+.pwa-install-dialog{width:min(440px,calc(100% - 28px));border:0;border-radius:18px;padding:24px;box-shadow:0 18px 55px #0005;color:var(--ink)}
+.pwa-install-dialog::backdrop{background:#122b45bb}
+.pwa-install-dialog h2{font-size:1.3rem;margin:0 0 10px;color:var(--navy)}
+.pwa-install-dialog p{line-height:1.65;margin:0 0 18px}
+.pwa-help-close{width:100%;min-height:46px;border:0;border-radius:12px;background:var(--navy);color:#fff;font:inherit;font-weight:800}
+.pwa-install:focus-visible,.mobile-upload-help summary:focus-visible,.pwa-help-close:focus-visible{outline:3px solid var(--gold);outline-offset:3px}
+.mobile-upload-help{padding:12px 14px;margin:12px 0;border-radius:12px;border:1px solid var(--line);background:#f0f5fa;color:var(--navy)}
+.mobile-upload-help summary{font-size:.95rem;font-weight:800;cursor:pointer}
+.mobile-upload-help p{font-size:.9rem;color:var(--ink);font-weight:500;margin:10px 0 0}
+#submitBtn:disabled{opacity:.7;cursor:progress}
+@media(max-width:500px){.site-header{flex-wrap:wrap}.site-header nav{margin-left:auto;gap:7px}.brand{font-size:.96rem}.pwa-install{padding:8px 10px;font-size:.79rem}.form-card{padding:17px 14px}.upload-box{padding:14px 12px}}
+@media(display-mode:standalone){body{padding-bottom:env(safe-area-inset-bottom)}}

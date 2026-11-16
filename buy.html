@@ -1,7 +1,7 @@
 <!doctype html>
 <!-- preview env refresh -->
 <html lang="en">
-<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Buy Ticket · Tigray Lottery</title><link rel="stylesheet" href="style.css"><script src="https://telegram.org/js/telegram-web-app.js"></script></head>
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><title>Buy Ticket · Tigray Lottery</title><link rel="stylesheet" href="style.css"><script src="https://telegram.org/js/telegram-web-app.js"></script><meta name="theme-color" content="#12355b"><link rel="manifest" href="/manifest.webmanifest"><link rel="icon" type="image/png" href="/icons/tigray-icon-192.png"></head>
 <body>
 <header class="site-header">
   <a class="brand" href="index.html"><span class="brand-mark">✦</span><span>Tigray Lottery</span></a>
@@ -14,7 +14,7 @@
     <form id="buyForm" class="card form-card">
       <div class="form-step"><span>01</span><div><h2 data-i18n="yourDetails">Your details</h2><p class="form-note" data-i18n="detailsNote">Use the same phone number you will use to check your ticket.</p></div></div>
       <label><span data-i18n="fullName">Full name</span><input id="name" required autocomplete="name"></label>
-      <label><span data-i18n="phoneNumber">Phone number</span><input id="phone" type="tel" required autocomplete="tel" placeholder="09…"></label>
+      <label><span data-i18n="phoneNumber">Phone number</span><input id="phone" type="tel" inputmode="tel" required autocomplete="tel" placeholder="09…"></label>
 
       <div class="form-step"><span>02</span><div><h2 data-i18n="tickets">Tickets</h2><p class="form-note" data-i18n="ticketsNote">Choose how many tickets you want.</p></div></div>
       <div class="quantity-control"><button type="button" id="qtyMinus" class="qty-btn" aria-label="Decrease">−</button><input id="quantity" type="number" min="1" max="5" value="1" inputmode="numeric" aria-label="Quantity"><button type="button" id="qtyPlus" class="qty-btn" aria-label="Increase">+</button></div>
@@ -22,15 +22,17 @@
 
       <div class="form-step"><span>03</span><div><h2 data-i18n="paymentProof">Payment proof</h2><p class="form-note" data-i18n="proofNote">Enter the transaction number, upload a screenshot or PDF receipt, or provide both.</p></div></div>
       <label><span data-i18n="referenceNumber">Transaction / reference number</span><input id="reference" autocomplete="off"></label>
-            <label class="upload-box"><span data-i18n="paymentScreenshot">Payment screenshot or PDF receipt</span><input id="screenshot" type="file" accept="image/jpeg,image/png,image/webp,application/pdf,.pdf"><span id="screenshotInfo" class="upload-hint" data-i18n="uploadHint">Choose a screenshot or PDF</span></label>
+            <label class="upload-box"><span data-i18n="paymentScreenshot">Payment screenshot or PDF receipt</span><input id="screenshot" type="file" accept="image/jpeg,image/png,image/webp,application/pdf,.pdf"><span id="screenshotInfo" role="status" aria-live="polite" class="upload-hint" data-i18n="uploadHint">Choose a screenshot or PDF</span></label>
       <p class="form-note proof-rule" data-i18n="proofRule">Provide a transaction number OR a screenshot/PDF receipt (both are accepted).</p>
+      <details class="mobile-upload-help"><summary data-i18n="uploadHelpTitle">Need help attaching a receipt?</summary><p data-i18n="uploadHelpText">Save your receipt from the bank app, then tap Choose file and select it from Photos or Files. If the file picker does not open, try opening this page in Chrome or Samsung Internet from your app's menu.</p></details>
 
       <div class="review-box"><div><span data-i18n="ticketPrice">Ticket price</span><b id="reviewPrice">—</b></div><div><span data-i18n="numberOfTickets">Number of tickets</span><b id="reviewQty">1</b></div><div class="review-total"><span data-i18n="total">Total</span><b id="reviewTotal">—</b></div></div>
       <button id="submitBtn" type="submit" class="btn btn-primary full" data-i18n="submitRequest">Submit ticket request</button>
-      <p class="form-note center" data-i18n="manualNote">Payment is verified manually. Ticket numbers are assigned after approval.</p>
+      <p class="form-note center" data-i18n="manualNote">Payment is checked after submission. Tickets are assigned after approval.</p>
     </form>
   </div>
   <div id="message"></div>
 </main>
 <script type="module" src="js/buy.js"></script>
+<script src="/js/pwa.js" defer></script>
 </body></html>

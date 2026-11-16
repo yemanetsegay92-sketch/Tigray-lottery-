@@ -13,7 +13,8 @@
   },
   "git": {
     "deploymentEnabled": {
-      "feat/yoas-payment-workflow-upgrade": false
+      "feat/yoas-payment-workflow-upgrade": false,
+      "feat/pwa-mobile-checkout-20261116": false
     }
   }
 }

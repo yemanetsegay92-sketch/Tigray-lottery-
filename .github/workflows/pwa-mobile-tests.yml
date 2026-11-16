@@ -1,0 +1,16 @@
+name: PWA and mobile checkout smoke tests
+on: [pull_request, workflow_dispatch]
+permissions:
+  contents: read
+jobs:
+  pwa:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - run: node --check js/pwa.js
+      - run: node --check service-worker.js
+      - run: node --check js/buy.js
+      - run: node --test tools/test-pwa.cjs
