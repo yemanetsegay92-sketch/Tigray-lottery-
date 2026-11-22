@@ -1,0 +1,4 @@
+const test=require('node:test'),assert=require('node:assert/strict');
+const {paymentEvidenceMode,assertUploadAllowed,assertPurchaseEvidence}=require('../lib/payment-evidence-mode');
+test('old lotteries remain standard',()=>{assert.equal(paymentEvidenceMode({}),'standard');assert.doesNotThrow(()=>assertUploadAllowed({}));assert.doesNotThrow(()=>assertPurchaseEvidence({},'',{}));assert.throws(()=>assertPurchaseEvidence({},'',null),/reference OR upload/);});
+test('reference-only rules are server enforced',()=>{const l={paymentEvidenceMode:'reference_only'};assert.throws(()=>assertUploadAllowed(l),/references only/);assert.throws(()=>assertPurchaseEvidence(l,'',null),/Enter a transaction reference/);assert.throws(()=>assertPurchaseEvidence(l,'FT123',{}),/disabled/);assert.doesNotThrow(()=>assertPurchaseEvidence(l,'FT123',null));});

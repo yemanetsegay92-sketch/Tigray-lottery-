@@ -1,5 +1,6 @@
 const {normalizePaymentReference,assertReferenceUnusedAtCheckout}=require('../../lib/payment-claims');
 const crypto = require('crypto');
+const {assertPurchaseEvidence,assertUploadAllowed}=require('../../lib/payment-evidence-mode');
 const { getStorage } = require('firebase-admin/storage');
 const { BUCKET: PRIVATE_BUCKET, TYPES, POLICY_TTL_MS, FINISH_TTL_MS, signToken, receiptPath, verifyToken, validateStagedFile, sha256: proofHash } = require('./_receipt-upload');
 const { adminDb, validateTelegramInitData, FieldValue } = require('../telegram/_lib');
@@ -35,6 +36,7 @@ async function authorizeReceiptUpload(body, res) {
   const db = adminDb();
   const snap = await db.collection('lotteries').doc(lotteryId).get();
   if (!snap.exists || snap.data()?.status !== 'active') throw badRequest('Lottery is not open.');
+  assertUploadAllowed(snap.data());
   const session = crypto.randomBytes(16).toString('hex');
   const path = receiptPath(lotteryId, session, TYPES[mime].ext);
   const [policy] = await getStorage().bucket(PRIVATE_BUCKET).file(path).generateSignedPostPolicyV4({
@@ -96,6 +98,7 @@ module.exports = async (req, res) => {
     if (!lotterySnap.exists) return res.status(404).json({ ok: false, error: 'Lottery not found.' });
     const lottery = lotterySnap.data();
     if (lottery.status !== 'active') throw badRequest('This lottery is not currently open.');
+    assertPurchaseEvidence(lottery,reference,proof);
     const price = Number(lottery.price || 0);
     if (!Number.isFinite(price) || price <= 0) throw badRequest('Lottery price is not configured correctly.');
     const total = price * quantity;

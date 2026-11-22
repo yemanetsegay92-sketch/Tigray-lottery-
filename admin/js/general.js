@@ -62,9 +62,11 @@ $('createForm').addEventListener('submit',async e=>{
     if(!['manual','automatic'].includes(approvalMode))throw new Error('Choose manual or automatic approval.');
     if(approvalMode==='automatic' && !validAutomaticCbeAccounts(paymentAccounts))
       throw new Error('For automatic approval, configure exactly one real CBE receiving account with its correct account-holder name.');
+    const paymentEvidenceMode=$('paymentEvidenceMode').value;
+    if(!['standard','reference_only'].includes(paymentEvidenceMode))throw Error('Invalid payment evidence mode.');
     const newLottery=doc(collection(db,'lotteries'));
     const batch=writeBatch(db);
-    batch.set(newLottery,{name:$('name').value.trim(),price,min,max,status:$('status').value,approvalMode,description:$('description').value.trim(),createdAt:serverTimestamp(),adminIds:[],nextTicketNumber:min,awards:['First Prize'],paymentAccounts});
+    batch.set(newLottery,{name:$('name').value.trim(),price,min,max,status:$('status').value,approvalMode,description:$('description').value.trim(),createdAt:serverTimestamp(),adminIds:[],nextTicketNumber:min,awards:['First Prize'],paymentAccounts,paymentEvidenceMode});
     batch.set(doc(collection(db,'auditLogs')),{action:'createLottery',lotteryId:newLottery.id,approvalMode,adminId:auth.currentUser.uid,createdAt:serverTimestamp(),paymentAccountBanks:paymentAccounts.map(x=>x.bank)});
     await batch.commit();
     let activationError='';

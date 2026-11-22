@@ -95,7 +95,7 @@ service cloud.firestore {
         ]) &&
         data.keys().hasOnly([
           'name', 'price', 'min', 'max', 'status', 'description', 'createdAt',
-          'adminIds', 'nextTicketNumber', 'awards', 'paymentAccounts', 'approvalMode',
+          'adminIds', 'nextTicketNumber', 'awards', 'paymentAccounts', 'approvalMode', 'paymentEvidenceMode',
           'awardsUpdatedAt', 'awardsUpdatedBy', 'drawnNumber', 'drawDigits',
           'drawnAt', 'drawnBy', 'cleanupInProgress', 'cleanupPhase',
           'cleanupStartedBy', 'cleanupStartedAt'
@@ -109,6 +109,7 @@ service cloud.firestore {
         data.nextTicketNumber <= data.max + 1 &&
         data.status in ['active', 'upcoming', 'closed', 'drawn', 'hidden'] &&
         (!('approvalMode' in data) || data.approvalMode in ['manual', 'automatic']) &&
+        (!('paymentEvidenceMode' in data) || data.paymentEvidenceMode in ['standard', 'reference_only']) &&
         data.createdAt is timestamp &&
         validStringList(data.adminIds, 0, 10, 128) &&
         (!('awards' in data) || validStringList(data.awards, 1, 10, 200)) &&
@@ -139,7 +140,9 @@ service cloud.firestore {
         (('approvalMode' in resource.data &&
             request.resource.data.approvalMode == resource.data.approvalMode) ||
           (!('approvalMode' in resource.data) &&
-            !('approvalMode' in request.resource.data)));
+            !('approvalMode' in request.resource.data))) &&
+        (('paymentEvidenceMode' in resource.data && request.resource.data.paymentEvidenceMode == resource.data.paymentEvidenceMode) ||
+          (!('paymentEvidenceMode' in resource.data) && !('paymentEvidenceMode' in request.resource.data)));
     }
     function lotteryAdminUpdateOnly() {
       return request.resource.data.diff(resource.data).affectedKeys().hasOnly([

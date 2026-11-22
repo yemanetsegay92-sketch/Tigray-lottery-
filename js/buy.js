@@ -84,8 +84,21 @@ $('screenshot')?.addEventListener('change',async e=>{
     e.target.value='';$('screenshotInfo').textContent=error.message||'Could not use this receipt.';
   }
 });
+function referenceOnly(){return lot?.paymentEvidenceMode==='reference_only'}
+function applyEvidenceMode(){
+ const only=referenceOnly();
+ const upload=document.querySelector('label.upload-box'),help=document.querySelector('.mobile-upload-help');
+ if(upload)upload.hidden=only;
+ if(help)help.hidden=only;
+ $('screenshot').disabled=only;
+ $('reference').required=only;
+ const note=document.querySelector('.proof-rule');
+ if(note)note.textContent=only?(lang==='ti'?'ቁጽሪ ግብይት ጥራይ ኣእቱ።':'Enter transaction reference only. No file upload needed.'):t.proofRule;
+ const description=document.querySelector('[data-i18n="proofNote"]');
+ if(description)description.textContent=only?(lang==='ti'?'ቁጽሪ ግብይት ጥራይ ኣእቱ።':'Enter the bank transaction reference only.'):t.proofNote;
+}
 function qty(){return Math.max(1,Math.min(5,Number($('quantity').value)||1))}function updateTotal(){const q=qty(),price=Number(lot?.price||0);$('quantity').value=q;$('total').textContent=`${t.total}: ${q*price} Birr`;$('reviewQty').textContent=q;$('reviewPrice').textContent=`${price} Birr`;$('reviewTotal').textContent=`${q*price} Birr`}$('qtyMinus').addEventListener('click',()=>{$('quantity').value=Math.max(1,qty()-1);updateTotal()});$('qtyPlus').addEventListener('click',()=>{$('quantity').value=Math.min(5,qty()+1);updateTotal()});$('quantity').addEventListener('input',updateTotal);
-async function init(){if(!lotId){$('lotteryInfo').innerHTML=`<div class="error">${t.lotUnavailable}</div>`;$('buyForm').style.display='none';return}try{const snap=await getDoc(doc(db,'lotteries',lotId));if(!snap.exists()||snap.data().status!=='active'){$('lotteryInfo').innerHTML=`<div class="card lottery-head-card"><h2>${t.lotUnavailable}</h2><a class="btn btn-primary" href="index.html">${t.goBack}</a></div>`;$('buyForm').style.display='none';return}lot={id:snap.id,...snap.data()};$('lotteryInfo').innerHTML=`<div class="card lottery-head-card"><div class="eyebrow dark">OPEN LOTTERY</div><h1>${esc(lot.name)}</h1><div class="lottery-head-meta"><span class="meta-pill">${Number(lot.price)} Birr / ticket</span><span class="meta-pill">${esc(lot.min)} – ${esc(lot.max)}</span></div><p class="form-note">${t.ticketPending}</p></div>`;updateTotal()}catch(e){console.error(e);$('lotteryInfo').innerHTML='<div class="error">Could not load this lottery.</div>'}}
+async function init(){if(!lotId){$('lotteryInfo').innerHTML=`<div class="error">${t.lotUnavailable}</div>`;$('buyForm').style.display='none';return}try{const snap=await getDoc(doc(db,'lotteries',lotId));if(!snap.exists()||snap.data().status!=='active'){$('lotteryInfo').innerHTML=`<div class="card lottery-head-card"><h2>${t.lotUnavailable}</h2><a class="btn btn-primary" href="index.html">${t.goBack}</a></div>`;$('buyForm').style.display='none';return}lot={id:snap.id,...snap.data()};$('lotteryInfo').innerHTML=`<div class="card lottery-head-card"><div class="eyebrow dark">OPEN LOTTERY</div><h1>${esc(lot.name)}</h1><div class="lottery-head-meta"><span class="meta-pill">${Number(lot.price)} Birr / ticket</span><span class="meta-pill">${esc(lot.min)} – ${esc(lot.max)}</span></div><p class="form-note">${t.ticketPending}</p></div>`;applyEvidenceMode();updateTotal()}catch(e){console.error(e);$('lotteryInfo').innerHTML='<div class="error">Could not load this lottery.</div>'}}
 let submitting=false;
 $('buyForm').addEventListener('submit',async e=>{
   e.preventDefault();
@@ -104,6 +117,7 @@ $('buyForm').addEventListener('submit',async e=>{
     $('message').innerHTML='<div class="error">Please complete your name and phone number.</div>';
     return;
   }
+  if(referenceOnly()&&!reference){$('message').innerHTML='<div class="error">Transaction reference is required for this lottery.</div>';return;}
   if(!reference&&!compressedScreenshot&&!hasShot){
     $('message').innerHTML=`<div class="error">${t.requiredProof}</div>`;
     return;
@@ -119,7 +133,7 @@ $('buyForm').addEventListener('submit',async e=>{
     // The JPEG/PDF bytes go directly from this browser to private GCS.
     // Only a small signed upload token is sent through Vercel.
     let proofUploadToken='';
-    if(compressedScreenshot){
+    if(compressedScreenshot&&!referenceOnly()){
       btn.textContent='Uploading receipt…';
       proofUploadToken=await uploadPrivateReceipt(lot.id,compressedScreenshot);
     }
