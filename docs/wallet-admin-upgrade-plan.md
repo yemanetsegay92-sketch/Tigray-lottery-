@@ -26,4 +26,4 @@
 - **Do not merge or activate wallet until backend, front-end, rules, auth and financial tests all pass.**
 
 ## Implementation status
-This branch begins with RF-only checkout behavior; full wallet and admin feature work follows in separate commits. This document does not activate payments.
+This branch includes RF-only checkout, on-demand admin workspace navigation, and an isolated wallet transaction service with monetary/verification unit tests. Customer registration, authenticated API routes, bank owner verification, deposit worker, settlement recording, end-to-end emulator/browser tests and launch approval are still incomplete. None of the wallet code is routed to production.
