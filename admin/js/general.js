@@ -29,6 +29,33 @@ $('closeSummary')?.addEventListener('click',()=>{$('summaryPanel').style.display
 $('contactForm')?.addEventListener('submit',saveContactSettings);
 $('whatsappNumber')?.addEventListener('input',updateContactPreview);
 $('addCreatePaymentAccount')?.addEventListener('click',addCreatePaymentAccount);
+// Workspace navigation: render one panel at a time and load expensive data only when selected.
+const generalPanels=Array.from(document.querySelectorAll('.admin-wrap > section'));
+const generalGroups={overview:[0,1],lotteries:[4],create:[3],admins:[5,8],draw:[6],
+ reports:[7,9],verify:[2],settings:[10,11]};
+let generalView='overview';
+function showGeneralView(view){
+ generalView=generalGroups[view]?view:'overview';
+ generalPanels.forEach((panel,index)=>{panel.hidden=!generalGroups[generalView].includes(index)});
+ document.querySelectorAll('#workspaceNav [data-view]').forEach(button=>{
+  const selected=button.dataset.view===generalView;
+  if(selected)button.setAttribute('aria-current','page');else button.removeAttribute('aria-current');
+ });
+}
+async function openGeneralView(view){
+ showGeneralView(view);
+ try{
+  if(generalView==='lotteries')await renderLotteries();
+  if(generalView==='admins')await renderAdminList();
+  if(generalView==='reports')await renderSummaryOverview();
+  if(generalView==='draw')setupDraw();
+  if(generalView==='settings')await loadContactSettings();
+  if(generalView==='create')renderCreatePaymentAccountsEditor();
+ }catch(e){$('message').innerHTML='<div class="error">'+esc(e.message||'Could not load this section.')+'</div>';}
+}
+document.querySelectorAll('#workspaceNav [data-view]').forEach(button=>
+ button.addEventListener('click',()=>void openGeneralView(button.dataset.view)));
+showGeneralView('overview');
 let accessGeneration=0;
 onAuthStateChanged(auth,async u=>{
   const generation=++accessGeneration;
@@ -39,11 +66,8 @@ onAuthStateChanged(auth,async u=>{
     const p=await getDoc(doc(db,'users',u.uid));
     if(generation!==accessGeneration || auth.currentUser?.uid!==u.uid)return;
     if(!p.exists()||p.data().role!=='generalAdmin'){location.replace(p.exists() && p.data().role==='lotteryAdmin' ? 'lottery.html' : 'login.html');return;}
-    await renderLotteries();
-    await renderSummaryOverview();
-    await loadContactSettings();
-    renderCreatePaymentAccountsEditor();
-    setupDraw();
+    await loadLotteriesBasics();
+    showGeneralView('overview');
     // Previously confirmed cleanups resume automatically after refresh/sign-in.
     void autoResumeCleanupOnLoad();
     if(generation===accessGeneration && auth.currentUser?.uid===u.uid)document.documentElement.classList.add('admin-verified');
@@ -80,7 +104,7 @@ $('createForm').addEventListener('submit',async e=>{
     $('message').innerHTML=activationError
       ? '<div class="error">Lottery created, but CBE automatic approval is NOT ACTIVE: '+esc(activationError)+'. Use the Activate button beside the lottery to retry.</div>'
       : '<div class="success">Lottery created with '+esc(approvalMode)+(approvalMode==='automatic'?' CBE automatic approval activated.':' approval.')+'</div>';
-    await renderLotteries();await renderSummaryOverview();setupDraw();
+    await loadLotteriesBasics();showGeneralView('create');
   }catch(err){console.error(err);$('message').innerHTML=`<div class="error">${esc(err.message)}</div>`;}
 });
 
@@ -234,15 +258,20 @@ async function refreshCbeApprovalStatus(){
   }));
 }
 
+async function loadLotteriesBasics(){
+  const ls=await getDocs(collection(db,'lotteries'));lots=ls.docs.map(d=>({id:d.id,...d.data()}));
+  $('statLotteries').textContent=lots.length;
+  const opts=lots.map(x=>`<option value="${esc(x.id)}">${esc(x.name)}</option>`).join('');
+  $('adminLottery').innerHTML=opts;$('assignLottery').innerHTML=opts;
+  if($('drawLotterySelect'))$('drawLotterySelect').innerHTML=opts;
+}
 async function renderLotteries(){
-  const ls=await getDocs(collection(db,'lotteries'));lots=ls.docs.map(d=>({id:d.id,...d.data()}));$('statLotteries').textContent=lots.length;
+  await loadLotteriesBasics();
   if ($('deleteAllLotteries')) $('deleteAllLotteries').disabled = !lots.length || cleanupBusy || bulkCleanupBusy;
-  const opts=lots.map(x=>`<option value="${esc(x.id)}">${esc(x.name)}</option>`).join('');$('adminLottery').innerHTML=opts;$('assignLottery').innerHTML=opts;if($('drawLotterySelect'))$('drawLotterySelect').innerHTML=opts;
   $('lotteries').innerHTML=lots.map(x=>{const mode=x.approvalMode==='automatic'?'Automatic CBE':'Manual';return `<div class="row"><b>${esc(x.name)}</b> <span class="badge ${esc(x.status)}">${esc(x.status)}</span><br><span class="muted">ID: ${esc(x.id)} · ${Number(x.price||0)} Birr · ${esc(x.min)}–${esc(x.max)} · Next: ${esc(x.nextTicketNumber??x.min)} · Approval: <b>${mode}</b></span><div class="actions"><button data-edit="${esc(x.id)}">Edit</button><button class="secondary" data-summary="${esc(x.id)}">Open Summary</button><button class="danger" data-delete="${esc(x.id)}">${x.cleanupInProgress?"Continue Cleanup":"Delete & Clear"}</button></div>${x.approvalMode==='automatic'?`<div class="muted" data-auto-status="${esc(x.id)}">Checking CBE auto approval…</div>`:''}<div class="muted" data-cleanup-message="${esc(x.id)}">${esc(cleanupNotices.get(x.id) || (x.cleanupInProgress?'Cleanup already started: this lottery is closed. Click Continue Cleanup to resume.':'Click Delete & Clear to preview linked data; then type DELETE followed by the exact lottery ID to confirm.'))}</div></div>`}).join('')||'<p class="muted">No lotteries.</p>';
   document.querySelectorAll('[data-edit]').forEach(b=>b.addEventListener('click',()=>editLottery(b.dataset.edit)));
   document.querySelectorAll('[data-delete]').forEach(b=>b.addEventListener('click',()=>removeLottery(b.dataset.delete)));
   document.querySelectorAll('[data-summary]').forEach(b=>b.addEventListener('click',()=>openLotterySummary(b.dataset.summary)));
-  await renderAdminList();
   void refreshCbeApprovalStatus();
 }
 
@@ -274,6 +303,7 @@ async function renderSummaryOverview(){
   }
 }
 async function openLotterySummary(id){
+  showGeneralView('reports');
   const lot=lots.find(x=>x.id===id);if(!lot)return;
   $('summaryTitle').textContent=`Summary · ${lot.name}`;
   $('summaryPanel').style.display='block';

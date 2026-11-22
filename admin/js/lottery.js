@@ -92,6 +92,21 @@ async function connectTelegram(){
 
 $('logoutBtn').addEventListener('click',async()=>{document.documentElement.classList.remove('admin-verified');await signOut(auth);location.href='login.html'});
 $('refreshBtn').addEventListener('click',renderAll);
+const lotteryPanels=Array.from(document.querySelectorAll('.admin-wrap > section'));
+const lotteryGroups={pending:[5,8],sales:[5,9],find:[6],lotteries:[2],awards:[3],accounts:[4],telegram:[1]};
+let lotteryView='pending';
+function showLotteryView(view){
+ lotteryView=lotteryGroups[view]?view:'pending';
+ lotteryPanels.forEach((panel,index)=>{panel.hidden=index!==0&&!lotteryGroups[lotteryView].includes(index)});
+ document.querySelectorAll('#workspaceNav [data-view]').forEach(button=>{
+   if(button.dataset.view===lotteryView)button.setAttribute('aria-current','page');
+   else button.removeAttribute('aria-current');
+ });
+}
+async function openLotteryView(view){showLotteryView(view);await renderAll();}
+document.querySelectorAll('#workspaceNav [data-view]').forEach(button=>
+ button.addEventListener('click',()=>void openLotteryView(button.dataset.view)));
+showLotteryView('pending');
 $('refreshTelegramStatus')?.addEventListener('click',refreshTelegram);
 $('connectTelegram').addEventListener('click',connectTelegram);
 $('lotterySelect').addEventListener('change',async e=>{lot=lots.find(x=>x.id===e.target.value)||lot;await renderAll()});
@@ -270,28 +285,29 @@ async function renderAll(){
   $('lotteryName').textContent='· '+lot.name;
   $('lotteryInfo').innerHTML=`<span class="meta-pill"><b>${esc(lot.name)}</b></span><span class="meta-pill">Status: ${esc(lot.status)}</span><span class="meta-pill">Price: ${Number(lot.price||0)} Birr</span><span class="meta-pill">Sequence: ${esc(lot.min)} – ${esc(lot.max)}</span>`;
 
+  const currentLot=lot.id, selected=lotteryView;
   const requests=collection(db,'ticketRequests');
-  const [pendingSnap,approvedSnap]=await Promise.all([
-    getDocs(query(requests,where('lotteryId','==',lot.id),where('status','==','pending'),limit(51))),
-    getDocs(query(requests,where('lotteryId','==',lot.id),where('status','==','approved'),limit(101)))
-  ]);
-
-  pendingHasMore=pendingSnap.docs.length>50;
-  approvedHasMore=approvedSnap.docs.length>100;
-  const pending=pendingSnap.docs.slice(0,50).map(d=>({id:d.id,...d.data()}));
-  displayedApproved=approvedSnap.docs.slice(0,100).map(d=>({id:d.id,...d.data()}));
-  pendingTotal=pending.length;
-
-  $('statPending').textContent=pendingHasMore?'50+':pending.length;
-  $('statApproved').textContent=approvedHasMore?'100+':displayedApproved.length;
-  $('statRejected').textContent='—';
-  if($('statCancelled')) $('statCancelled').textContent='—';
-  await refreshSoldTicketCount();
-
-  renderPending(pending,pendingHasMore);
-  renderSummary(displayedApproved,approvedHasMore);
-  renderAwardsEditor();
-  renderPaymentAccountsEditor();
+  if(selected==='pending'){
+    const pendingSnap=await getDocs(query(requests,where('lotteryId','==',currentLot),where('status','==','pending'),limit(51)));
+    if(lot.id!==currentLot||lotteryView!==selected)return;
+    pendingHasMore=pendingSnap.docs.length>50;
+    const pending=pendingSnap.docs.slice(0,50).map(d=>({id:d.id,...d.data()}));
+    pendingTotal=pending.length;
+    $('statPending').textContent=pendingHasMore?'50+':pending.length;
+    renderPending(pending,pendingHasMore);
+  }else if(selected==='sales'){
+    const approvedSnap=await getDocs(query(requests,where('lotteryId','==',currentLot),where('status','==','approved'),limit(101)));
+    if(lot.id!==currentLot||lotteryView!==selected)return;
+    approvedHasMore=approvedSnap.docs.length>100;
+    displayedApproved=approvedSnap.docs.slice(0,100).map(d=>({id:d.id,...d.data()}));
+    $('statApproved').textContent=approvedHasMore?'100+':displayedApproved.length;
+    await refreshSoldTicketCount();
+    renderSummary(displayedApproved,approvedHasMore);
+  }else if(selected==='awards'){
+    renderAwardsEditor();
+  }else if(selected==='accounts'){
+    renderPaymentAccountsEditor();
+  }
 }
 function normalizeScreenshot(src){
   const raw=String(src||'').trim();

@@ -1,6 +1,17 @@
 <!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>General Admin · Tigray Lottery</title><link rel="stylesheet" href="admin.css"><style>html:not(.admin-verified) .admin-header,html:not(.admin-verified) .admin-wrap{display:none!important}html.admin-verified #adminAccessCheck{display:none}</style></head>
 <body><p id="adminAccessCheck" role="status">Verifying administrator access…</p><header class="admin-header"><div class="title"><span class="admin-mark">✦</span> General Admin <span class="muted-light">Management & reports</span></div><button id="logoutBtn">Logout</button></header>
-<main class="admin-wrap"><div id="message"></div>
+<main class="admin-wrap workspace-layout"><div id="message"></div>
+<nav id="workspaceNav" class="workspace-nav" aria-label="General Manager sections">
+<strong class="workspace-brand">MANAGEMENT</strong>
+<button type="button" data-view="overview" aria-current="page">◫ Overview</button>
+<button type="button" data-view="lotteries">▣ Lotteries</button>
+<button type="button" data-view="create">＋ Create lottery</button>
+<button type="button" data-view="admins">♙ Lottery admins</button>
+<button type="button" data-view="draw">◉ Live draw</button>
+<button type="button" data-view="reports">▥ Sales reports</button>
+<button type="button" data-view="verify">✓ Verification</button>
+<button type="button" data-view="settings">⚙ Settings</button>
+</nav>
 <section class="panel hero-admin"><div><div class="eyebrow-admin">CONTROL CENTER</div><h1>Tigray Lottery management</h1><p class="muted">Manage lotteries, administrators, reports, and the final draw.</p></div></section>
 <section class="stats"><div class="stat"><span>Lotteries</span><b id="statLotteries">—</b></div><div class="stat"><span>Lottery admins</span><b id="statAdmins">—</b></div><div class="stat"><span>Approved tickets</span><b id="statTickets">—</b></div><div class="stat"><span>Approved value</span><b id="statRevenue">—</b></div></section>
 <section class="panel" id="checketPanel"><h2>Payment verification</h2><p class="muted">Preview payment diagnostics are unavailable. Authorized Lottery Admins can review pending payments on the production dashboard. Review saves corrections and verification history; Verify Again requires confirmation and may use a Check.et credit.</p></section>
