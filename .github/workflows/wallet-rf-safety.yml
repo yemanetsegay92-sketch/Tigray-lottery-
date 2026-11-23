@@ -14,6 +14,7 @@ on:
       - 'tools/test-wallet-deposit-verification.cjs'
       - 'tools/test-wallet-runtime-policy.cjs'
       - 'tools/test-wallet-emulator.cjs'
+      - 'tools/test-wallet-api-emulator.cjs'
       - 'tools/test-payment-evidence-mode.cjs'
       - '.github/workflows/wallet-rf-safety.yml'
   workflow_dispatch:
@@ -43,4 +44,4 @@ jobs:
           npx firebase --config firebase.emulator.json \
             --project demo-tigray-wallet-pr36 \
             emulators:exec --only firestore \
-            'node --test tools/test-wallet-emulator.cjs'
+            'node --test tools/test-wallet-emulator.cjs tools/test-wallet-api-emulator.cjs'
