@@ -7,7 +7,6 @@ const { BUCKET: PRIVATE_BUCKET, TYPES, POLICY_TTL_MS, FINISH_TTL_MS, signToken, 
 const { adminDb, validateTelegramInitData, FieldValue } = require('../telegram/_lib');
 const { usesAutomaticApproval } = require('../../lib/lottery-approval-mode');
 const { assertReasonableBody, enforcePublicPurchaseLimit } = require('../../lib/public-purchase-guard');
-const {registerCustomer,createDepositRequest,purchaseWithWallet,COMPANY_ID}=require('../../lib/wallet-core');
 
 const BUCKET = 'tigiray-lottery.firebasestorage.app';
 
@@ -36,6 +35,7 @@ async function authenticateCustomer(req){
   return {...auth,phone_number_verified:true};
 }
 async function handleWalletAction(req,res,body){
+  const {registerCustomer,createDepositRequest,purchaseWithWallet,COMPANY_ID}=require('../../lib/wallet-core');
   const auth=await authenticateCustomer(req),db=adminDb();
   if(body.action==='wallet-register'){
     const result=await registerCustomer(db,{uid:auth.uid,auth,name:body.name});

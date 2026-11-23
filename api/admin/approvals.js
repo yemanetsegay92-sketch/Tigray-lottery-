@@ -4,7 +4,6 @@ const { adminDb, FieldValue } = require('../telegram/_lib');
 const { getAuth } = require('firebase-admin/auth');
 const { getStorage } = require('firebase-admin/storage');
 const { paymentClaimRef, normalizePaymentReference, claimSnapshotStatus, assertClaimFree, createPaymentClaim } = require('../../lib/payment-claims');
-const {creditDeposit,settleObligation,refundWalletPurchase}=require('../../lib/wallet-core');
 
 function readBearer(req) {
   const h = String(req.headers?.authorization || '');
@@ -814,6 +813,7 @@ module.exports = async (req, res) => {
     if (action === 'lookup-reference') return await lookupReference(req, res, body);
     if (action.startsWith('lottery-cleanup-')) return await handleLotteryCleanup(req, res, body);
     if(['wallet-finance-summary','wallet-deposit-approve','wallet-settle','wallet-refund'].includes(action)){
+      const {creditDeposit,settleObligation,refundWalletPurchase}=require('../../lib/wallet-core');
       const db=adminDb(),{caller,profile}=await authenticateAdmin(req,db);
       res.setHeader('Cache-Control','no-store');
       if(action==='wallet-finance-summary'){
