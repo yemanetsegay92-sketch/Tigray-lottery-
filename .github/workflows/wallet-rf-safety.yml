@@ -5,8 +5,14 @@ on:
       - 'lib/wallet-core.js'
       - 'lib/payment-evidence-mode.js'
       - 'lib/payment-claims.js'
+      - 'lib/wallet-deposit-verification.js'
+      - 'lib/wallet-runtime-policy.js'
+      - 'api/admin/approvals.js'
       - 'api/customer/create-request.js'
+      - 'admin/js/general.js'
       - 'tools/test-wallet-core.cjs'
+      - 'tools/test-wallet-deposit-verification.cjs'
+      - 'tools/test-wallet-runtime-policy.cjs'
       - 'tools/test-wallet-emulator.cjs'
       - 'tools/test-payment-evidence-mode.cjs'
       - '.github/workflows/wallet-rf-safety.yml'
@@ -31,7 +37,7 @@ jobs:
       - run: java -version
       - run: npm ci --ignore-scripts
       - name: Monetary and evidence unit tests
-        run: node --test tools/test-wallet-core.cjs tools/test-payment-evidence-mode.cjs
+        run: node --test tools/test-wallet-core.cjs tools/test-wallet-deposit-verification.cjs tools/test-wallet-runtime-policy.cjs tools/test-payment-evidence-mode.cjs
       - name: Real isolated Firestore financial transaction tests
         run: |
           npx firebase --config firebase.emulator.json \

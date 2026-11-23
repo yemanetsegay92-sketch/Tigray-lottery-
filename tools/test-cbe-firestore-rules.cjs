@@ -44,6 +44,9 @@ before(async()=>{
       ,setDoc(doc(db,'depositRequests','deposit-1'),{uid:'buyer-1',companyId:'tigray-lottery',amountSantim:10000,status:'pending'})
       ,setDoc(doc(db,'walletObligations','req-1'),{lotteryId:'lot-a',requestId:'req-1',amountSantim:10000,settledSantim:0})
       ,setDoc(doc(db,'walletSettlements','settlement-1'),{lotteryId:'lot-a',requestId:'req-1',amountSantim:5000})
+      ,setDoc(doc(db,'walletFinancialAudits','audit-1'),{operation:'deposit_credit',amountSantim:10000})
+      ,setDoc(doc(db,'walletDepositVerificationAttempts','deposit-1'),{uid:'buyer-1',state:'started'})
+      ,setDoc(doc(db,'walletDepositRateLimits','rate-1'),{count:1})
     ]);
   });
   general=testEnv.authenticatedContext('admin-1');
@@ -72,6 +75,15 @@ test('owner obligations and settlements are GM or assigned-admin read-only',asyn
   await assertFails(getDoc(doc(unassigned.firestore(),name,id)));
   await assertFails(getDoc(doc(buyer.firestore(),name,id)));
   await assertFails(updateDoc(doc(general.firestore(),name,id),{amountSantim:1}));
+ }
+});
+test('financial audit, provider-attempt and rate-limit records are server-only and immutable',async()=>{
+ for(const [name,id] of [['walletFinancialAudits','audit-1'],['walletDepositVerificationAttempts','deposit-1'],['walletDepositRateLimits','rate-1']]){
+  for(const c of [buyer,general,assigned,unassigned,anonymous]){
+   await assertFails(getDoc(doc(c.firestore(),name,id)));
+   await assertFails(setDoc(doc(c.firestore(),name,'forged'),{count:999,amountSantim:999999}));
+   await assertFails(updateDoc(doc(c.firestore(),name,id),{count:999}));
+  }
  }
 });
 after(async()=>{if(testEnv)await testEnv.cleanup();});

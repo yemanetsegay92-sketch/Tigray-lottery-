@@ -35,7 +35,12 @@ async function authenticateCustomer(req){
   return {...auth,phone_number_verified:true};
 }
 async function handleWalletAction(req,res,body){
-  const {registerCustomer,createDepositRequest,purchaseWithWallet,COMPANY_ID}=require('../../lib/wallet-core');
+  const wallet=require('../../lib/wallet-core');
+  const {registerCustomer,createDepositRequest,purchaseWithWallet,COMPANY_ID}=wallet;
+  const capability={
+    'wallet-register':'registration','wallet-deposit':'deposit','wallet-purchase':'purchase'
+  }[body.action];
+  if(capability)require('../../lib/wallet-runtime-policy').assertWalletMutationAllowed(capability);
   const auth=await authenticateCustomer(req),db=adminDb();
   if(body.action==='wallet-register'){
     const result=await registerCustomer(db,{uid:auth.uid,auth,name:body.name});
@@ -58,8 +63,13 @@ async function handleWalletAction(req,res,body){
     const result=await createDepositRequest(db,{uid:auth.uid,auth,amountEtb:body.amountEtb,
       reference:body.reference,legalName:body.legalName});
     let automaticCredit=false,automaticReviewReasons=[];
-    if(process.env.WALLET_AUTO_DEPOSITS_ENABLED==='true'){
+    let attemptClaimed=false;
+    if(result.created&&process.env.WALLET_AUTO_DEPOSITS_ENABLED==='true'){
       try{
+        const claim=await wallet.claimAutomaticDepositVerification(db,{depositId:result.depositId,uid:auth.uid});
+        attemptClaimed=claim.claimed;
+        if(!claim.claimed){automaticReviewReasons=['verification_already_attempted'];}
+        else{
         const account=String(process.env.CBE_WALLET_RECEIVING_ACCOUNT||'').replace(/\D/g,''),
           holderName=String(process.env.CBE_WALLET_RECEIVER_NAME||'');
         if(!/^\d{8,30}$/.test(account)||holderName.length<3)throw new Error('Wallet receiving account is not configured.');
@@ -68,9 +78,16 @@ async function handleWalletAction(req,res,body){
         const assessment=require('../../lib/wallet-deposit-verification').assessAutomaticDeposit({deposit,provider,
           receiver:{account,holderName},providerReceiverAccountAssurance:process.env.CHECK_ET_CBE_RECEIVER_ASSURANCE==='authorized'});
         automaticReviewReasons=assessment.reasons;
-        if(assessment.eligible){await require('../../lib/wallet-core').creditDeposit(db,{depositId:result.depositId,
+        if(assessment.eligible){await wallet.creditDeposit(db,{depositId:result.depositId,
           evidence:assessment.evidence,actorId:'system_auto_deposit',actorRole:'trustedAutoWorker'});automaticCredit=true;}
-      }catch(error){automaticReviewReasons=['provider_unavailable_or_unverified'];console.error('wallet auto deposit held for review',{statusCode:error?.statusCode,code:error?.code});}
+        await wallet.finishAutomaticDepositVerification(db,{depositId:result.depositId,
+          state:automaticCredit?'credited':'manual_review',reasons:automaticReviewReasons});
+        }
+      }catch(error){
+        automaticReviewReasons=['provider_unavailable_or_unverified'];
+        if(attemptClaimed)await wallet.finishAutomaticDepositVerification(db,{depositId:result.depositId,state:'manual_review',reasons:automaticReviewReasons}).catch(()=>{});
+        console.error('wallet auto deposit held for review',{statusCode:error?.statusCode,code:error?.code});
+      }
     }
     return res.status(automaticCredit?200:202).json({ok:true,...result,automaticCredit,automaticReviewReasons,
       message:automaticCredit?'Deposit verified and credited.':'Deposit submitted for verified ownership review.'});

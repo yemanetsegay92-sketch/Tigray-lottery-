@@ -82,16 +82,23 @@ async function loadWalletFinance(){
 async function approveWalletDeposit(id,deposit){
  const payerName=prompt('Verified CBE payer legal name',deposit?.legalName||'');if(payerName===null)return;
  const transactionDate=prompt('Verified CBE transaction date/time (ISO 8601)',new Date().toISOString());if(!transactionDate)return;
+ const receivingAccount=prompt('CBE receiving account number reviewed on the transfer');if(!receivingAccount)return;
+ const receivingOwner=prompt('Receiving account owner reviewed on the transfer');if(!receivingOwner)return;
+ const reviewNote=prompt('Review note (how receiver, amount, status, date and payer ownership were verified)');if(!reviewNote||reviewNote.trim().length<10)return alert('Enter a review note of at least 10 characters.');
  if(!confirm('Confirm that receiver, amount, completed status, transaction reference, date, and payer ownership were independently verified.'))return;
- try{await walletFinanceApi('wallet-deposit-approve',{depositId:id,reference:deposit.reference,verifiedAmountSantim:Number(deposit.amountSantim),payerName,transactionDate,completed:true,receiverVerified:true,customerOwnershipVerified:true,referenceVerified:true});await loadWalletFinance();}
+ try{await walletFinanceApi('wallet-deposit-approve',{depositId:id,payerName,transactionDate,receivingAccount,receivingOwner,reviewNote,reviewAttestation:'gm_independent_review'});await loadWalletFinance();}
  catch(error){$('walletFinanceMessage').innerHTML='<div class="error">'+esc(error.message)+'</div>';}
 }
 async function settleWalletObligation(id,remaining){
  const raw=prompt('Settlement amount in ETB (up to '+(remaining/100).toFixed(2)+')');if(raw===null)return;
  const amountSantim=Math.round(Number(raw)*100);if(!Number.isSafeInteger(amountSantim)||amountSantim<1||amountSantim>remaining)return alert('Invalid settlement amount.');
  const reference=prompt('Completed bank-transfer reference');if(!reference)return;
+ const receivingAccount=prompt('Lottery owner receiving account number');if(!receivingAccount)return;
+ const receivingOwner=prompt('Lottery owner / account holder name');if(!receivingOwner)return;
+ const transactionDate=prompt('Completed transfer date/time (ISO 8601)',new Date().toISOString());if(!transactionDate)return;
+ const reviewNote=prompt('Settlement verification note');if(!reviewNote||reviewNote.trim().length<10)return alert('Enter a review note of at least 10 characters.');
  if(!confirm('Record this completed owner settlement? This history is append-only.'))return;
- try{await walletFinanceApi('wallet-settle',{obligationId:id,amountSantim,reference,completed:true,referenceVerified:true});await loadWalletFinance();}
+ try{await walletFinanceApi('wallet-settle',{obligationId:id,amountSantim,reference,receivingAccount,receivingOwner,transactionDate,reviewNote,reviewAttestation:'gm_independent_review'});await loadWalletFinance();}
  catch(error){$('walletFinanceMessage').innerHTML='<div class="error">'+esc(error.message)+'</div>';}
 }
 async function refundWalletPurchase(requestId){

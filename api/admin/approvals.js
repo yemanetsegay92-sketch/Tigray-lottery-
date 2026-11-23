@@ -829,24 +829,36 @@ module.exports = async (req, res) => {
           settlements:settlements.docs.filter(visible).map(x=>({id:x.id,...x.data()}))});
       }
       if(profile.role!=='generalAdmin')throw Object.assign(new Error('Only General Manager may change wallet finances.'),{statusCode:403});
+      const capability={'wallet-deposit-approve':'deposit','wallet-settle':'settlement','wallet-refund':'refund'}[action];
+      require('../../lib/wallet-runtime-policy').assertWalletMutationAllowed(capability);
       if(action==='wallet-deposit-approve'){
         const depositId=String(body.depositId||''),deposit=await db.collection('depositRequests').doc(depositId).get();
         if(!deposit.exists)throw Object.assign(new Error('Deposit not found.'),{statusCode:404});
         const data=deposit.data()||{};
+        const expectedAccount=String(process.env.CBE_WALLET_RECEIVING_ACCOUNT||'').replace(/\D/g,''),
+          reviewedAccount=String(body.receivingAccount||'').replace(/\D/g,''),
+          expectedOwner=String(process.env.CBE_WALLET_RECEIVER_NAME||'').trim(),
+          reviewedOwner=String(body.receivingOwner||'').trim();
+        if(body.reviewAttestation!=='gm_independent_review'||!/^\d{8,30}$/.test(expectedAccount)||
+          reviewedAccount!==expectedAccount||!expectedOwner||reviewedOwner.toUpperCase()!==expectedOwner.toUpperCase())
+          throw Object.assign(new Error('Configured receiving account and owner must be independently reviewed.'),{statusCode:409});
         const result=await creditDeposit(db,{depositId,actorId:caller.uid,actorRole:profile.role,evidence:{
-          bank:'cbe',completed:body.completed===true,receiverVerified:body.receiverVerified===true,
-          customerOwnershipVerified:body.customerOwnershipVerified===true,referenceVerified:body.referenceVerified===true,
-          verifiedAmountSantim:Number(body.verifiedAmountSantim),currency:'ETB',verificationMethod:'official',
+          bank:'cbe',completed:true,receiverVerified:true,customerOwnershipVerified:true,referenceVerified:true,
+          verifiedAmountSantim:Number(data.amountSantim),currency:'ETB',verificationMethod:'gm_manual_review',
           customerUid:data.uid,ownershipMethod:'gm_reviewed_identity',transactionDate:String(body.transactionDate||''),
-          payerName:String(body.payerName||''),reference:String(body.reference||data.reference||'')
+          payerName:String(body.payerName||''),reference:String(data.reference||''),reviewedBy:caller.uid,
+          receivingAccount:expectedAccount,receivingOwner:expectedOwner,reviewNote:String(body.reviewNote||'')
         }});
         return res.status(200).json({ok:true,...result});
       }
       if(action==='wallet-settle'){
         const result=await settleObligation(db,{obligationId:String(body.obligationId||''),
           amountSantim:Number(body.amountSantim),actorId:caller.uid,actorRole:profile.role,
-          reference:String(body.reference||''),evidence:{completed:body.completed===true,
-            amountSantim:Number(body.amountSantim),referenceVerified:body.referenceVerified===true}});
+          reference:String(body.reference||''),evidence:{mode:body.reviewAttestation==='gm_independent_review'?'gm_manual_review':'',
+            reviewedBy:caller.uid,amountSantim:Number(body.amountSantim),reference:String(body.reference||''),
+            receivingAccount:String(body.receivingAccount||'').replace(/\D/g,''),
+            receivingOwner:String(body.receivingOwner||''),transactionDate:String(body.transactionDate||''),
+            reviewNote:String(body.reviewNote||'')}});
         return res.status(200).json({ok:true,...result});
       }
       const result=await refundWalletPurchase(db,{requestId:String(body.requestId||''),actorId:caller.uid,
