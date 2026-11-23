@@ -12,7 +12,9 @@
   },
   "scripts": {
     "test": "node tools/run-unit-tests.cjs",
-    "test:emulator": "firebase --config firebase.emulator.json --project demo-tigray-upgrade emulators:exec --only firestore \"node --test tools/test-cbe-firestore-emulator.cjs tools/test-cbe-firestore-rules.cjs tools/test-payment-upgrade-emulator.cjs\""
+    "test:emulator": "firebase --config firebase.emulator.json --project demo-tigray-upgrade emulators:exec --only firestore \"node --test tools/test-cbe-firestore-emulator.cjs tools/test-cbe-firestore-rules.cjs tools/test-payment-upgrade-emulator.cjs\"",
+    "test:local:start": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File tools/local/start-local.ps1",
+    "test:local:smoke": "node tools/local/smoke.cjs"
   },
   "devDependencies": {
     "@firebase/rules-unit-testing": "5.0.0",

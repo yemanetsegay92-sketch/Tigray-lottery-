@@ -1,5 +1,7 @@
 # Tigray Lottery V9
 
+Windows emulator setup for PR #36 is documented in [docs/local-windows-testing.md](docs/local-windows-testing.md).
+
 V9 builds on the tested V8 release.
 
 ## Public

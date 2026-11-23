@@ -1,0 +1,18 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Local test sign-in</title><link rel="stylesheet" href="/style.css"></head><body>
+<main class="content narrow"><section class="card form-card"><div class="eyebrow dark">LOCAL EMULATOR ONLY</div><h1>Synthetic test accounts</h1><p>This page refuses non-local hosts and signs in only through the Firebase Authentication emulator.</p>
+<div id="accounts"></div><div id="message" role="status"></div><p><a href="/account.html">Customer wallet</a> · <a href="/buy.html">Buy tickets</a> · <a href="/admin/login.html">Admin sign-in form</a> · <a href="http://127.0.0.1:4000">Emulator UI</a></p></section></main>
+<script type="module">
+if(!['127.0.0.1','localhost'].includes(location.hostname))throw new Error('Local sign-in page is disabled outside localhost.');
+import {auth} from '/firebase.js';
+import {signInWithEmailAndPassword,signOut} from 'https://www.gstatic.com/firebasejs/12.2.1/firebase-auth.js';
+const password='LocalTest!2026';
+const accounts=[
+ ['General Manager','gm.local@tigray.test','/admin/general.html'],
+ ['Lottery Admin — RF-only','rf.admin.local@tigray.test','/admin/lottery.html'],
+ ['Lottery Admin — Standard','standard.admin.local@tigray.test','/admin/lottery.html'],
+ ['Customer One — funded','customer1.local@tigray.test','/account.html'],
+ ['Customer Two — registration test','customer2.local@tigray.test','/account.html']
+];
+const host=document.getElementById('accounts'),message=document.getElementById('message');
+for(const [label,email,target] of accounts){const button=document.createElement('button');button.className='btn secondary full';button.textContent=label+' — '+email;button.addEventListener('click',async()=>{try{await signOut(auth);await signInWithEmailAndPassword(auth,email,password);location.href=target;}catch(error){message.textContent=error.message;}});host.append(button);}
+</script></body></html>
