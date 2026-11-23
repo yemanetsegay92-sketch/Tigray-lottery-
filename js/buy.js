@@ -1,8 +1,11 @@
-import { db } from '../firebase.js';
+import { db, auth } from '../firebase.js';
 import { getDoc, doc } from 'https://www.gstatic.com/firebasejs/12.2.1/firebase-firestore.js';
+import { onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/12.2.1/firebase-auth.js';
 import { phoneHash, normalizePhone } from './phoneHash.js';
 const $=id=>document.getElementById(id);const esc=s=>String(s??'').replace(/[&<>\"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;',"'":'&#39;'}[c]));const lotId=new URLSearchParams(location.search).get('lot');let lot=null,compressedScreenshot=null;
 const tg=window.Telegram?.WebApp||null; if(tg){try{tg.ready();tg.expand()}catch{}}
+let walletUser=null;
+onAuthStateChanged(auth,user=>{walletUser=user;$('walletBuyBtn').hidden=!user;$('walletBuyNote').hidden=!!user;});
 async function getBuyerTelegramLink(requestId,buyerLinkToken){
   try{const r=await fetch('/api/telegram/buyer-link',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({requestId,buyerLinkToken})});const j=await r.json();return j.ok?j.url:'';}catch{return '';}
 }
@@ -154,5 +157,19 @@ $('buyForm').addEventListener('submit',async e=>{
     console.error(err);$('message').innerHTML=`<div class="error">${esc(err.message||'Could not submit request.')}</div>`;btn.disabled=false;btn.textContent=t.submitRequest;
   }
   } finally {submitting=false;}
+});
+$('walletBuyBtn')?.addEventListener('click',async()=>{
+ if(!walletUser||!lot)return location.href='account.html';
+ const button=$('walletBuyBtn');button.disabled=true;button.textContent='Buying…';
+ const storageKey='wallet-buy-key:'+walletUser.uid+':'+lot.id;
+ let requestKey=sessionStorage.getItem(storageKey);
+ if(!requestKey){requestKey=(crypto.randomUUID?.()||String(Date.now())+Math.random().toString(36).slice(2)).replace(/[^a-zA-Z0-9_-]/g,'');sessionStorage.setItem(storageKey,requestKey);}
+ try{
+  const token=await walletUser.getIdToken();
+  const response=await fetch('/api/customer/create-request',{method:'POST',headers:{'content-type':'application/json',authorization:'Bearer '+token},body:JSON.stringify({action:'wallet-purchase',lotteryId:lot.id,requestKey,quantity:qty()})});
+  const result=await response.json();if(!response.ok||!result.ok)throw new Error(result.error||'Wallet purchase failed.');
+  sessionStorage.removeItem(storageKey);$('buyForm').style.display='none';
+  $('message').innerHTML=`<div class="success"><b>✓ Tickets assigned instantly</b><p>${result.ticketNumbers.map(x=>esc(x)).join(', ')}</p><a class="btn btn-primary" href="account.html">Open wallet</a></div>`;
+ }catch(error){$('message').innerHTML='<div class="error">'+esc(error.message)+'</div>';button.disabled=false;button.textContent='Buy instantly with wallet';}
 });
 init();

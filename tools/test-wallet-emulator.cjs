@@ -5,41 +5,72 @@ if(!process.env.FIRESTORE_EMULATOR_HOST || !/^demo-/.test(process.env.GCLOUD_PRO
   throw Error('Run only with isolated demo Firestore emulator');
 const {initializeApp,deleteApp}=require('firebase-admin/app');
 const {getFirestore}=require('firebase-admin/firestore');
-const {creditDeposit,purchaseWithWallet,COMPANY_ID,MIN_DEPOSIT_SANTIM}=require('../lib/wallet-core');
+const {creditDeposit,purchaseWithWallet,settleObligation,refundWalletPurchase,COMPANY_ID,MIN_DEPOSIT_SANTIM}=require('../lib/wallet-core');
 const {paymentClaimRef}=require('../lib/payment-claims');
 const app=initializeApp({projectId:process.env.GCLOUD_PROJECT});
 const db=getFirestore(app);
 after(()=>deleteApp(app));
-const evidence=(amount,reference)=>({
+const evidence=(amount,reference,uid)=>({
  bank:'cbe',completed:true,receiverVerified:true,customerOwnershipVerified:true,
- referenceVerified:true,verifiedAmountSantim:amount,currency:'ETB',reference
+ referenceVerified:true,verifiedAmountSantim:amount,currency:'ETB',reference,
+ verificationMethod:'official',customerUid:uid,ownershipMethod:'gm_reviewed_identity',
+ transactionDate:new Date().toISOString(),payerName:'Synthetic Owner'
 });
 const deposit=(id,uid,amount,ref)=>db.collection('depositRequests').doc(id).set({
- companyId:COMPANY_ID,uid,amountSantim:amount,reference:ref,status:'pending'
+ companyId:COMPANY_ID,uid,amountSantim:amount,reference:ref,status:'pending',
+ legalName:'Synthetic Owner',createdAtMs:Date.now()
 });
 test('GM deposits: 100 ETB minimum, one permanent reference, immutable ledger and idempotent repeat',async()=>{
  const uid='wallet-d1',id='wallet-test-deposit1',ref='FTWALLETEMULATOR01';
  await deposit(id,uid,MIN_DEPOSIT_SANTIM,ref);
- await assert.rejects(creditDeposit(db,{depositId:id,evidence:evidence(MIN_DEPOSIT_SANTIM,ref),actorId:'lotteryAdmin',actorRole:'lotteryAdmin'}),/Only General Manager/);
- const a=await creditDeposit(db,{depositId:id,evidence:evidence(MIN_DEPOSIT_SANTIM,ref),actorId:'generalAdmin',actorRole:'generalAdmin'});
+ await assert.rejects(creditDeposit(db,{depositId:id,evidence:evidence(MIN_DEPOSIT_SANTIM,ref,uid),actorId:'lotteryAdmin',actorRole:'lotteryAdmin'}),/Only General Manager/);
+ const a=await creditDeposit(db,{depositId:id,evidence:evidence(MIN_DEPOSIT_SANTIM,ref,uid),actorId:'generalAdmin',actorRole:'generalAdmin'});
  assert.equal(a.credited,true);assert.equal(a.alreadyProcessed,false);
  assert.equal((await db.collection('walletAccounts').doc(COMPANY_ID+'_'+uid).get()).data().balanceSantim,MIN_DEPOSIT_SANTIM);
  assert.equal((await db.collection('walletLedger').doc(id+'_credit').get()).data().amountSantim,MIN_DEPOSIT_SANTIM);
  assert.equal((await paymentClaimRef(db,ref).get()).exists,true);
- const second=await creditDeposit(db,{depositId:id,evidence:evidence(MIN_DEPOSIT_SANTIM,ref),actorId:'generalAdmin',actorRole:'generalAdmin'});
+ const second=await creditDeposit(db,{depositId:id,evidence:evidence(MIN_DEPOSIT_SANTIM,ref,uid),actorId:'generalAdmin',actorRole:'generalAdmin'});
  assert.equal(second.alreadyProcessed,true);
  assert.equal((await db.collection('walletAccounts').doc(COMPANY_ID+'_'+uid).get()).data().balanceSantim,MIN_DEPOSIT_SANTIM);
  await deposit('wallet-test-deposit2','wallet-d2',MIN_DEPOSIT_SANTIM,ref);
- await assert.rejects(creditDeposit(db,{depositId:'wallet-test-deposit2',evidence:evidence(MIN_DEPOSIT_SANTIM,ref),actorId:'generalAdmin',actorRole:'generalAdmin'}),/already been used/);
+ await assert.rejects(creditDeposit(db,{depositId:'wallet-test-deposit2',evidence:evidence(MIN_DEPOSIT_SANTIM,ref,'wallet-d2'),actorId:'generalAdmin',actorRole:'generalAdmin'}),/already been used/);
  await deposit('wallet-test-small','wallet-d3',9900,'FTWALLETEMULATOR02');
- await assert.rejects(creditDeposit(db,{depositId:'wallet-test-small',evidence:evidence(9900,'FTWALLETEMULATOR02'),actorId:'generalAdmin',actorRole:'generalAdmin'}),/Minimum wallet deposit/);
+ await assert.rejects(creditDeposit(db,{depositId:'wallet-test-small',evidence:evidence(9900,'FTWALLETEMULATOR02','wallet-d3'),actorId:'generalAdmin',actorRole:'generalAdmin'}),/Minimum wallet deposit/);
 });
 test('bank claim from direct purchase prevents wallet credit for the same RF',async()=>{
  const ref='FTDIRECTALREADY01';
  await paymentClaimRef(db,ref).set({requestId:'direct-approved',lotteryId:'lottery-other',status:'consumed'});
  await deposit('wallet-test-direct-reuse','wallet-d4',15000,ref);
- await assert.rejects(creditDeposit(db,{depositId:'wallet-test-direct-reuse',evidence:evidence(15000,ref),actorId:'generalAdmin',actorRole:'generalAdmin'}),/already been used/);
+ await assert.rejects(creditDeposit(db,{depositId:'wallet-test-direct-reuse',evidence:evidence(15000,ref,'wallet-d4'),actorId:'generalAdmin',actorRole:'generalAdmin'}),/already been used/);
  assert.equal((await db.collection('walletLedger').doc('wallet-test-direct-reuse_credit').get()).exists,false);
+});
+test('partial settlements are append-only, idempotent, and cannot exceed the obligation',async()=>{
+ const id='wallet-obligation-settle';
+ await db.collection('walletObligations').doc(id).set({companyId:COMPANY_ID,lotteryId:'wallet-lotto-a',requestId:id,amountSantim:10000,settledSantim:0,refundedSantim:0});
+ await assert.rejects(settleObligation(db,{obligationId:id,amountSantim:4000,actorId:'lotteryAdmin',actorRole:'lotteryAdmin',reference:'SETTLE01',evidence:{completed:true,amountSantim:4000,referenceVerified:true}}),/Only General Manager/);
+ const first=await settleObligation(db,{obligationId:id,amountSantim:4000,actorId:'generalAdmin',actorRole:'generalAdmin',reference:'SETTLE01',evidence:{completed:true,amountSantim:4000,referenceVerified:true}});
+ assert.equal(first.remainingSantim,6000);
+ const repeat=await settleObligation(db,{obligationId:id,amountSantim:4000,actorId:'generalAdmin',actorRole:'generalAdmin',reference:'SETTLE01',evidence:{completed:true,amountSantim:4000,referenceVerified:true}});
+ assert.equal(repeat.alreadyProcessed,true);
+ await db.collection('walletObligations').doc('wallet-obligation-other').set({companyId:COMPANY_ID,lotteryId:'wallet-lotto-b',requestId:'wallet-obligation-other',amountSantim:4000,settledSantim:0,refundedSantim:0});
+ await assert.rejects(settleObligation(db,{obligationId:'wallet-obligation-other',amountSantim:4000,actorId:'generalAdmin',actorRole:'generalAdmin',reference:'SETTLE01',evidence:{completed:true,amountSantim:4000,referenceVerified:true}}),/already been used/);
+ const second=await settleObligation(db,{obligationId:id,amountSantim:2500,actorId:'generalAdmin',actorRole:'generalAdmin',reference:'SETTLE02',evidence:{completed:true,amountSantim:2500,referenceVerified:true}});
+ assert.equal(second.remainingSantim,3500);
+ await assert.rejects(settleObligation(db,{obligationId:id,amountSantim:3501,actorId:'generalAdmin',actorRole:'generalAdmin',reference:'SETTLE03',evidence:{completed:true,amountSantim:3501,referenceVerified:true}}),/exceeds/);
+ assert.equal((await db.collection('walletSettlements').where('obligationId','==',id).get()).size,2);
+});
+test('wallet refund is atomic and idempotent and settled sales cannot be refunded',async()=>{
+ const uid='wallet-refund-user',lotteryId='wallet-refund-lottery',requestKey='refundRequest';
+ await db.collection('customerProfiles').doc(uid).set({uid,companyId:COMPANY_ID,phone:'0911111111',phoneVerified:true,name:'Refund User'});
+ await db.collection('walletAccounts').doc(COMPANY_ID+'_'+uid).set({uid,companyId:COMPANY_ID,balanceSantim:10000});
+ await db.collection('lotteries').doc(lotteryId).set({status:'active',price:50,min:1,max:30,nextTicketNumber:1});
+ const purchase=await purchaseWithWallet(db,{uid,lotteryId,requestKey,quantity:1});
+ const refunded=await refundWalletPurchase(db,{requestId:purchase.requestId,actorId:'generalAdmin',actorRole:'generalAdmin',reason:'Customer cancellation'});
+ assert.equal(refunded.refundedSantim,5000);assert.equal(refunded.balanceSantim,10000);
+ assert.equal((await refundWalletPurchase(db,{requestId:purchase.requestId,actorId:'generalAdmin',actorRole:'generalAdmin',reason:'Repeat'})).alreadyProcessed,true);
+ assert.equal((await db.collection('tickets').doc(lotteryId+'_1').get()).exists,false);
+ assert.equal((await db.collection('publicStatus').doc((await db.collection('ticketRequests').doc(purchase.requestId).get()).data().phoneHash).collection('requests').doc(purchase.requestId).get()).data().status,'cancelled');
+ assert.equal((await db.collection('buyerNotificationQueue').doc(purchase.requestId+'_cancelled').get()).exists,true);
 });
 test('parallel wallet purchases across two lotteries never overspend or duplicate tickets',async()=>{
  const uid='wallet-buyer-parallel';

@@ -26,4 +26,8 @@
 - **Do not merge or activate wallet until backend, front-end, rules, auth and financial tests all pass.**
 
 ## Implementation status
-This branch includes RF-only checkout, on-demand admin workspace navigation, and an isolated wallet transaction service with monetary/verification unit tests. Customer registration, authenticated API routes, bank owner verification, deposit worker, settlement recording, end-to-end emulator/browser tests and launch approval are still incomplete. None of the wallet code is routed to production.
+This branch now includes free Firebase Phone Auth registration, a company-scoped wallet account, authenticated customer wallet routes, a 100 ETB deposit floor, permanent cross-flow bank-reference claims, atomic/idempotent wallet purchase and ticket assignment, refunds, owner obligations, partial General Manager settlements, read-only Lottery Admin finance views, RF-only/standard creation choice, and lazy single-workspace dashboards. Client Security Rules deny every wallet balance and financial-history write.
+
+Automatic CBE deposits are deliberately fail-closed: the reference lookup validates receiver, amount, completed status, date and reference, but automatic credit additionally requires an authorized provider/KYC assertion binding the payer identity to the authenticated customer UID. The currently integrated Check.et response does not supply that ownership assertion, so such deposits remain pending for General Manager review. Do not enable `WALLET_AUTO_DEPOSITS_ENABLED` until provider authorization, receiver-account negative controls, payer-ownership integration and regulatory approval are documented.
+
+Unit and responsive browser layout checks have been executed locally. Full Auth/Firestore emulator, authenticated role-browser, isolated load, production-compatibility and rollback drills remain required before merge. Production payments remain disabled and unchanged.

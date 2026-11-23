@@ -11,6 +11,7 @@
 <button type="button" data-view="lotteries">▣ My lotteries</button>
 <button type="button" data-view="awards">♜ Winner awards</button>
 <button type="button" data-view="accounts">▤ Payment accounts</button>
+<button type="button" data-view="wallet">Wallet settlements</button>
 <button type="button" data-view="telegram">✉ Notifications</button>
 </nav>
 <section class="panel hero-admin"><div><div class="eyebrow-admin">OPERATIONS</div><h1>Lottery workspace</h1><p class="muted">Review payments, assign sequential ticket numbers, and manage your assigned lotteries. Mistaken approvals can be cancelled before the lottery is drawn.</p></div><button class="secondary" id="refreshBtn">↻ Refresh</button></section>
@@ -22,4 +23,5 @@
 <section class="panel"><p class="muted"><strong>Check.et CBE matching (Preview only):</strong> Pending requests with a bank reference have a read-only Verify button. It compares the bank record to this lottery's configured receiving account and purchase amount. It does not approve tickets. If there is no configured CBE receiving account, add one under Payment Accounts.</p></section>
 <section class="panel"><div class="section-title"><div><h2>Payment verification</h2><div id="pendingCount" class="muted">Loading…</div></div></div><div id="requests">Loading…</div></section>
 <section class="panel"><div class="section-title"><div><h2>Approved sales</h2><div id="summaryCount" class="muted"></div></div></div><div class="actions"><button id="downloadCsv">⬇ Download CSV</button><button class="secondary" id="copyExcel">📋 Copy for Excel</button></div><div id="summaryMessage"></div><div id="summaryTable" class="table-wrap"></div></section>
+<section class="panel"><div class="section-title"><div><h2>Wallet obligations and settlements</h2><p class="muted">Read-only amounts due and settlement history for your assigned lotteries.</p></div><button type="button" class="secondary" id="refreshWalletFinance">Refresh</button></div><div id="walletFinance">Choose Wallet settlements to load data.</div></section>
 </main><script type="module" src="js/lottery.js"></script></body></html>

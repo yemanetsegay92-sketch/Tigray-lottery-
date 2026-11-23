@@ -93,7 +93,7 @@ async function connectTelegram(){
 $('logoutBtn').addEventListener('click',async()=>{document.documentElement.classList.remove('admin-verified');await signOut(auth);location.href='login.html'});
 $('refreshBtn').addEventListener('click',renderAll);
 const lotteryPanels=Array.from(document.querySelectorAll('.admin-wrap > section'));
-const lotteryGroups={pending:[5,8],sales:[5,9],find:[6],lotteries:[2],awards:[3],accounts:[4],telegram:[1]};
+const lotteryGroups={pending:[5,8],sales:[5,9],find:[6],lotteries:[2],awards:[3],accounts:[4],telegram:[1],wallet:[10]};
 let lotteryView='pending';
 function showLotteryView(view){
  lotteryView=lotteryGroups[view]?view:'pending';
@@ -103,10 +103,22 @@ function showLotteryView(view){
    else button.removeAttribute('aria-current');
  });
 }
-async function openLotteryView(view){showLotteryView(view);await renderAll();}
+async function openLotteryView(view){showLotteryView(view);if(lotteryView==='wallet')await loadWalletFinance();else await renderAll();}
 document.querySelectorAll('#workspaceNav [data-view]').forEach(button=>
  button.addEventListener('click',()=>void openLotteryView(button.dataset.view)));
 showLotteryView('pending');
+$('refreshWalletFinance')?.addEventListener('click',()=>void loadWalletFinance());
+async function loadWalletFinance(){
+ const host=$('walletFinance');if(!host||!auth.currentUser)return;host.innerHTML='<p class="muted">Loading wallet settlements…</p>';
+ try{
+  const token=await auth.currentUser.getIdToken();
+  const response=await fetch('/api/admin/approvals',{method:'POST',headers:{'content-type':'application/json',authorization:'Bearer '+token},body:JSON.stringify({action:'wallet-finance-summary'})});
+  const data=await response.json();if(!response.ok||!data.ok)throw new Error(data.error||'Could not load wallet settlements.');
+  const obligations=data.obligations.filter(x=>!lot||x.lotteryId===lot.id);
+  const settlements=data.settlements.filter(x=>!lot||x.lotteryId===lot.id);
+  host.innerHTML=`<h3>Outstanding owner balances</h3>${obligations.length?`<div class="table-wrap"><table><thead><tr><th>Request</th><th>Total</th><th>Settled</th><th>Outstanding</th></tr></thead><tbody>${obligations.map(x=>{const left=Number(x.amountSantim||0)-Number(x.settledSantim||0)-Number(x.refundedSantim||0);return `<tr><td>${esc(x.requestId)}</td><td>${(Number(x.amountSantim)/100).toFixed(2)} ETB</td><td>${(Number(x.settledSantim||0)/100).toFixed(2)} ETB</td><td>${(left/100).toFixed(2)} ETB</td></tr>`}).join('')}</tbody></table></div>`:'<p class="muted">No wallet obligations for this lottery.</p>'}<h3>Settlement history</h3>${settlements.length?`<div class="table-wrap"><table><thead><tr><th>Reference</th><th>Amount</th><th>Request</th></tr></thead><tbody>${settlements.map(x=>`<tr><td>${esc(x.reference)}</td><td>${(Number(x.amountSantim)/100).toFixed(2)} ETB</td><td>${esc(x.requestId)}</td></tr>`).join('')}</tbody></table></div>`:'<p class="muted">No settlements recorded.</p>'}`;
+ }catch(error){host.innerHTML='<div class="error">'+esc(error.message)+'</div>';}
+}
 $('refreshTelegramStatus')?.addEventListener('click',refreshTelegram);
 $('connectTelegram').addEventListener('click',connectTelegram);
 $('lotterySelect').addEventListener('change',async e=>{lot=lots.find(x=>x.id===e.target.value)||lot;await renderAll()});

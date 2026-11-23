@@ -2,3 +2,6 @@ node_modules/
 *-debug.log
 .firebase/
 .env*
+.npm-cache/
+.java-runtime/
+.java-runtime.zip

@@ -2,10 +2,12 @@ const {normalizePaymentReference,assertReferenceUnusedAtCheckout}=require('../..
 const crypto = require('crypto');
 const {assertPurchaseEvidence,assertUploadAllowed}=require('../../lib/payment-evidence-mode');
 const { getStorage } = require('firebase-admin/storage');
+const { getAuth } = require('firebase-admin/auth');
 const { BUCKET: PRIVATE_BUCKET, TYPES, POLICY_TTL_MS, FINISH_TTL_MS, signToken, receiptPath, verifyToken, validateStagedFile, sha256: proofHash } = require('./_receipt-upload');
 const { adminDb, validateTelegramInitData, FieldValue } = require('../telegram/_lib');
 const { usesAutomaticApproval } = require('../../lib/lottery-approval-mode');
 const { assertReasonableBody, enforcePublicPurchaseLimit } = require('../../lib/public-purchase-guard');
+const {registerCustomer,createDepositRequest,purchaseWithWallet,COMPANY_ID}=require('../../lib/wallet-core');
 
 const BUCKET = 'tigiray-lottery.firebasestorage.app';
 
@@ -21,6 +23,64 @@ function readBody(req) {
 }
 function badRequest(message) {
   return Object.assign(new Error(message), { statusCode: 400 });
+}
+function readBearer(req){
+  const value=String(req.headers?.authorization||'');
+  return value.startsWith('Bearer ')?value.slice(7):'';
+}
+async function authenticateCustomer(req){
+  const token=readBearer(req);
+  if(!token)throw Object.assign(new Error('Sign in with a verified phone number.'),{statusCode:401});
+  const auth=await getAuth().verifyIdToken(token);
+  if(!auth.phone_number)throw Object.assign(new Error('A verified phone number is required.'),{statusCode:403});
+  return {...auth,phone_number_verified:true};
+}
+async function handleWalletAction(req,res,body){
+  const auth=await authenticateCustomer(req),db=adminDb();
+  if(body.action==='wallet-register'){
+    const result=await registerCustomer(db,{uid:auth.uid,auth,name:body.name});
+    return res.status(200).json({ok:true,customer:result});
+  }
+  if(body.action==='wallet-summary'){
+    const [profile,wallet,deposits,ledger]=await Promise.all([
+      db.collection('customerProfiles').doc(auth.uid).get(),
+      db.collection('walletAccounts').doc(COMPANY_ID+'_'+auth.uid).get(),
+      db.collection('depositRequests').where('uid','==',auth.uid).limit(25).get(),
+      db.collection('walletLedger').where('uid','==',auth.uid).limit(50).get()
+    ]);
+    if(!profile.exists)throw Object.assign(new Error('Register the customer wallet first.'),{statusCode:404});
+    return res.status(200).json({ok:true,profile:{name:profile.data().name,phone:profile.data().phone},
+      balanceSantim:Number(wallet.data()?.balanceSantim||0),
+      deposits:deposits.docs.map(x=>({id:x.id,status:x.data().status,amountSantim:x.data().amountSantim,reference:x.data().reference})),
+      ledger:ledger.docs.map(x=>({id:x.id,type:x.data().type,amountSantim:x.data().amountSantim,lotteryId:x.data().lotteryId||''}))});
+  }
+  if(body.action==='wallet-deposit'){
+    const result=await createDepositRequest(db,{uid:auth.uid,auth,amountEtb:body.amountEtb,
+      reference:body.reference,legalName:body.legalName});
+    let automaticCredit=false,automaticReviewReasons=[];
+    if(process.env.WALLET_AUTO_DEPOSITS_ENABLED==='true'){
+      try{
+        const account=String(process.env.CBE_WALLET_RECEIVING_ACCOUNT||'').replace(/\D/g,''),
+          holderName=String(process.env.CBE_WALLET_RECEIVER_NAME||'');
+        if(!/^\d{8,30}$/.test(account)||holderName.length<3)throw new Error('Wallet receiving account is not configured.');
+        const provider=await require('../../lib/checket-verify').verifyCheckEtPayment({bank:'cbe',transactionNumber:body.reference,accountNumber:account});
+        const deposit=(await db.collection('depositRequests').doc(result.depositId).get()).data();
+        const assessment=require('../../lib/wallet-deposit-verification').assessAutomaticDeposit({deposit,provider,
+          receiver:{account,holderName},providerReceiverAccountAssurance:process.env.CHECK_ET_CBE_RECEIVER_ASSURANCE==='authorized'});
+        automaticReviewReasons=assessment.reasons;
+        if(assessment.eligible){await require('../../lib/wallet-core').creditDeposit(db,{depositId:result.depositId,
+          evidence:assessment.evidence,actorId:'system_auto_deposit',actorRole:'trustedAutoWorker'});automaticCredit=true;}
+      }catch(error){automaticReviewReasons=['provider_unavailable_or_unverified'];console.error('wallet auto deposit held for review',{statusCode:error?.statusCode,code:error?.code});}
+    }
+    return res.status(automaticCredit?200:202).json({ok:true,...result,automaticCredit,automaticReviewReasons,
+      message:automaticCredit?'Deposit verified and credited.':'Deposit submitted for verified ownership review.'});
+  }
+  if(body.action==='wallet-purchase'){
+    const result=await purchaseWithWallet(db,{uid:auth.uid,lotteryId:String(body.lotteryId||''),
+      requestKey:String(body.requestKey||''),quantity:Number(body.quantity)});
+    return res.status(200).json({ok:true,...result});
+  }
+  throw badRequest('Unknown wallet action.');
 }
 // Same function handles authorization and checkout to fit Vercel Hobby's
 // 12-serverless-functions deployment limit.
@@ -69,6 +129,7 @@ module.exports = async (req, res) => {
     const body = readBody(req);
     res.setHeader('Cache-Control','no-store');
     assertReasonableBody(req, body);
+    if(String(body.action||'').startsWith('wallet-'))return await handleWalletAction(req,res,body);
     if (body.action === 'authorize-receipt-upload') {
       await enforcePublicPurchaseLimit(req, 'upload', adminDb);
       return await authorizeReceiptUpload(body, res);

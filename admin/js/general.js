@@ -32,7 +32,7 @@ $('addCreatePaymentAccount')?.addEventListener('click',addCreatePaymentAccount);
 // Workspace navigation: render one panel at a time and load expensive data only when selected.
 const generalPanels=Array.from(document.querySelectorAll('.admin-wrap > section'));
 const generalGroups={overview:[0,1],lotteries:[4],create:[3],admins:[5,8],draw:[6],
- reports:[7,9],verify:[2],settings:[10,11]};
+ reports:[7,9],verify:[2],settings:[10,11],wallet:[12]};
 let generalView='overview';
 function showGeneralView(view){
  generalView=generalGroups[view]?view:'overview';
@@ -51,11 +51,55 @@ async function openGeneralView(view){
   if(generalView==='draw')setupDraw();
   if(generalView==='settings')await loadContactSettings();
   if(generalView==='create')renderCreatePaymentAccountsEditor();
+  if(generalView==='wallet')await loadWalletFinance();
  }catch(e){$('message').innerHTML='<div class="error">'+esc(e.message||'Could not load this section.')+'</div>';}
 }
 document.querySelectorAll('#workspaceNav [data-view]').forEach(button=>
  button.addEventListener('click',()=>void openGeneralView(button.dataset.view)));
 showGeneralView('overview');
+$('refreshWalletFinance')?.addEventListener('click',()=>void loadWalletFinance());
+async function walletFinanceApi(action,body={}){
+ const token=await auth.currentUser.getIdToken();
+ const response=await fetch('/api/admin/approvals',{method:'POST',headers:{'content-type':'application/json',authorization:'Bearer '+token},body:JSON.stringify({action,...body})});
+ const payload=await response.json().catch(()=>({}));
+ if(!response.ok||!payload.ok)throw new Error(payload.error||'Wallet finance request failed.');
+ return payload;
+}
+async function loadWalletFinance(){
+ const host=$('walletFinance');if(!host)return;host.innerHTML='<p class="muted">Loading wallet finance…</p>';
+ try{
+  const data=await walletFinanceApi('wallet-finance-summary');
+  const pending=data.deposits.filter(x=>x.status==='pending');
+  const obligations=data.obligations.map(x=>({...x,remaining:Number(x.amountSantim||0)-Number(x.settledSantim||0)-Number(x.refundedSantim||0)}));
+  host.innerHTML=`<h3>Pending deposits</h3>${pending.length?`<div class="table-wrap"><table><thead><tr><th>Reference</th><th>Amount</th><th>Customer</th><th>Action</th></tr></thead><tbody>${pending.map(x=>`<tr><td>${esc(x.reference)}</td><td>${(Number(x.amountSantim)/100).toFixed(2)} ETB</td><td>${esc(x.legalName||x.uid)}</td><td><button class="small-btn" data-deposit="${esc(x.id)}">Verify & approve</button></td></tr>`).join('')}</tbody></table></div>`:'<p class="muted">No pending deposits.</p>'}
+  <h3>Owner obligations</h3>${obligations.length?`<div class="table-wrap"><table><thead><tr><th>Lottery</th><th>Request</th><th>Outstanding</th><th>Status</th><th>Actions</th></tr></thead><tbody>${obligations.map(x=>`<tr><td>${esc(x.lotteryId)}</td><td>${esc(x.requestId)}</td><td>${(x.remaining/100).toFixed(2)} ETB</td><td>${esc(x.status||'open')}</td><td>${x.remaining>0?`<button class="small-btn" data-settle="${esc(x.id)}" data-remaining="${x.remaining}">Settle</button> <button class="secondary small-btn" data-refund="${esc(x.requestId)}">Refund</button>`:'—'}</td></tr>`).join('')}</tbody></table></div>`:'<p class="muted">No wallet obligations.</p>'}
+  <h3>Settlement history</h3>${data.settlements.length?`<div class="table-wrap"><table><thead><tr><th>Lottery</th><th>Reference</th><th>Amount</th><th>Obligation</th></tr></thead><tbody>${data.settlements.map(x=>`<tr><td>${esc(x.lotteryId)}</td><td>${esc(x.reference)}</td><td>${(Number(x.amountSantim)/100).toFixed(2)} ETB</td><td>${esc(x.obligationId)}</td></tr>`).join('')}</tbody></table></div>`:'<p class="muted">No settlements recorded.</p>'}`;
+  host.querySelectorAll('[data-deposit]').forEach(button=>button.addEventListener('click',()=>void approveWalletDeposit(button.dataset.deposit,pending.find(x=>x.id===button.dataset.deposit))));
+  host.querySelectorAll('[data-settle]').forEach(button=>button.addEventListener('click',()=>void settleWalletObligation(button.dataset.settle,Number(button.dataset.remaining))));
+  host.querySelectorAll('[data-refund]').forEach(button=>button.addEventListener('click',()=>void refundWalletPurchase(button.dataset.refund)));
+ }catch(error){host.innerHTML='<div class="error">'+esc(error.message)+'</div>';}
+}
+async function approveWalletDeposit(id,deposit){
+ const payerName=prompt('Verified CBE payer legal name',deposit?.legalName||'');if(payerName===null)return;
+ const transactionDate=prompt('Verified CBE transaction date/time (ISO 8601)',new Date().toISOString());if(!transactionDate)return;
+ if(!confirm('Confirm that receiver, amount, completed status, transaction reference, date, and payer ownership were independently verified.'))return;
+ try{await walletFinanceApi('wallet-deposit-approve',{depositId:id,reference:deposit.reference,verifiedAmountSantim:Number(deposit.amountSantim),payerName,transactionDate,completed:true,receiverVerified:true,customerOwnershipVerified:true,referenceVerified:true});await loadWalletFinance();}
+ catch(error){$('walletFinanceMessage').innerHTML='<div class="error">'+esc(error.message)+'</div>';}
+}
+async function settleWalletObligation(id,remaining){
+ const raw=prompt('Settlement amount in ETB (up to '+(remaining/100).toFixed(2)+')');if(raw===null)return;
+ const amountSantim=Math.round(Number(raw)*100);if(!Number.isSafeInteger(amountSantim)||amountSantim<1||amountSantim>remaining)return alert('Invalid settlement amount.');
+ const reference=prompt('Completed bank-transfer reference');if(!reference)return;
+ if(!confirm('Record this completed owner settlement? This history is append-only.'))return;
+ try{await walletFinanceApi('wallet-settle',{obligationId:id,amountSantim,reference,completed:true,referenceVerified:true});await loadWalletFinance();}
+ catch(error){$('walletFinanceMessage').innerHTML='<div class="error">'+esc(error.message)+'</div>';}
+}
+async function refundWalletPurchase(requestId){
+ const reason=prompt('Refund reason');if(!reason)return;
+ if(!confirm('Refund this wallet purchase and cancel its tickets?'))return;
+ try{await walletFinanceApi('wallet-refund',{requestId,reason});await loadWalletFinance();}
+ catch(error){$('walletFinanceMessage').innerHTML='<div class="error">'+esc(error.message)+'</div>';}
+}
 let accessGeneration=0;
 onAuthStateChanged(auth,async u=>{
   const generation=++accessGeneration;

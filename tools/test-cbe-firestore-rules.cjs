@@ -10,7 +10,7 @@ if(!process.env.FIRESTORE_EMULATOR_HOST ||
    !/^demo-/.test(String(process.env.GCLOUD_PROJECT||''))) {
   throw new Error('Security Rules tests require isolated demo- Firestore emulator.');
 }
-let testEnv, general, assigned, unassigned, anonymous;
+let testEnv, general, assigned, unassigned, buyer, anonymous;
 function validLottery(overrides={}){
   return {name:'Synthetic lottery',description:'',price:100,min:1,max:999,
     status:'active',approvalMode:'manual',createdAt:new Date(),adminIds:[],nextTicketNumber:1,
@@ -38,12 +38,41 @@ before(async()=>{
       setDoc(doc(db,'paymentClaims','claim-1'),{requestId:'req-1',status:'consumed'}),
       setDoc(doc(db,'tickets','lot-a_10'),{lotteryId:'lot-a',requestId:'req-1',number:10}),
       setDoc(doc(db,'publicStatus','hashed-phone','requests','req-1'),{lotteryId:'lot-a',status:'pending'})
+      ,setDoc(doc(db,'customerProfiles','buyer-1'),{uid:'buyer-1',phone:'0911000000',phoneVerified:true,companyId:'tigray-lottery'})
+      ,setDoc(doc(db,'walletAccounts','tigray-lottery_buyer-1'),{uid:'buyer-1',companyId:'tigray-lottery',balanceSantim:10000})
+      ,setDoc(doc(db,'walletLedger','ledger-1'),{uid:'buyer-1',companyId:'tigray-lottery',amountSantim:10000})
+      ,setDoc(doc(db,'depositRequests','deposit-1'),{uid:'buyer-1',companyId:'tigray-lottery',amountSantim:10000,status:'pending'})
+      ,setDoc(doc(db,'walletObligations','req-1'),{lotteryId:'lot-a',requestId:'req-1',amountSantim:10000,settledSantim:0})
+      ,setDoc(doc(db,'walletSettlements','settlement-1'),{lotteryId:'lot-a',requestId:'req-1',amountSantim:5000})
     ]);
   });
   general=testEnv.authenticatedContext('admin-1');
   assigned=testEnv.authenticatedContext('lottery-1');
   unassigned=testEnv.authenticatedContext('lottery-2');
+  buyer=testEnv.authenticatedContext('buyer-1',{phone_number:'+251911000000'});
   anonymous=testEnv.unauthenticatedContext();
+});
+test('customers can read only their own financial records and no client can change balances',async()=>{
+ await assertSucceeds(getDoc(doc(buyer.firestore(),'customerProfiles','buyer-1')));
+ await assertSucceeds(getDoc(doc(buyer.firestore(),'walletAccounts','tigray-lottery_buyer-1')));
+ await assertSucceeds(getDoc(doc(buyer.firestore(),'walletLedger','ledger-1')));
+ await assertSucceeds(getDoc(doc(buyer.firestore(),'depositRequests','deposit-1')));
+ for(const c of [buyer,general,assigned,unassigned,anonymous]){
+  await assertFails(updateDoc(doc(c.firestore(),'walletAccounts','tigray-lottery_buyer-1'),{balanceSantim:99999999}));
+  await assertFails(setDoc(doc(c.firestore(),'walletLedger','forged-'+(c.app?.name||'anon')),{uid:'buyer-1',amountSantim:99999999}));
+ }
+ await assertFails(getDoc(doc(unassigned.firestore(),'walletAccounts','tigray-lottery_buyer-1')));
+ await assertFails(getDoc(doc(anonymous.firestore(),'depositRequests','deposit-1')));
+});
+test('owner obligations and settlements are GM or assigned-admin read-only',async()=>{
+ for(const name of ['walletObligations','walletSettlements']){
+  const id=name==='walletObligations'?'req-1':'settlement-1';
+  await assertSucceeds(getDoc(doc(general.firestore(),name,id)));
+  await assertSucceeds(getDoc(doc(assigned.firestore(),name,id)));
+  await assertFails(getDoc(doc(unassigned.firestore(),name,id)));
+  await assertFails(getDoc(doc(buyer.firestore(),name,id)));
+  await assertFails(updateDoc(doc(general.firestore(),name,id),{amountSantim:1}));
+ }
 });
 after(async()=>{if(testEnv)await testEnv.cleanup();});
 

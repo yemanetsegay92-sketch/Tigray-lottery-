@@ -11,7 +11,7 @@ test('wallet monetary values use integer santim',()=>{
 });
 test('deposit approval requires receiver and ownership verification',()=>{
  const e={bank:'cbe',completed:true,receiverVerified:true,customerOwnershipVerified:true,
-  referenceVerified:true,verifiedAmountSantim:10000,currency:'ETB'};
+  referenceVerified:true,verifiedAmountSantim:10000,currency:'ETB',verificationMethod:'official'};
  assert.doesNotThrow(()=>verifiedEvidence(e,10000));
  assert.throws(()=>verifiedEvidence({...e,customerOwnershipVerified:false},10000),/payer-ownership/);
  assert.throws(()=>verifiedEvidence({...e,verifiedAmountSantim:9999},10000),/payer-ownership/);

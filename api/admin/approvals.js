@@ -4,6 +4,7 @@ const { adminDb, FieldValue } = require('../telegram/_lib');
 const { getAuth } = require('firebase-admin/auth');
 const { getStorage } = require('firebase-admin/storage');
 const { paymentClaimRef, normalizePaymentReference, claimSnapshotStatus, assertClaimFree, createPaymentClaim } = require('../../lib/payment-claims');
+const {creditDeposit,settleObligation,refundWalletPurchase}=require('../../lib/wallet-core');
 
 function readBearer(req) {
   const h = String(req.headers?.authorization || '');
@@ -282,6 +283,12 @@ async function cancelApproval(db, caller, profile, requestId, reason) {
     const request = requestSnap.data() || {};
     if (request.status !== 'approved') {
       throw new Error('Only approved requests can be cancelled.');
+    }
+    if (request.paymentMethod === 'wallet') {
+      throw Object.assign(
+        new Error('Wallet purchases must be refunded by the General Manager.'),
+        { statusCode: 403 }
+      );
     }
 
     const lotteryId = String(request.lotteryId || '');
@@ -806,6 +813,46 @@ module.exports = async (req, res) => {
     if (action === 'checket-verify') return await handleCheckEtVerification(req, res, body);
     if (action === 'lookup-reference') return await lookupReference(req, res, body);
     if (action.startsWith('lottery-cleanup-')) return await handleLotteryCleanup(req, res, body);
+    if(['wallet-finance-summary','wallet-deposit-approve','wallet-settle','wallet-refund'].includes(action)){
+      const db=adminDb(),{caller,profile}=await authenticateAdmin(req,db);
+      res.setHeader('Cache-Control','no-store');
+      if(action==='wallet-finance-summary'){
+        const [deposits,obligations,settlements]=await Promise.all([
+          profile.role==='generalAdmin'?db.collection('depositRequests').limit(100).get():Promise.resolve({docs:[]}),
+          db.collection('walletObligations').limit(200).get(),db.collection('walletSettlements').limit(200).get()
+        ]);
+        const allowed=new Set(profile.lotteryIds||[]);
+        const visible=x=>profile.role==='generalAdmin'||allowed.has(String(x.data().lotteryId||''));
+        return res.status(200).json({ok:true,
+          deposits:deposits.docs.map(x=>({id:x.id,...x.data()})),
+          obligations:obligations.docs.filter(visible).map(x=>({id:x.id,...x.data()})),
+          settlements:settlements.docs.filter(visible).map(x=>({id:x.id,...x.data()}))});
+      }
+      if(profile.role!=='generalAdmin')throw Object.assign(new Error('Only General Manager may change wallet finances.'),{statusCode:403});
+      if(action==='wallet-deposit-approve'){
+        const depositId=String(body.depositId||''),deposit=await db.collection('depositRequests').doc(depositId).get();
+        if(!deposit.exists)throw Object.assign(new Error('Deposit not found.'),{statusCode:404});
+        const data=deposit.data()||{};
+        const result=await creditDeposit(db,{depositId,actorId:caller.uid,actorRole:profile.role,evidence:{
+          bank:'cbe',completed:body.completed===true,receiverVerified:body.receiverVerified===true,
+          customerOwnershipVerified:body.customerOwnershipVerified===true,referenceVerified:body.referenceVerified===true,
+          verifiedAmountSantim:Number(body.verifiedAmountSantim),currency:'ETB',verificationMethod:'official',
+          customerUid:data.uid,ownershipMethod:'gm_reviewed_identity',transactionDate:String(body.transactionDate||''),
+          payerName:String(body.payerName||''),reference:String(body.reference||data.reference||'')
+        }});
+        return res.status(200).json({ok:true,...result});
+      }
+      if(action==='wallet-settle'){
+        const result=await settleObligation(db,{obligationId:String(body.obligationId||''),
+          amountSantim:Number(body.amountSantim),actorId:caller.uid,actorRole:profile.role,
+          reference:String(body.reference||''),evidence:{completed:body.completed===true,
+            amountSantim:Number(body.amountSantim),referenceVerified:body.referenceVerified===true}});
+        return res.status(200).json({ok:true,...result});
+      }
+      const result=await refundWalletPurchase(db,{requestId:String(body.requestId||''),actorId:caller.uid,
+        actorRole:profile.role,reason:String(body.reason||'')});
+      return res.status(200).json({ok:true,...result});
+    }
     // Preview may share production Firebase configuration. Never let a Preview
     // dashboard invoke the purchase-review write path (including OCR caching).
     if(process.env.VERCEL_ENV!=='production' &&
