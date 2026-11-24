@@ -30,14 +30,22 @@ const authApi={verifyIdToken:async token=>{
  return profiles[token];
 }};
 let providerCalls=0;
+// Reproduce a cold production function where no default Firebase Admin app exists.
+let defaultAdminAppInitialized=false;
 function loadRoute(relative){
  const filename=require.resolve('../'+relative);
  const realRequire=createRequire(filename),module={exports:{}};
  vm.runInNewContext(fs.readFileSync(filename,'utf8'),{
   module,exports:module.exports,Buffer,console,process,setTimeout,clearTimeout,
   require:spec=>{
-   if(spec==='firebase-admin/auth')return {getAuth:()=>authApi};
-   if(spec==='../telegram/_lib')return {...realRequire(spec),adminDb:()=>db};
+   if(spec==='firebase-admin/auth')return {getAuth:()=>{
+     if(!defaultAdminAppInitialized)throw Error('Firebase Admin app not initialized before getAuth');
+     return authApi;
+   }};
+   if(spec==='../telegram/_lib')return {...realRequire(spec),adminDb:()=>{
+     defaultAdminAppInitialized=true;
+     return db;
+   }};
    if(spec==='../../lib/checket-verify')return {verifyCheckEtPayment:async ({transactionNumber})=>{
     providerCalls++;
     return {verified:true,providerDuplicate:false,bank:'cbe',reportedBank:'cbe',
