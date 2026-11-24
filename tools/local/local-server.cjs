@@ -7,6 +7,7 @@ const {LOCAL_PROJECT_ID,assertLocalEmulatorEnvironment,assertLocalUrl}=require('
 const ROOT=path.resolve(__dirname,'../..');
 const HOST='127.0.0.1',PORT=4174;
 const FIREBASE_SDK_BASE='https://www.gstatic.com/firebasejs/12.2.1/';
+const LIVE_PILOT_REQUESTED=process.env.AFROMESSAGE_LIVE_PILOT==='true';
 const LOCAL_SDK_ROUTES={
  '/__local/firebase-app.js':'firebase-app.js',
  '/__local/firebase-auth.js':'firebase-auth.js',
@@ -23,8 +24,11 @@ Object.assign(process.env,{
  WALLET_PRODUCTION_MUTATIONS_ENABLED:'false',WALLET_REGISTRATION_ENABLED:'false',
  WALLET_DEPOSITS_ENABLED:'false',WALLET_PURCHASES_ENABLED:'false',WALLET_REFUNDS_ENABLED:'false',
  WALLET_SETTLEMENTS_ENABLED:'false',WALLET_AUTO_DEPOSITS_ENABLED:'false',
- AFROMESSAGE_OTP_ENABLED:'true',AFROMESSAGE_MOCK_PROVIDER:'true',
- AFROMESSAGE_PHONE_HASH_KEY:'synthetic-local-mock-hash-key-32-plus-characters',
+ AFROMESSAGE_OTP_ENABLED:'true',
+ AFROMESSAGE_MOCK_PROVIDER:LIVE_PILOT_REQUESTED?'false':'true',
+ AFROMESSAGE_PHONE_HASH_KEY:LIVE_PILOT_REQUESTED
+  ?process.env.AFROMESSAGE_PHONE_HASH_KEY:'synthetic-local-mock-hash-key-32-plus-characters',
+ AFROMESSAGE_DAILY_SMS_CAP:LIVE_PILOT_REQUESTED?'2':'10',
  WALLET_STAGING_MUTATIONS_ENABLED:'false',CBE_WALLET_RECEIVING_ACCOUNT:'1000000000001',
  CBE_WALLET_RECEIVER_NAME:'Tigray Lottery Local',CHECK_ET_API_KEY:'local-mock-no-charge',
  CHECK_ET_API_URL:`http://${HOST}:${PORT}/mock/checket`
@@ -32,8 +36,19 @@ Object.assign(process.env,{
 assertLocalEmulatorEnvironment();
 
 const nativeFetch=globalThis.fetch;
+const {isLivePilot,keyedHash}=require('../../lib/afro-otp-core');
+if(LIVE_PILOT_REQUESTED&&!isLivePilot())throw new Error('Live pilot isolation requirements are not met.');
 globalThis.fetch=(input,options)=>{
  const raw=typeof input==='string'||input instanceof URL?input:input?.url;
+ const u=new URL(String(raw));
+ if(isLivePilot()&&u.protocol==='https:'&&u.hostname==='api.afromessage.com'&&
+    u.port===''&&['/api/challenge','/api/verify'].includes(u.pathname)&&
+    String(options?.method||'GET').toUpperCase()==='GET'){
+   const candidate=u.searchParams.get('to')||'';
+   const allowlist=String(process.env.AFROMESSAGE_PILOT_PHONE_HASHES||'').split(',').map(x=>x.trim());
+   if(!allowlist.includes(keyedHash(candidate)))throw new Error('The real SMS pilot is limited to one preverified contact.');
+   return nativeFetch(input,options);
+ }
  assertLocalUrl(raw);
  return nativeFetch(input,options);
 };
