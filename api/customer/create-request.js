@@ -45,7 +45,8 @@ async function handleWalletAction(req,res,body){
     return res.status(200).json({ok:true,capabilities:{
       registration:capabilities.registration,
       deposits:capabilities.deposit,
-      purchases:capabilities.purchase
+      purchases:capabilities.purchase,
+      afroOtp:require('../../lib/afro-otp-core').enabled()
     }});
   }
   const capability={
@@ -158,7 +159,23 @@ module.exports = async (req, res) => {
     res.setHeader('Cache-Control','no-store');
     assertReasonableBody(req, body);
     if(String(body.action||'').startsWith('wallet-'))return await handleWalletAction(req,res,body);
-    if (body.action === 'authorize-receipt-upload') {
+    if(body.action==='afro-otp-start'||body.action==='afro-otp-verify'){
+    // Shares the existing serverless function: no extra Vercel function slot.
+    // This public endpoint is guarded by explicit provider/production/pilot flags
+    // and Firestore-backed SMS limits. No client-supplied UID is trusted.
+    const otpCore=require('../../lib/afro-otp-core');
+    if(otpCore.isLivePilot()&&String(req.headers?.origin||'')!=='http://127.0.0.1:4174')
+      throw Object.assign(new Error('Local pilot requires a same-origin browser request.'),{statusCode:403});
+    const service=require('../../lib/afro-otp-service').createOtpService({
+      db:adminDb(),auth:getAuth(),
+      provider:otpCore.isDemo()?require('../../lib/afro-otp-mock'):require('../../lib/afro-otp-provider')
+    });
+    const result=body.action==='afro-otp-start'
+      ?await service.start({phone:body.phone,ip:require('../../lib/afro-otp-core').getClientIp(req)})
+      :await service.verify({challengeId:body.challengeId,code:body.code});
+    return res.status(200).json({ok:true,...result});
+  }
+  if (body.action === 'authorize-receipt-upload') {
       await enforcePublicPurchaseLimit(req, 'upload', adminDb);
       return await authorizeReceiptUpload(body, res);
     }
