@@ -45,7 +45,8 @@ async function handleWalletAction(req,res,body){
     return res.status(200).json({ok:true,capabilities:{
       registration:capabilities.registration,
       deposits:capabilities.deposit,
-      purchases:capabilities.purchase
+      purchases:capabilities.purchase,
+      afroOtp:require('../../lib/afro-otp-core').enabled()
     }});
   }
   const capability={
@@ -158,7 +159,19 @@ module.exports = async (req, res) => {
     res.setHeader('Cache-Control','no-store');
     assertReasonableBody(req, body);
     if(String(body.action||'').startsWith('wallet-'))return await handleWalletAction(req,res,body);
-    if (body.action === 'authorize-receipt-upload') {
+    if(body.action==='afro-otp-start'||body.action==='afro-otp-verify'){
+    // Shares the existing serverless function: no extra Vercel function slot.
+    // This public endpoint is guarded by explicit provider/production/pilot flags
+    // and Firestore-backed SMS limits. No client-supplied UID is trusted.
+    const service=require('../../lib/afro-otp-service').createOtpService({
+      db:adminDb(),auth:getAuth()
+    });
+    const result=body.action==='afro-otp-start'
+      ?await service.start({phone:body.phone,ip:require('../../lib/afro-otp-core').getClientIp(req)})
+      :await service.verify({challengeId:body.challengeId,code:body.code});
+    return res.status(200).json({ok:true,...result});
+  }
+  if (body.action === 'authorize-receipt-upload') {
       await enforcePublicPurchaseLimit(req, 'upload', adminDb);
       return await authorizeReceiptUpload(body, res);
     }
