@@ -45,6 +45,7 @@ test('customer sees safe Firebase SMS and captcha errors in the actual account f
     throw Object.assign(new Error(detail.message),{code:detail.code});
    }
    export function onAuthStateChanged(_auth,handler) {handler(null);return ()=>{};}
+   export async function signInWithCustomToken() { throw new Error('Not used in Firebase error test'); }
    export async function signOut() {}
   `
  }));
