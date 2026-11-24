@@ -30,6 +30,9 @@ function readBearer(req){
 async function authenticateCustomer(req){
   const token=readBearer(req);
   if(!token)throw Object.assign(new Error('Sign in with a verified phone number.'),{statusCode:401});
+  // Wallet routes may be the first Firebase Admin call in a cold Vercel function.
+  // Initialize the default Admin app before obtaining its Authentication service.
+  adminDb();
   const auth=await getAuth().verifyIdToken(token);
   if(!auth.phone_number)throw Object.assign(new Error('A verified phone number is required.'),{statusCode:403});
   return {...auth,phone_number_verified:true};
