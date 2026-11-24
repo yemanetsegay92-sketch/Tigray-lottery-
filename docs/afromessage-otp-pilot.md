@@ -42,3 +42,18 @@ Keep all variables unset in production at this stage. Never paste credentials in
 ## Recovery
 - Remove/turn off `AFROMESSAGE_OTP_ENABLED`; existing Firebase phone sign-in and wallet account UIDs remain untouched.
 - Do not delete existing Firebase users or wallet documents as part of reverting the pilot.
+
+## Controlled real-SMS end-to-end test (personal preverified contact, not production)
+
+Only run on a trusted Windows PC. This is not a public rollout, and it does not need any Firebase production secrets.
+
+1. Open PowerShell in this PR branch checkout and run:
+   `powershell.exe -NoProfile -ExecutionPolicy Bypass -File tools/local/start-real-sms-pilot.ps1`
+2. Enter your own already-AfroMessage-verified Ethio Telecom `09XXXXXXXX` contact and the AfroMessage API token in the **hidden** terminal prompt. The token is passed only through the local process environment and must not be pasted into GitHub, screenshots, chat or files.
+3. The test script starts an isolated local demo Firebase Auth + Firestore instance with random hash key and a one-phone HMAC allowlist. Only the real AfroMessage `/api/challenge` and `/api/verify` requests are allowed to leave the local PC; all other outbound API requests are blocked. The daily SMS cap is **2** for this local session.
+4. Open `http://127.0.0.1:4174/account.html`. Enter the same phone number and click **Send via AfroMessage**, then type the received code into the page and click **Verify AfroMessage code**. Do not share the code.
+5. Verify that the legal-name form appears. Enter a synthetic name only (the test database is disposable), register, and confirm a **0.00 ETB** wallet. Deposits or purchases in this local emulator are test-only and never touch real bank accounts.
+6. Sign out and sign in again with the same number using a second real SMS if desired. Confirm the wallet is unchanged and does not duplicate. Use at most two messages.
+7. Press **Ctrl+C** to stop. The local Firebase data is reset by the next fresh emulator start. Sensitive env vars are cleared by the PowerShell wrapper on exit. Do not post raw terminal traces containing credentials, OTPs, full numbers or Firebase tokens.
+
+**Safety:** This pilot only works when the local demo project, Firebase Auth and Firestore emulators, loopback host, exact demo env flags, private token and preverified phone HMAC all match. Opening the normal `https://tigraylottery.com` site does NOT use this pilot. Never set these pilot variables in Vercel or in production. This deliberately costs up to two real SMS charges and must be started manually.
