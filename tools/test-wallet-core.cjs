@@ -28,3 +28,19 @@ test('repeat request key derives one stable id and is customer isolated',()=>{
  assert.notEqual(purchaseId('user01','purchase01'),purchaseId('user02','purchase01'));
  assert.throws(()=>purchaseId('user01','bad key'),/Invalid/);
 });
+
+test('customer web signup accepts 09 and Safaricom 07 Ethiopian numbers',()=>{
+ // Exercise the exact normalizer shipped in the browser without external Firebase calls.
+ const fs=require('node:fs'),vm=require('node:vm'),path=require('node:path');
+ const source=fs.readFileSync(path.join(__dirname,'../js/account.js'),'utf8');
+ const definition=source.match(/^function normalizePhone\(value\)\{[^\n]+\}$/m);
+ assert.ok(definition,'browser phone normalizer must be present');
+ const normalizePhone=vm.runInNewContext('('+definition[0]+')');
+ assert.equal(normalizePhone('0912345678'),'+251912345678');
+ assert.equal(normalizePhone('+251912345678'),'+251912345678');
+ assert.equal(normalizePhone('0791234567'),'+251791234567');
+ assert.equal(normalizePhone('+251791234567'),'+251791234567');
+ assert.equal(normalizePhone('251791234567'),'+251791234567');
+ for(const value of ['0691234567','0891234567','079123456','07912345678','+254791234567',''])
+  assert.throws(()=>normalizePhone(value),/Enter a valid Ethiopian mobile number/);
+});
