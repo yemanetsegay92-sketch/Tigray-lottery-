@@ -19,7 +19,17 @@ async function loadCapabilities(){
 async function api(action,body={}){const token=await auth.currentUser.getIdToken();const response=await fetch('/api/customer/create-request',{method:'POST',headers:{'content-type':'application/json',authorization:'Bearer '+token},body:JSON.stringify({action,...body})});const data=await response.json();if(!response.ok||!data.ok)throw new Error(data.error||'Wallet request failed.');return data;}
 function message(text,error=false){$('walletMessage').innerHTML=`<div class="${error?'error':'success'}">${esc(text)}</div>`;}
 async function refresh(){try{const data=await api('wallet-summary');$('registration').hidden=true;$('walletDashboard').hidden=false;$('walletBalance').textContent=(Number(data.balanceSantim)/100).toFixed(2)+' ETB';$('walletActivity').innerHTML=[...data.deposits.map(x=>`<p>Deposit ${esc(x.reference)} · ${(Number(x.amountSantim)/100).toFixed(2)} ETB · ${esc(x.status)}</p>`),...data.ledger.map(x=>`<p>${esc(x.type)} · ${(Number(x.amountSantim)/100).toFixed(2)} ETB</p>`)].join('')||'<p class="form-note">No activity yet.</p>';}catch(error){if(/Register/.test(error.message)){$('registration').hidden=false;$('walletDashboard').hidden=true;}else message(error.message,true);}}
-onAuthStateChanged(auth,async current=>{$('signedOut').hidden=!!current;if(current)await refresh();else{$('registration').hidden=true;$('walletDashboard').hidden=true;}});
+onAuthStateChanged(auth,async current=>{
+ const hasPhone=!!current?.phoneNumber;
+ $('signedOut').hidden=hasPhone;
+ if(!hasPhone){
+  $('registration').hidden=true;
+  $('walletDashboard').hidden=true;
+  if(current)message('This session is not phone-verified. Enter your phone number to continue.');
+  return;
+ }
+ await refresh();
+});
 $('sendCode').addEventListener('click',async()=>{const button=$('sendCode');try{button.disabled=true;if(!window.walletRecaptcha)window.walletRecaptcha=new RecaptchaVerifier(auth,'recaptcha',{});confirmation=await signInWithPhoneNumber(auth,normalizePhone($('walletPhone').value),window.walletRecaptcha);$('confirmCode').disabled=false;message('Verification code sent.');}catch(error){confirmation=null;$('confirmCode').disabled=true;window.walletRecaptcha?.clear();window.walletRecaptcha=null;message(error.message,true);}finally{button.disabled=false;}});
 $('confirmCode').addEventListener('click',async()=>{try{if(!confirmation)throw new Error('Send a verification code first.');await confirmation.confirm($('verificationCode').value.trim());message('Phone verified. Complete free registration.');}catch(error){message(error.message,true);}});
 $('registerWallet').addEventListener('click',async()=>{try{await api('wallet-register',{name:$('walletName').value.trim()});message('Wallet created.');await refresh();}catch(error){message(error.message,true);}});
