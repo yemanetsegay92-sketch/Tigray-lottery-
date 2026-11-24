@@ -1,6 +1,6 @@
 'use strict';
 const test=require('node:test'),assert=require('node:assert/strict');
-const {normalizePhone,assertEligible,enabled,verifiedProviderResponse,getClientIp}=require('../lib/afro-otp-core');
+const {normalizePhone,assertEligible,enabled,isLivePilot,keyedHash,verifiedProviderResponse,getClientIp}=require('../lib/afro-otp-core');
 const {createOtpService}=require('../lib/afro-otp-service');
 
 const demo={
@@ -127,4 +127,29 @@ test('customer OTP cannot sign in an existing admin account',async()=>{
  const x=await t.service.start({phone,ip:'127.0.0.1'});
  await assert.rejects(()=>t.service.verify({challengeId:x.challengeId,code:'123456'}),/cannot use customer/);
  assert.equal(t.auth.tokens.length,0);
+});
+
+test('real-SMS mode can run only in locally isolated emulators and only for explicitly verified test contact',()=>{
+ const phone='+251912345678';
+ const env={
+  LOCAL_EMULATOR_ONLY:'true',GCLOUD_PROJECT:'demo-tigray-wallet',GOOGLE_CLOUD_PROJECT:'demo-tigray-wallet',
+  FIRESTORE_EMULATOR_HOST:'127.0.0.1:8080',FIREBASE_AUTH_EMULATOR_HOST:'127.0.0.1:9099',
+  VERCEL_ENV:'preview',AFROMESSAGE_LIVE_PILOT:'true',AFROMESSAGE_OTP_ENABLED:'true',
+  AFROMESSAGE_MOCK_PROVIDER:'false',AFROMESSAGE_API_TOKEN:'offline-placeholder-not-a-real-token',
+  AFROMESSAGE_PHONE_HASH_KEY:'synthetic-hmac-secret-longer-than-32-characters'
+ };
+ env.AFROMESSAGE_PILOT_PHONE_HASHES=keyedHash(phone,env);
+ assert.equal(isLivePilot(env),true);
+ assert.equal(enabled(env),true);
+ assert.doesNotThrow(()=>assertEligible(phone,env));
+ assert.throws(()=>assertEligible('+251912345679',env),/not available/);
+ assert.equal(getClientIp({headers:{}},env),'127.0.0.1');
+ for(const bad of [
+  {...env,AFROMESSAGE_API_TOKEN:''},
+  {...env,VERCEL_ENV:'production'},
+  {...env,GCLOUD_PROJECT:'tigiray-lottery'},
+  {...env,FIRESTORE_EMULATOR_HOST:''},
+  {...env,AFROMESSAGE_MOCK_PROVIDER:'true'},
+  {...env,AFROMESSAGE_LIVE_PILOT:'false'}
+ ])assert.equal(isLivePilot(bad),false);
 });
