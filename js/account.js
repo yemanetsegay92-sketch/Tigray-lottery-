@@ -1,5 +1,6 @@
 import {auth} from '../firebase.js';
 import {RecaptchaVerifier,signInWithPhoneNumber,onAuthStateChanged,signOut} from 'https://www.gstatic.com/firebasejs/12.2.1/firebase-auth.js';
+import {phoneAuthErrorMessage} from './phoneAuthErrors.mjs';
 const $=id=>document.getElementById(id),esc=value=>String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 let confirmation=null;
 let walletCapabilities={registration:false,deposits:false,purchases:false};
@@ -30,8 +31,8 @@ onAuthStateChanged(auth,async current=>{
  }
  await refresh();
 });
-$('sendCode').addEventListener('click',async()=>{const button=$('sendCode');try{button.disabled=true;if(!window.walletRecaptcha)window.walletRecaptcha=new RecaptchaVerifier(auth,'recaptcha',{});confirmation=await signInWithPhoneNumber(auth,normalizePhone($('walletPhone').value),window.walletRecaptcha);$('confirmCode').disabled=false;message('Verification code sent.');}catch(error){confirmation=null;$('confirmCode').disabled=true;window.walletRecaptcha?.clear();window.walletRecaptcha=null;message(error.message,true);}finally{button.disabled=false;}});
-$('confirmCode').addEventListener('click',async()=>{try{if(!confirmation)throw new Error('Send a verification code first.');await confirmation.confirm($('verificationCode').value.trim());message('Phone verified. Complete free registration.');}catch(error){message(error.message,true);}});
+$('sendCode').addEventListener('click',async()=>{const button=$('sendCode');try{button.disabled=true;if(!window.walletRecaptcha)window.walletRecaptcha=new RecaptchaVerifier(auth,'recaptcha',{});confirmation=await signInWithPhoneNumber(auth,normalizePhone($('walletPhone').value),window.walletRecaptcha);$('confirmCode').disabled=false;message('Verification code sent.');}catch(error){confirmation=null;$('confirmCode').disabled=true;window.walletRecaptcha?.clear();window.walletRecaptcha=null;message(phoneAuthErrorMessage(error),true);}finally{button.disabled=false;}});
+$('confirmCode').addEventListener('click',async()=>{try{if(!confirmation)throw new Error('Send a verification code first.');await confirmation.confirm($('verificationCode').value.trim());message('Phone verified. Complete free registration.');}catch(error){message(error.message==='Send a verification code first.'?error.message:phoneAuthErrorMessage(error),true);}});
 $('registerWallet').addEventListener('click',async()=>{try{await api('wallet-register',{name:$('walletName').value.trim()});message('Wallet created.');await refresh();}catch(error){message(error.message,true);}});
 $('submitDeposit').addEventListener('click',async()=>{try{if(!walletCapabilities.deposits)throw new Error('Wallet deposits are not yet available.');const data=await api('wallet-deposit',{amountEtb:$('depositAmount').value,reference:$('depositReference').value.trim(),legalName:$('walletName').value.trim()});message(data.message||'Deposit submitted.');await refresh();}catch(error){message(error.message,true);}});
 $('walletSignOut').addEventListener('click',()=>signOut(auth));
