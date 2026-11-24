@@ -4,7 +4,7 @@ const $=id=>document.getElementById(id),esc=value=>String(value??'').replace(/[&
 let confirmation=null;
 let walletCapabilities={registration:false,deposits:false,purchases:false};
 auth.useDeviceLanguage();
-function normalizePhone(value){const digits=String(value||'').replace(/\D/g,'');if(/^09\d{8}$/.test(digits))return '+251'+digits.slice(1);if(/^2519\d{8}$/.test(digits))return '+'+digits;throw new Error('Enter a valid Ethiopian mobile number.');}
+function normalizePhone(value){const digits=String(value||'').replace(/\D/g,'');if(/^0[79]\d{8}$/.test(digits))return '+251'+digits.slice(1);if(/^251[79]\d{8}$/.test(digits))return '+'+digits;throw new Error('Enter a valid Ethiopian mobile number (09 or 07).');}
 async function loadCapabilities(){
  try{
   const response=await fetch('/api/customer/create-request',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({action:'wallet-status'})});
