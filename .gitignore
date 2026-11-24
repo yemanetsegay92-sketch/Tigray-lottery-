@@ -7,3 +7,6 @@ node_modules/
 .java-runtime.zip
 .firebase-local/
 .local-emulator-data/
+playwright-report/
+test-results/
+test-artifacts/

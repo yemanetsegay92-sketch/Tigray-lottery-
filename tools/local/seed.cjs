@@ -2,9 +2,9 @@
 const {getApps,initializeApp}=require('firebase-admin/app');
 const {getAuth}=require('firebase-admin/auth');
 const {getFirestore,FieldValue}=require('firebase-admin/firestore');
-const {LOCAL_PROJECT_ID,assertLocalEmulatorEnvironment,localAdminCredential}=require('../../lib/local-emulator-guard');
+const {LOCAL_PROJECT_ID,assertLocalEmulatorEnvironment}=require('../../lib/local-emulator-guard');
 assertLocalEmulatorEnvironment();
-if(!getApps().length)initializeApp({projectId:LOCAL_PROJECT_ID,credential:localAdminCredential()});
+if(!getApps().length)initializeApp({projectId:LOCAL_PROJECT_ID});
 const auth=getAuth(),db=getFirestore(),PASSWORD='LocalTest!2026';
 const accounts=[
  {uid:'gm-local',email:'gm.local@tigray.test',displayName:'Local General Manager'},

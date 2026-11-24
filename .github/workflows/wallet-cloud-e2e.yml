@@ -1,0 +1,99 @@
+name: PR36 cloud wallet browser E2E
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/wallet-cloud-e2e.yml'
+      - 'playwright.config.cjs'
+      - 'tests/cloud-e2e/**'
+      - 'tools/local/**'
+      - 'firebase.local.js'
+      - 'firebase.local.json'
+      - 'api/admin/approvals.js'
+      - 'api/customer/create-request.js'
+      - 'admin/**'
+      - 'account.html'
+      - 'buy.html'
+      - 'js/account.js'
+      - 'js/buy.js'
+      - 'lib/wallet-*.js'
+      - 'lib/local-emulator-guard.js'
+      - 'package.json'
+      - 'package-lock.json'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  chromium-e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      CI: 'true'
+      LOCAL_EMULATOR_ONLY: 'true'
+      GCLOUD_PROJECT: demo-tigray-wallet
+      GOOGLE_CLOUD_PROJECT: demo-tigray-wallet
+      FIRESTORE_EMULATOR_HOST: 127.0.0.1:8080
+      FIREBASE_AUTH_EMULATOR_HOST: 127.0.0.1:9099
+      METADATA_SERVER_DETECTION: none
+      WALLET_PRODUCTION_MUTATIONS_ENABLED: 'false'
+      WALLET_REGISTRATION_ENABLED: 'false'
+      WALLET_DEPOSITS_ENABLED: 'false'
+      WALLET_PURCHASES_ENABLED: 'false'
+      WALLET_REFUNDS_ENABLED: 'false'
+      WALLET_SETTLEMENTS_ENABLED: 'false'
+      WALLET_AUTO_DEPOSITS_ENABLED: 'false'
+      VERCEL_ENV: preview
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '24'
+          cache: npm
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Install locked dependencies
+        run: npm ci --ignore-scripts
+      - name: Install Chromium and runner libraries
+        run: npx playwright install --with-deps chromium
+      - name: Start isolated emulators and website
+        shell: bash
+        run: |
+          mkdir -p test-artifacts
+          node tools/local/start.cjs > test-artifacts/local-stack.log 2>&1 &
+          echo $! > test-artifacts/local-stack.pid
+          for attempt in $(seq 1 120); do
+            if curl --fail --silent http://127.0.0.1:4174/__local/health > test-artifacts/health.json; then
+              exit 0
+            fi
+            sleep 1
+          done
+          cat test-artifacts/local-stack.log
+          exit 1
+      - name: Prove localhost and demo-project isolation
+        run: npm run test:local:smoke
+      - name: Run real Chromium customer and admin flows
+        run: npm run test:e2e:cloud
+      - name: Stop local stack
+        if: always()
+        shell: bash
+        run: |
+          if [ -f test-artifacts/local-stack.pid ]; then
+            kill "$(cat test-artifacts/local-stack.pid)" 2>/dev/null || true
+          fi
+      - name: Upload screenshots, report, traces and logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pr36-wallet-cloud-e2e-${{ github.run_attempt }}
+          if-no-files-found: warn
+          retention-days: 14
+          path: |
+            playwright-report/
+            test-results/
+            test-artifacts/

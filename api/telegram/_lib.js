@@ -7,7 +7,9 @@ function adminDb() {
     if (process.env.LOCAL_EMULATOR_ONLY === 'true') {
       const guard = require('../../lib/local-emulator-guard');
       const { projectId } = guard.assertLocalEmulatorEnvironment();
-      initializeApp({ projectId, credential: guard.localAdminCredential() });
+      // Auth and Firestore emulator transports do not require credentials.
+      // Omitting them also prevents accidental metadata/service-account lookup.
+      initializeApp({ projectId });
       return getFirestore();
     }
     const raw = process.env.FIREBASE_SERVICE_ACCOUNT_JSON;

@@ -6,12 +6,19 @@ const path=require('node:path');
 const {LOCAL_PROJECT_ID,assertLocalEmulatorEnvironment,assertLocalUrl}=require('../../lib/local-emulator-guard');
 const ROOT=path.resolve(__dirname,'../..');
 const HOST='127.0.0.1',PORT=4174;
+const FIREBASE_SDK_BASE='https://www.gstatic.com/firebasejs/12.2.1/';
+const LOCAL_SDK_ROUTES={
+ '/__local/firebase-app.js':'firebase-app.js',
+ '/__local/firebase-auth.js':'firebase-auth.js',
+ '/__local/firebase-firestore.js':'firebase-firestore.js'
+};
 
 delete process.env.FIREBASE_SERVICE_ACCOUNT_JSON;
 delete process.env.GOOGLE_APPLICATION_CREDENTIALS;
 Object.assign(process.env,{
  LOCAL_EMULATOR_ONLY:'true',GCLOUD_PROJECT:LOCAL_PROJECT_ID,GOOGLE_CLOUD_PROJECT:LOCAL_PROJECT_ID,
  FIRESTORE_EMULATOR_HOST:'127.0.0.1:8080',FIREBASE_AUTH_EMULATOR_HOST:'127.0.0.1:9099',
+ METADATA_SERVER_DETECTION:'none',
  FIREBASE_CONFIG:JSON.stringify({projectId:LOCAL_PROJECT_ID}),VERCEL_ENV:'preview',
  WALLET_PRODUCTION_MUTATIONS_ENABLED:'false',WALLET_REGISTRATION_ENABLED:'false',
  WALLET_DEPOSITS_ENABLED:'false',WALLET_PURCHASES_ENABLED:'false',WALLET_REFUNDS_ENABLED:'false',
@@ -74,12 +81,20 @@ async function mockCheckEt(req,res){
 const MIME={'.html':'text/html; charset=utf-8','.js':'text/javascript; charset=utf-8','.mjs':'text/javascript; charset=utf-8',
  '.css':'text/css; charset=utf-8','.json':'application/json; charset=utf-8','.png':'image/png','.svg':'image/svg+xml','.webp':'image/webp','.ico':'image/x-icon'};
 function staticPath(urlPath){
+ if(LOCAL_SDK_ROUTES[urlPath])return path.join(ROOT,'node_modules/firebase',LOCAL_SDK_ROUTES[urlPath]);
  if(urlPath==='/firebase.js')return path.join(ROOT,'firebase.local.js');
  if(urlPath==='/local-login'||urlPath==='/local-login.html')return path.join(ROOT,'tools/local/local-login.html');
  let relative=urlPath==='/'?'index.html':decodeURIComponent(urlPath).replace(/^\/+/, '');
  if(!path.extname(relative))relative+='.html';
  const resolved=path.resolve(ROOT,relative);
  return resolved.startsWith(ROOT+path.sep)?resolved:null;
+}
+function localizeBrowserImports(source){
+ return String(source)
+  .replaceAll(FIREBASE_SDK_BASE+'firebase-app.js','/__local/firebase-app.js')
+  .replaceAll(FIREBASE_SDK_BASE+'firebase-auth.js','/__local/firebase-auth.js')
+  .replaceAll(FIREBASE_SDK_BASE+'firebase-firestore.js','/__local/firebase-firestore.js')
+  .replaceAll('https://telegram.org/js/telegram-web-app.js','/__local/telegram-web-app.js');
 }
 const server=http.createServer(async(req,res)=>{
  try{
@@ -90,6 +105,11 @@ const server=http.createServer(async(req,res)=>{
    const health=await emulatorHealth();return json(res,health.ok?200:503,health);
   }
   if(url.pathname==='/mock/checket'&&req.method==='POST')return await mockCheckEt(req,res);
+  if(url.pathname==='/__local/telegram-web-app.js'&&req.method==='GET'){
+   res.setHeader('content-type','text/javascript; charset=utf-8');
+   res.setHeader('cache-control','no-store');
+   return res.end('window.Telegram=undefined;');
+  }
   if(url.pathname==='/api/customer/create-request'&&req.method==='POST')return await api(req,res,'../../api/customer/create-request');
   if(url.pathname==='/api/admin/approvals'&&req.method==='POST')return await api(req,res,'../../api/admin/approvals');
   if(!['GET','HEAD'].includes(req.method))return json(res,405,{ok:false,error:'Local route not enabled.'});
@@ -97,6 +117,8 @@ const server=http.createServer(async(req,res)=>{
   if(!file||!fs.existsSync(file)||!fs.statSync(file).isFile())return json(res,404,{ok:false,error:'Not found.'});
   res.statusCode=200;res.setHeader('cache-control','no-store');res.setHeader('content-type',MIME[path.extname(file).toLowerCase()]||'application/octet-stream');
   if(req.method==='HEAD')return res.end();
+  const extension=path.extname(file).toLowerCase();
+  if(extension==='.js'||extension==='.mjs'||extension==='.html')return res.end(localizeBrowserImports(fs.readFileSync(file,'utf8')));
   fs.createReadStream(file).pipe(res);
  }catch(error){console.error('local server request failed',{message:error?.message,statusCode:error?.statusCode});if(!res.headersSent)json(res,Number(error?.statusCode)||500,{ok:false,error:String(error?.message||'Local request failed.')});else res.end();}
 });

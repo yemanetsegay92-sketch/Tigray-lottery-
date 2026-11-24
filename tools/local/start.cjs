@@ -4,6 +4,7 @@ const net=require('node:net');
 const path=require('node:path');
 const {LOCAL_PROJECT_ID,assertLocalEmulatorEnvironment}=require('../../lib/local-emulator-guard');
 assertLocalEmulatorEnvironment();
+process.env.METADATA_SERVER_DETECTION='none';
 const ROOT=path.resolve(__dirname,'../..');
 const children=[];
 let stopping=false;

@@ -83,3 +83,17 @@ npm.cmd run test:local:smoke
 ```
 
 The existing Windows OCR fixture may remain platform-sensitive; do not change OCR as part of local wallet testing.
+
+## Cloud Chromium E2E
+
+The dedicated `PR36 cloud wallet browser E2E` GitHub Actions workflow starts the same Auth and Firestore emulators, deterministic seed and localhost API server on an Ubuntu runner. It installs the Playwright-pinned Chromium build and exercises the real customer, General Manager and Lottery Admin pages.
+
+The job has no Firebase or payment-provider secrets. Production wallet flags remain false, Google metadata detection is disabled, Firebase browser modules are served from localhost, Telegram is replaced by an inert local stub, and every browser request is asserted to use `localhost` or `127.0.0.1`.
+
+Every run uploads a 14-day `pr36-wallet-cloud-e2e-*` artifact containing:
+
+- the HTML and JUnit reports;
+- a screenshot for every test;
+- traces and video for failures;
+- emulator, seed and local-server logs;
+- the emulator health response.
