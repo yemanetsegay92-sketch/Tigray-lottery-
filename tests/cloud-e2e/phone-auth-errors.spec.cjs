@@ -19,8 +19,10 @@ test('customer sees safe Firebase SMS and captcha errors in the actual account f
  await page.route('**/js/account.js',async route=>{
   const response=await route.fetch();
   const original=await response.text();
-  const sdk='https://www.gstatic.com/firebasejs/12.2.1/firebase-auth.js';
-  expect(original).toContain(sdk);
+  // The localhost E2E server rewrites CDN imports to an isolated SDK shim.
+  const sdk=['https://www.gstatic.com/firebasejs/12.2.1/firebase-auth.js','/__local/firebase-auth.js']
+   .find(path=>original.includes(path));
+  expect(sdk,'Expected browser Firebase Auth import').toBeTruthy();
   await route.fulfill({status:200,contentType:'text/javascript',
    body:original.replace(sdk,'/mock-firebase-auth.mjs')});
  });
