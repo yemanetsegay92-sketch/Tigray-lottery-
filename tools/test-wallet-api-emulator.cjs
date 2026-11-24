@@ -73,7 +73,7 @@ let depositId,firstPurchase,secondPurchase;
 test('wallet status is public but contains only server-authorized capability booleans',async()=>{
  const status=await customerAction('','wallet-status');
  assert.equal(status.status,200);
- assert.deepEqual(JSON.parse(JSON.stringify(status.result)),{ok:true,capabilities:{registration:true,deposits:true,purchases:true}});
+ assert.deepEqual(JSON.parse(JSON.stringify(status.result)),{ok:true,capabilities:{registration:true,deposits:true,purchases:true,afroOtp:false}});
 });
 test('synthetic wallet API setup',async()=>{
  await Promise.all([
