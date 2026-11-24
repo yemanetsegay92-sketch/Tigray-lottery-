@@ -164,6 +164,8 @@ module.exports = async (req, res) => {
     // This public endpoint is guarded by explicit provider/production/pilot flags
     // and Firestore-backed SMS limits. No client-supplied UID is trusted.
     const otpCore=require('../../lib/afro-otp-core');
+    if(otpCore.isLivePilot()&&String(req.headers?.origin||'')!=='http://127.0.0.1:4174')
+      throw Object.assign(new Error('Local pilot requires a same-origin browser request.'),{statusCode:403});
     const service=require('../../lib/afro-otp-service').createOtpService({
       db:adminDb(),auth:getAuth(),
       provider:otpCore.isDemo()?require('../../lib/afro-otp-mock'):require('../../lib/afro-otp-provider')
