@@ -163,8 +163,10 @@ module.exports = async (req, res) => {
     // Shares the existing serverless function: no extra Vercel function slot.
     // This public endpoint is guarded by explicit provider/production/pilot flags
     // and Firestore-backed SMS limits. No client-supplied UID is trusted.
+    const otpCore=require('../../lib/afro-otp-core');
     const service=require('../../lib/afro-otp-service').createOtpService({
-      db:adminDb(),auth:getAuth()
+      db:adminDb(),auth:getAuth(),
+      provider:otpCore.isDemo()?require('../../lib/afro-otp-mock'):require('../../lib/afro-otp-provider')
     });
     const result=body.action==='afro-otp-start'
       ?await service.start({phone:body.phone,ip:require('../../lib/afro-otp-core').getClientIp(req)})
