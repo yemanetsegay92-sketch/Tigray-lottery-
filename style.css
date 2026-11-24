@@ -36,3 +36,6 @@
 #submitBtn:disabled{opacity:.7;cursor:progress}
 @media(max-width:500px){.site-header{flex-wrap:wrap}.site-header nav{margin-left:auto;gap:7px}.brand{font-size:.96rem}.pwa-install{padding:8px 10px;font-size:.79rem}.form-card{padding:17px 14px}.upload-box{padding:14px 12px}}
 @media(display-mode:standalone){body{padding-bottom:env(safe-area-inset-bottom)}}
+
+/* RF-only lotteries must not expose hidden receipt upload controls. */
+label.upload-box[hidden],.mobile-upload-help[hidden]{display:none!important}

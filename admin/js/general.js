@@ -29,6 +29,84 @@ $('closeSummary')?.addEventListener('click',()=>{$('summaryPanel').style.display
 $('contactForm')?.addEventListener('submit',saveContactSettings);
 $('whatsappNumber')?.addEventListener('input',updateContactPreview);
 $('addCreatePaymentAccount')?.addEventListener('click',addCreatePaymentAccount);
+// Workspace navigation: render one panel at a time and load expensive data only when selected.
+const generalPanels=Array.from(document.querySelectorAll('.admin-wrap > section'));
+const generalGroups={overview:[0,1],lotteries:[4],create:[3],admins:[5,8],draw:[6],
+ reports:[7,9],verify:[2],settings:[10,11],wallet:[12]};
+let generalView='overview';
+function showGeneralView(view){
+ generalView=generalGroups[view]?view:'overview';
+ generalPanels.forEach((panel,index)=>{panel.hidden=!generalGroups[generalView].includes(index)});
+ document.querySelectorAll('#workspaceNav [data-view]').forEach(button=>{
+  const selected=button.dataset.view===generalView;
+  if(selected)button.setAttribute('aria-current','page');else button.removeAttribute('aria-current');
+ });
+}
+async function openGeneralView(view){
+ showGeneralView(view);
+ try{
+  if(generalView==='lotteries')await renderLotteries();
+  if(generalView==='admins')await renderAdminList();
+  if(generalView==='reports')await renderSummaryOverview();
+  if(generalView==='draw')setupDraw();
+  if(generalView==='settings')await loadContactSettings();
+  if(generalView==='create')renderCreatePaymentAccountsEditor();
+  if(generalView==='wallet')await loadWalletFinance();
+ }catch(e){$('message').innerHTML='<div class="error">'+esc(e.message||'Could not load this section.')+'</div>';}
+}
+document.querySelectorAll('#workspaceNav [data-view]').forEach(button=>
+ button.addEventListener('click',()=>void openGeneralView(button.dataset.view)));
+showGeneralView('overview');
+$('refreshWalletFinance')?.addEventListener('click',()=>void loadWalletFinance());
+async function walletFinanceApi(action,body={}){
+ const token=await auth.currentUser.getIdToken();
+ const response=await fetch('/api/admin/approvals',{method:'POST',headers:{'content-type':'application/json',authorization:'Bearer '+token},body:JSON.stringify({action,...body})});
+ const payload=await response.json().catch(()=>({}));
+ if(!response.ok||!payload.ok)throw new Error(payload.error||'Wallet finance request failed.');
+ return payload;
+}
+async function loadWalletFinance(){
+ const host=$('walletFinance');if(!host)return;host.innerHTML='<p class="muted">Loading wallet finance…</p>';
+ try{
+  const data=await walletFinanceApi('wallet-finance-summary');
+  const pending=data.deposits.filter(x=>x.status==='pending');
+  const obligations=data.obligations.map(x=>({...x,remaining:Number(x.amountSantim||0)-Number(x.settledSantim||0)-Number(x.refundedSantim||0)}));
+  host.innerHTML=`<h3>Pending deposits</h3>${pending.length?`<div class="table-wrap"><table><thead><tr><th>Reference</th><th>Amount</th><th>Customer</th><th>Action</th></tr></thead><tbody>${pending.map(x=>`<tr><td>${esc(x.reference)}</td><td>${(Number(x.amountSantim)/100).toFixed(2)} ETB</td><td>${esc(x.legalName||x.uid)}</td><td><button class="small-btn" data-deposit="${esc(x.id)}">Verify & approve</button></td></tr>`).join('')}</tbody></table></div>`:'<p class="muted">No pending deposits.</p>'}
+  <h3>Owner obligations</h3>${obligations.length?`<div class="table-wrap"><table><thead><tr><th>Lottery</th><th>Request</th><th>Outstanding</th><th>Status</th><th>Actions</th></tr></thead><tbody>${obligations.map(x=>`<tr><td>${esc(x.lotteryId)}</td><td>${esc(x.requestId)}</td><td>${(x.remaining/100).toFixed(2)} ETB</td><td>${esc(x.status||'open')}</td><td>${x.remaining>0?`<button class="small-btn" data-settle="${esc(x.id)}" data-remaining="${x.remaining}">Settle</button> <button class="secondary small-btn" data-refund="${esc(x.requestId)}">Refund</button>`:'—'}</td></tr>`).join('')}</tbody></table></div>`:'<p class="muted">No wallet obligations.</p>'}
+  <h3>Settlement history</h3>${data.settlements.length?`<div class="table-wrap"><table><thead><tr><th>Lottery</th><th>Reference</th><th>Amount</th><th>Obligation</th></tr></thead><tbody>${data.settlements.map(x=>`<tr><td>${esc(x.lotteryId)}</td><td>${esc(x.reference)}</td><td>${(Number(x.amountSantim)/100).toFixed(2)} ETB</td><td>${esc(x.obligationId)}</td></tr>`).join('')}</tbody></table></div>`:'<p class="muted">No settlements recorded.</p>'}`;
+  host.querySelectorAll('[data-deposit]').forEach(button=>button.addEventListener('click',()=>void approveWalletDeposit(button.dataset.deposit,pending.find(x=>x.id===button.dataset.deposit))));
+  host.querySelectorAll('[data-settle]').forEach(button=>button.addEventListener('click',()=>void settleWalletObligation(button.dataset.settle,Number(button.dataset.remaining))));
+  host.querySelectorAll('[data-refund]').forEach(button=>button.addEventListener('click',()=>void refundWalletPurchase(button.dataset.refund)));
+ }catch(error){host.innerHTML='<div class="error">'+esc(error.message)+'</div>';}
+}
+async function approveWalletDeposit(id,deposit){
+ const payerName=prompt('Verified CBE payer legal name',deposit?.legalName||'');if(payerName===null)return;
+ const transactionDate=prompt('Verified CBE transaction date/time (ISO 8601)',new Date().toISOString());if(!transactionDate)return;
+ const receivingAccount=prompt('CBE receiving account number reviewed on the transfer');if(!receivingAccount)return;
+ const receivingOwner=prompt('Receiving account owner reviewed on the transfer');if(!receivingOwner)return;
+ const reviewNote=prompt('Review note (how receiver, amount, status, date and payer ownership were verified)');if(!reviewNote||reviewNote.trim().length<10)return alert('Enter a review note of at least 10 characters.');
+ if(!confirm('Confirm that receiver, amount, completed status, transaction reference, date, and payer ownership were independently verified.'))return;
+ try{await walletFinanceApi('wallet-deposit-approve',{depositId:id,payerName,transactionDate,receivingAccount,receivingOwner,reviewNote,reviewAttestation:'gm_independent_review'});await loadWalletFinance();}
+ catch(error){$('walletFinanceMessage').innerHTML='<div class="error">'+esc(error.message)+'</div>';}
+}
+async function settleWalletObligation(id,remaining){
+ const raw=prompt('Settlement amount in ETB (up to '+(remaining/100).toFixed(2)+')');if(raw===null)return;
+ const amountSantim=Math.round(Number(raw)*100);if(!Number.isSafeInteger(amountSantim)||amountSantim<1||amountSantim>remaining)return alert('Invalid settlement amount.');
+ const reference=prompt('Completed bank-transfer reference');if(!reference)return;
+ const receivingAccount=prompt('Lottery owner receiving account number');if(!receivingAccount)return;
+ const receivingOwner=prompt('Lottery owner / account holder name');if(!receivingOwner)return;
+ const transactionDate=prompt('Completed transfer date/time (ISO 8601)',new Date().toISOString());if(!transactionDate)return;
+ const reviewNote=prompt('Settlement verification note');if(!reviewNote||reviewNote.trim().length<10)return alert('Enter a review note of at least 10 characters.');
+ if(!confirm('Record this completed owner settlement? This history is append-only.'))return;
+ try{await walletFinanceApi('wallet-settle',{obligationId:id,amountSantim,reference,receivingAccount,receivingOwner,transactionDate,reviewNote,reviewAttestation:'gm_independent_review'});await loadWalletFinance();}
+ catch(error){$('walletFinanceMessage').innerHTML='<div class="error">'+esc(error.message)+'</div>';}
+}
+async function refundWalletPurchase(requestId){
+ const reason=prompt('Refund reason');if(!reason)return;
+ if(!confirm('Refund this wallet purchase and cancel its tickets?'))return;
+ try{await walletFinanceApi('wallet-refund',{requestId,reason});await loadWalletFinance();}
+ catch(error){$('walletFinanceMessage').innerHTML='<div class="error">'+esc(error.message)+'</div>';}
+}
 let accessGeneration=0;
 onAuthStateChanged(auth,async u=>{
   const generation=++accessGeneration;
@@ -39,11 +117,8 @@ onAuthStateChanged(auth,async u=>{
     const p=await getDoc(doc(db,'users',u.uid));
     if(generation!==accessGeneration || auth.currentUser?.uid!==u.uid)return;
     if(!p.exists()||p.data().role!=='generalAdmin'){location.replace(p.exists() && p.data().role==='lotteryAdmin' ? 'lottery.html' : 'login.html');return;}
-    await renderLotteries();
-    await renderSummaryOverview();
-    await loadContactSettings();
-    renderCreatePaymentAccountsEditor();
-    setupDraw();
+    await loadLotteriesBasics();
+    showGeneralView('overview');
     // Previously confirmed cleanups resume automatically after refresh/sign-in.
     void autoResumeCleanupOnLoad();
     if(generation===accessGeneration && auth.currentUser?.uid===u.uid)document.documentElement.classList.add('admin-verified');
@@ -62,9 +137,11 @@ $('createForm').addEventListener('submit',async e=>{
     if(!['manual','automatic'].includes(approvalMode))throw new Error('Choose manual or automatic approval.');
     if(approvalMode==='automatic' && !validAutomaticCbeAccounts(paymentAccounts))
       throw new Error('For automatic approval, configure exactly one real CBE receiving account with its correct account-holder name.');
+    const paymentEvidenceMode=$('paymentEvidenceMode').value;
+    if(!['standard','reference_only'].includes(paymentEvidenceMode))throw Error('Invalid payment evidence mode.');
     const newLottery=doc(collection(db,'lotteries'));
     const batch=writeBatch(db);
-    batch.set(newLottery,{name:$('name').value.trim(),price,min,max,status:$('status').value,approvalMode,description:$('description').value.trim(),createdAt:serverTimestamp(),adminIds:[],nextTicketNumber:min,awards:['First Prize'],paymentAccounts});
+    batch.set(newLottery,{name:$('name').value.trim(),price,min,max,status:$('status').value,approvalMode,description:$('description').value.trim(),createdAt:serverTimestamp(),adminIds:[],nextTicketNumber:min,awards:['First Prize'],paymentAccounts,paymentEvidenceMode});
     batch.set(doc(collection(db,'auditLogs')),{action:'createLottery',lotteryId:newLottery.id,approvalMode,adminId:auth.currentUser.uid,createdAt:serverTimestamp(),paymentAccountBanks:paymentAccounts.map(x=>x.bank)});
     await batch.commit();
     let activationError='';
@@ -78,7 +155,7 @@ $('createForm').addEventListener('submit',async e=>{
     $('message').innerHTML=activationError
       ? '<div class="error">Lottery created, but CBE automatic approval is NOT ACTIVE: '+esc(activationError)+'. Use the Activate button beside the lottery to retry.</div>'
       : '<div class="success">Lottery created with '+esc(approvalMode)+(approvalMode==='automatic'?' CBE automatic approval activated.':' approval.')+'</div>';
-    await renderLotteries();await renderSummaryOverview();setupDraw();
+    await loadLotteriesBasics();showGeneralView('create');
   }catch(err){console.error(err);$('message').innerHTML=`<div class="error">${esc(err.message)}</div>`;}
 });
 
@@ -232,15 +309,20 @@ async function refreshCbeApprovalStatus(){
   }));
 }
 
+async function loadLotteriesBasics(){
+  const ls=await getDocs(collection(db,'lotteries'));lots=ls.docs.map(d=>({id:d.id,...d.data()}));
+  $('statLotteries').textContent=lots.length;
+  const opts=lots.map(x=>`<option value="${esc(x.id)}">${esc(x.name)}</option>`).join('');
+  $('adminLottery').innerHTML=opts;$('assignLottery').innerHTML=opts;
+  if($('drawLotterySelect'))$('drawLotterySelect').innerHTML=opts;
+}
 async function renderLotteries(){
-  const ls=await getDocs(collection(db,'lotteries'));lots=ls.docs.map(d=>({id:d.id,...d.data()}));$('statLotteries').textContent=lots.length;
+  await loadLotteriesBasics();
   if ($('deleteAllLotteries')) $('deleteAllLotteries').disabled = !lots.length || cleanupBusy || bulkCleanupBusy;
-  const opts=lots.map(x=>`<option value="${esc(x.id)}">${esc(x.name)}</option>`).join('');$('adminLottery').innerHTML=opts;$('assignLottery').innerHTML=opts;if($('drawLotterySelect'))$('drawLotterySelect').innerHTML=opts;
   $('lotteries').innerHTML=lots.map(x=>{const mode=x.approvalMode==='automatic'?'Automatic CBE':'Manual';return `<div class="row"><b>${esc(x.name)}</b> <span class="badge ${esc(x.status)}">${esc(x.status)}</span><br><span class="muted">ID: ${esc(x.id)} · ${Number(x.price||0)} Birr · ${esc(x.min)}–${esc(x.max)} · Next: ${esc(x.nextTicketNumber??x.min)} · Approval: <b>${mode}</b></span><div class="actions"><button data-edit="${esc(x.id)}">Edit</button><button class="secondary" data-summary="${esc(x.id)}">Open Summary</button><button class="danger" data-delete="${esc(x.id)}">${x.cleanupInProgress?"Continue Cleanup":"Delete & Clear"}</button></div>${x.approvalMode==='automatic'?`<div class="muted" data-auto-status="${esc(x.id)}">Checking CBE auto approval…</div>`:''}<div class="muted" data-cleanup-message="${esc(x.id)}">${esc(cleanupNotices.get(x.id) || (x.cleanupInProgress?'Cleanup already started: this lottery is closed. Click Continue Cleanup to resume.':'Click Delete & Clear to preview linked data; then type DELETE followed by the exact lottery ID to confirm.'))}</div></div>`}).join('')||'<p class="muted">No lotteries.</p>';
   document.querySelectorAll('[data-edit]').forEach(b=>b.addEventListener('click',()=>editLottery(b.dataset.edit)));
   document.querySelectorAll('[data-delete]').forEach(b=>b.addEventListener('click',()=>removeLottery(b.dataset.delete)));
   document.querySelectorAll('[data-summary]').forEach(b=>b.addEventListener('click',()=>openLotterySummary(b.dataset.summary)));
-  await renderAdminList();
   void refreshCbeApprovalStatus();
 }
 
@@ -272,6 +354,7 @@ async function renderSummaryOverview(){
   }
 }
 async function openLotterySummary(id){
+  showGeneralView('reports');
   const lot=lots.find(x=>x.id===id);if(!lot)return;
   $('summaryTitle').textContent=`Summary · ${lot.name}`;
   $('summaryPanel').style.display='block';

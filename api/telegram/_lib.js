@@ -4,6 +4,14 @@ const crypto = require('crypto');
 
 function adminDb() {
   if (!getApps().length) {
+    if (process.env.LOCAL_EMULATOR_ONLY === 'true') {
+      const guard = require('../../lib/local-emulator-guard');
+      const { projectId } = guard.assertLocalEmulatorEnvironment();
+      // Auth and Firestore emulator transports do not require credentials.
+      // Omitting them also prevents accidental metadata/service-account lookup.
+      initializeApp({ projectId });
+      return getFirestore();
+    }
     const raw = process.env.FIREBASE_SERVICE_ACCOUNT_JSON;
     if (!raw) throw new Error('FIREBASE_SERVICE_ACCOUNT_JSON is not configured.');
     let serviceAccount;

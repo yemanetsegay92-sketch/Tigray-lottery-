@@ -14,6 +14,12 @@ service cloud.firestore {
     // tickets/{id}: issued ticket allocation; server writes only.
     // publicStatus/{phoneHash}/requests/{id}: public lookup result; server writes only.
     // paymentClaims/{hash}: immutable payment replay ledger; server only.
+    // customerProfiles/{uid}: phone-verified private customer identity; server writes only.
+    // walletAccounts/{companyId_uid}: customer balance; server writes only.
+    // walletLedger/{id}: immutable customer credit/debit/refund history; server writes only.
+    // depositRequests/{id}: private CBE deposit request and review state; server writes only.
+    // walletObligations/{requestId}: owner amount due for a wallet sale; server writes only.
+    // walletSettlements/{id}: immutable General Manager settlement history; server writes only.
     // autoPaymentQueue/{id}, receiptUploadClaims/{id},
     // buyerNotificationQueue/{id}, telegramAdminLinks/{id}: server only.
 
@@ -95,7 +101,7 @@ service cloud.firestore {
         ]) &&
         data.keys().hasOnly([
           'name', 'price', 'min', 'max', 'status', 'description', 'createdAt',
-          'adminIds', 'nextTicketNumber', 'awards', 'paymentAccounts', 'approvalMode',
+          'adminIds', 'nextTicketNumber', 'awards', 'paymentAccounts', 'approvalMode', 'paymentEvidenceMode',
           'awardsUpdatedAt', 'awardsUpdatedBy', 'drawnNumber', 'drawDigits',
           'drawnAt', 'drawnBy', 'cleanupInProgress', 'cleanupPhase',
           'cleanupStartedBy', 'cleanupStartedAt'
@@ -109,6 +115,7 @@ service cloud.firestore {
         data.nextTicketNumber <= data.max + 1 &&
         data.status in ['active', 'upcoming', 'closed', 'drawn', 'hidden'] &&
         (!('approvalMode' in data) || data.approvalMode in ['manual', 'automatic']) &&
+        (!('paymentEvidenceMode' in data) || data.paymentEvidenceMode in ['standard', 'reference_only']) &&
         data.createdAt is timestamp &&
         validStringList(data.adminIds, 0, 10, 128) &&
         (!('awards' in data) || validStringList(data.awards, 1, 10, 200)) &&
@@ -139,7 +146,9 @@ service cloud.firestore {
         (('approvalMode' in resource.data &&
             request.resource.data.approvalMode == resource.data.approvalMode) ||
           (!('approvalMode' in resource.data) &&
-            !('approvalMode' in request.resource.data)));
+            !('approvalMode' in request.resource.data))) &&
+        (('paymentEvidenceMode' in resource.data && request.resource.data.paymentEvidenceMode == resource.data.paymentEvidenceMode) ||
+          (!('paymentEvidenceMode' in resource.data) && !('paymentEvidenceMode' in request.resource.data)));
     }
     function lotteryAdminUpdateOnly() {
       return request.resource.data.diff(resource.data).affectedKeys().hasOnly([
@@ -223,6 +232,39 @@ service cloud.firestore {
 
     match /paymentClaims/{claimId} {
       allow read, write: if false;
+    }
+
+    // Financial documents are mutated only through authenticated Admin SDK
+    // transactions. Customer clients receive narrowly scoped read-only access;
+    // balances can never be created, incremented, or overwritten by a client.
+    match /customerProfiles/{userId} {
+      allow read: if signed() && (request.auth.uid == userId || isGeneral());
+      allow create, update, delete: if false;
+    }
+    match /walletAccounts/{walletId} {
+      allow read: if signed() &&
+        (resource.data.uid == request.auth.uid || isGeneral());
+      allow create, update, delete: if false;
+    }
+    match /walletLedger/{entryId} {
+      allow read: if signed() &&
+        (resource.data.uid == request.auth.uid || isGeneral());
+      allow create, update, delete: if false;
+    }
+    match /depositRequests/{depositId} {
+      allow read: if signed() &&
+        (resource.data.uid == request.auth.uid || isGeneral());
+      allow create, update, delete: if false;
+    }
+    match /walletObligations/{obligationId} {
+      allow read: if isGeneral() ||
+        (isLotteryAdmin() && managesLottery(resource.data.lotteryId));
+      allow create, update, delete: if false;
+    }
+    match /walletSettlements/{settlementId} {
+      allow read: if isGeneral() ||
+        (isLotteryAdmin() && managesLottery(resource.data.lotteryId));
+      allow create, update, delete: if false;
     }
 
     match /publicStatus/{phoneHash}/requests/{requestId} {

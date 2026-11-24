@@ -2,3 +2,11 @@ node_modules/
 *-debug.log
 .firebase/
 .env*
+.npm-cache/
+.java-runtime/
+.java-runtime.zip
+.firebase-local/
+.local-emulator-data/
+playwright-report/
+test-results/
+test-artifacts/
