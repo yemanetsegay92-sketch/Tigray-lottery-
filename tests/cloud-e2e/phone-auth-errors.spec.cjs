@@ -68,3 +68,76 @@ test('customer sees safe Firebase SMS and captcha errors in the actual account f
  expect(await page.evaluate(()=>window.__mockPhoneRequests)).toEqual(['+251791234567','+251912345678']);
  expect(external,'No real Firebase or SMS request should occur').toEqual([]);
 });
+
+
+test('pilot OTP mock signs a new customer into Firebase with phone claim and opens a zero-balance wallet',async({page})=>{
+ const external=[];
+ let challengeId;
+ page.on('request',request=>{
+  const url=new URL(request.url());
+  if(!['127.0.0.1','localhost'].includes(url.hostname))external.push(request.url());
+  if(url.pathname==='/api/customer/create-request'&&request.method()==='POST'){
+   const data=request.postDataJSON();
+   if(data?.action==='afro-otp-verify')challengeId=data.challengeId;
+  }
+ });
+
+ // Only localhost emulators run this test; the provider is an isolated fake.
+ await page.goto('/account.html');
+ await expect(page.locator('#afroOtpOption')).toBeVisible();
+ await expect(page.locator('#sendAfroCode')).toBeEnabled();
+ await page.locator('#walletPhone').fill('0911000707');
+ await page.locator('#sendAfroCode').click();
+ await expect(page.locator('#walletMessage')).toContainText('SMS request accepted');
+ await expect(page.locator('#verifyAfroCode')).toBeEnabled();
+
+ // The local-only fake sends no SMS. Its static test code is never valid live.
+ await page.locator('#verificationCode').fill('123456');
+ await page.locator('#verifyAfroCode').click();
+ await expect(page.locator('#registration')).toBeVisible();
+ const first=await page.evaluate(async()=>{
+  const {auth}=await import('/firebase.js');
+  const user=auth.currentUser;
+  const token=await user.getIdTokenResult(true);
+  return {uid:user.uid,phone:user.phoneNumber,claim:token.claims.phone_number};
+ });
+ expect(first.uid).toMatch(/^[a-zA-Z0-9_-]+$/);
+ expect(first.phone).toBe('+251911000707');
+ expect(first.claim).toBe('+251911000707');
+ expect(challengeId).toMatch(/^[a-f0-9]{32}$/);
+
+ // A valid OTP can be redeemed exactly once, including after Firebase sign-in.
+ const reused=await page.evaluate(async challengeId=>{
+  const result=await fetch('/api/customer/create-request',{
+   method:'POST',headers:{'content-type':'application/json'},
+   body:JSON.stringify({action:'afro-otp-verify',challengeId,code:'123456'})
+  });
+  return {status:result.status,ok:(await result.json()).ok};
+ },challengeId);
+ expect(reused.ok).toBe(false);
+ expect(reused.status).toBeGreaterThanOrEqual(400);
+
+ await page.locator('#walletName').fill('Synthetic OTP Customer');
+ await page.locator('#registerWallet').click();
+ await expect(page.locator('#walletDashboard')).toBeVisible();
+ await expect(page.locator('#walletBalance')).toHaveText('0.00 ETB');
+ expect(await page.locator('#submitDeposit').isDisabled()).toBe(true);
+
+ // Second sign-in with the same phone must reuse its UID and wallet.
+ await page.locator('#walletSignOut').click();
+ await expect(page.locator('#signedOut')).toBeVisible();
+ await page.locator('#walletPhone').fill('0911000707');
+ await page.locator('#sendAfroCode').click();
+ await expect(page.locator('#walletMessage')).toContainText('SMS request accepted');
+ await page.locator('#verificationCode').fill('123456');
+ await page.locator('#verifyAfroCode').click();
+ await expect(page.locator('#walletDashboard')).toBeVisible();
+ const second=await page.evaluate(async()=>{
+  const {auth}=await import('/firebase.js');
+  return {uid:auth.currentUser.uid,phone:auth.currentUser.phoneNumber};
+ });
+ expect(second.uid).toBe(first.uid);
+ expect(second.phone).toBe(first.phone);
+ expect(await page.locator('#walletBalance').textContent()).toBe('0.00 ETB');
+ expect(external,'The browser must not call live SMS/Firebase endpoints').toEqual([]);
+});
