@@ -37,6 +37,14 @@ async function authenticateCustomer(req){
 async function handleWalletAction(req,res,body){
   const wallet=require('../../lib/wallet-core');
   const {registerCustomer,createDepositRequest,purchaseWithWallet,COMPANY_ID}=wallet;
+  if(body.action==='wallet-status'){
+    const capabilities=require('../../lib/wallet-runtime-policy').walletCapabilities();
+    return res.status(200).json({ok:true,capabilities:{
+      registration:capabilities.registration,
+      deposits:capabilities.deposit,
+      purchases:capabilities.purchase
+    }});
+  }
   const capability={
     'wallet-register':'registration','wallet-deposit':'deposit','wallet-purchase':'purchase'
   }[body.action];

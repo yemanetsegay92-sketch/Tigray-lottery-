@@ -62,6 +62,11 @@ async function send(handler,token,body){
 const customerAction=(token,action,body={})=>send(customer,token,{action,...body});
 const adminAction=(token,action,body={})=>send(admin,token,{action,...body});
 let depositId,firstPurchase,secondPurchase;
+test('wallet status is public but contains only server-authorized capability booleans',async()=>{
+ const status=await customerAction('','wallet-status');
+ assert.equal(status.status,200);
+ assert.deepEqual(JSON.parse(JSON.stringify(status.result)),{ok:true,capabilities:{registration:true,deposits:true,purchases:true}});
+});
 test('synthetic wallet API setup',async()=>{
  await Promise.all([
   db.collection('users').doc(profiles.general.uid).set({role:'generalAdmin',lotteryIds:[]}),

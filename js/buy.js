@@ -4,8 +4,10 @@ import { onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/12.2.1/fi
 import { phoneHash, normalizePhone } from './phoneHash.js';
 const $=id=>document.getElementById(id);const esc=s=>String(s??'').replace(/[&<>\"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;',"'":'&#39;'}[c]));const lotId=new URLSearchParams(location.search).get('lot');let lot=null,compressedScreenshot=null;
 const tg=window.Telegram?.WebApp||null; if(tg){try{tg.ready();tg.expand()}catch{}}
-let walletUser=null;
-onAuthStateChanged(auth,user=>{walletUser=user;$('walletBuyBtn').hidden=!user;$('walletBuyNote').hidden=!!user;});
+let walletUser=null,walletPurchasesEnabled=false;
+function renderWalletPurchase(){const button=$('walletBuyBtn');if(!button)return;button.hidden=!walletUser;button.disabled=!walletPurchasesEnabled;button.textContent=walletPurchasesEnabled?'Buy instantly with wallet':'Wallet purchases unavailable';$('walletBuyNote').hidden=!!walletUser;}
+onAuthStateChanged(auth,user=>{walletUser=user;renderWalletPurchase();});
+fetch('/api/customer/create-request',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({action:'wallet-status'})}).then(async response=>{const data=await response.json();walletPurchasesEnabled=response.ok&&data.ok&&data.capabilities?.purchases===true;renderWalletPurchase();}).catch(()=>{walletPurchasesEnabled=false;renderWalletPurchase();});
 async function getBuyerTelegramLink(requestId,buyerLinkToken){
   try{const r=await fetch('/api/telegram/buyer-link',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({requestId,buyerLinkToken})});const j=await r.json();return j.ok?j.url:'';}catch{return '';}
 }
@@ -160,6 +162,7 @@ $('buyForm').addEventListener('submit',async e=>{
 });
 $('walletBuyBtn')?.addEventListener('click',async()=>{
  if(!walletUser||!lot)return location.href='account.html';
+ if(!walletPurchasesEnabled){$('message').innerHTML='<div class="error">Wallet purchases are not yet available.</div>';return;}
  const button=$('walletBuyBtn');button.disabled=true;button.textContent='Buying…';
  const storageKey='wallet-buy-key:'+walletUser.uid+':'+lot.id;
  let requestKey=sessionStorage.getItem(storageKey);
