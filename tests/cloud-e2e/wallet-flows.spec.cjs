@@ -203,4 +203,11 @@ test.describe.serial('demo wallet browser flows',()=>{
   const ticket=(await db.collection('tickets').doc('local-standard-lottery_'+unchanged.ticketNumbers[0]).get()).data();
   expect(ticket.status).not.toBe('cancelled');
  });
+ test('existing non-phone admin login shows phone sign-in instead of blank wallet page',async({page})=>{
+  await signIn(page,'gm.local@tigray.test','/admin/general.html');
+  await page.goto('/account.html');
+  await expect(page.locator('#signedOut')).toBeVisible();
+  await expect(page.locator('#walletPhone')).toBeVisible();
+  await expect(page.locator('#walletMessage')).toContainText(/not phone-verified/i);
+ });
 });
