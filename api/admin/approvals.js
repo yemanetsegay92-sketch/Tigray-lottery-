@@ -812,32 +812,42 @@ module.exports = async (req, res) => {
     if (action === 'checket-verify') return await handleCheckEtVerification(req, res, body);
     if (action === 'lookup-reference') return await lookupReference(req, res, body);
     if (action.startsWith('lottery-cleanup-')) return await handleLotteryCleanup(req, res, body);
-    if(['wallet-finance-summary','wallet-deposit-approve','wallet-settle','wallet-refund'].includes(action)){
+    if(['wallet-finance-summary','wallet-receiving-account-set','wallet-deposit-approve','wallet-settle','wallet-refund'].includes(action)){
       const {creditDeposit,settleObligation,refundWalletPurchase}=require('../../lib/wallet-core');
       const db=adminDb(),{caller,profile}=await authenticateAdmin(req,db);
       res.setHeader('Cache-Control','no-store');
       if(action==='wallet-finance-summary'){
-        const [deposits,obligations,settlements]=await Promise.all([
+        const [deposits,obligations,settlements,receivingAccount]=await Promise.all([
           profile.role==='generalAdmin'?db.collection('depositRequests').limit(100).get():Promise.resolve({docs:[]}),
-          db.collection('walletObligations').limit(200).get(),db.collection('walletSettlements').limit(200).get()
+          db.collection('walletObligations').limit(200).get(),db.collection('walletSettlements').limit(200).get(),
+          require('../../lib/wallet-company-config').readReceiver(db)
         ]);
         const allowed=new Set(profile.lotteryIds||[]);
         const visible=x=>profile.role==='generalAdmin'||allowed.has(String(x.data().lotteryId||''));
         return res.status(200).json({ok:true,
           deposits:deposits.docs.map(x=>({id:x.id,...x.data()})),
           obligations:obligations.docs.filter(visible).map(x=>({id:x.id,...x.data()})),
-          settlements:settlements.docs.filter(visible).map(x=>({id:x.id,...x.data()}))});
+          settlements:settlements.docs.filter(visible).map(x=>({id:x.id,...x.data()})),
+          receivingAccount:profile.role==='generalAdmin'?receivingAccount:{configured:receivingAccount.configured}});
       }
       if(profile.role!=='generalAdmin')throw Object.assign(new Error('Only General Manager may change wallet finances.'),{statusCode:403});
+      if(action==='wallet-receiving-account-set'){
+        const {isolatedTarget}=require('../../lib/wallet-runtime-policy');
+        if(!isolatedTarget(process.env)&&process.env.VERCEL_ENV!=='production')
+          throw Object.assign(new Error('Wallet receiving-account changes are disabled outside production or an isolated emulator.'),{statusCode:403});
+        const result=await require('../../lib/wallet-company-config').setReceiver(db,{
+          account:body.account,holderName:body.holderName,actorId:caller.uid});
+        return res.status(200).json({ok:true,receivingAccount:result});
+      }
       const capability={'wallet-deposit-approve':'deposit','wallet-settle':'settlement','wallet-refund':'refund'}[action];
       require('../../lib/wallet-runtime-policy').assertWalletMutationAllowed(capability);
       if(action==='wallet-deposit-approve'){
         const depositId=String(body.depositId||''),deposit=await db.collection('depositRequests').doc(depositId).get();
         if(!deposit.exists)throw Object.assign(new Error('Deposit not found.'),{statusCode:404});
         const data=deposit.data()||{};
-        const expectedAccount=String(process.env.CBE_WALLET_RECEIVING_ACCOUNT||'').replace(/\D/g,''),
+        const expectedAccount=String(data.receivingAccount||'').replace(/\D/g,''),
           reviewedAccount=String(body.receivingAccount||'').replace(/\D/g,''),
-          expectedOwner=String(process.env.CBE_WALLET_RECEIVER_NAME||'').trim(),
+          expectedOwner=String(data.receivingOwner||'').trim(),
           reviewedOwner=String(body.receivingOwner||'').trim();
         if(body.reviewAttestation!=='gm_independent_review'||!/^\d{8,30}$/.test(expectedAccount)||
           reviewedAccount!==expectedAccount||!expectedOwner||reviewedOwner.toUpperCase()!==expectedOwner.toUpperCase())

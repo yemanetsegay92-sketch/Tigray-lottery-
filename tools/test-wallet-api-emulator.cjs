@@ -21,6 +21,9 @@ const profiles={
  buyer:{uid:'api-test-buyer',phone_number:'+251911111115'},
  other:{uid:'api-test-other',phone_number:'+251911111116'},
  noPhone:{uid:'api-test-no-phone'},
+ emailBuyer:{uid:'api-test-email',email:'email.buyer@example.test',email_verified:true},
+ emailClone:{uid:'api-test-email-clone',email:'email.buyer@example.test',email_verified:true},
+ emailUnverified:{uid:'api-test-email-unverified',email:'waiting@example.test',email_verified:false},
  general:{uid:'api-test-gm'},
  assigned:{uid:'api-test-assigned'},
  unrelated:{uid:'api-test-unrelated'}
@@ -71,9 +74,12 @@ const customerAction=(token,action,body={})=>send(customer,token,{action,...body
 const adminAction=(token,action,body={})=>send(admin,token,{action,...body});
 let depositId,firstPurchase,secondPurchase;
 test('wallet status is public but contains only server-authorized capability booleans',async()=>{
+ await db.collection('companyWalletConfig').doc('tigray-lottery').set({companyId:'tigray-lottery',bank:'CBE',
+  receivingAccount:'1000000000000',receivingHolderName:'Synthetic Company'});
  const status=await customerAction('','wallet-status');
  assert.equal(status.status,200);
- assert.deepEqual(JSON.parse(JSON.stringify(status.result)),{ok:true,capabilities:{registration:true,deposits:true,purchases:true}});
+ assert.deepEqual(JSON.parse(JSON.stringify(status.result)),{ok:true,capabilities:{registration:true,deposits:true,purchases:true},
+  receivingAccount:{configured:true,bank:'CBE',account:'1000000000000',holderName:'Synthetic Company'}});
 });
 test('synthetic wallet API setup',async()=>{
  await Promise.all([
@@ -85,11 +91,13 @@ test('synthetic wallet API setup',async()=>{
   })
  ]);
 });
-test('registration requires a verified phone token, then initializes exactly one wallet',async()=>{
+test('registration requires a verified phone or email token and initializes exactly one zero-balance wallet',async()=>{
  const anonymous=await customerAction('', 'wallet-register',{name:'Synthetic One'});
  assert.equal(anonymous.status,401);
  const noPhone=await customerAction('noPhone','wallet-register',{name:'Synthetic One'});
  assert.equal(noPhone.status,403);
+ const unverified=await customerAction('emailUnverified','wallet-register',{name:'Waiting Customer',contactPhone:'0911222333'});
+ assert.equal(unverified.status,403);
  const a=await customerAction('buyer','wallet-register',{name:'Synthetic One'});
  assert.equal(a.status,200,JSON.stringify(a.result));assert.equal(a.result.customer.balanceSantim,0);
  const again=await customerAction('buyer','wallet-register',{name:'Synthetic One'});
@@ -97,6 +105,24 @@ test('registration requires a verified phone token, then initializes exactly one
  const other=await customerAction('other','wallet-register',{name:'Synthetic Other'});
  assert.equal(other.status,200);
  assert.equal((await db.collection('walletAccounts').where('uid','==',profiles.buyer.uid).get()).size,1);
+ const email=await customerAction('emailBuyer','wallet-register',{name:'Verified Email Customer',contactPhone:'0711222333'});
+ assert.equal(email.status,200,JSON.stringify(email.result));assert.equal(email.result.customer.balanceSantim,0);
+ assert.equal(email.result.customer.identityType,'email');
+ const emailAgain=await customerAction('emailBuyer','wallet-register',{name:'Verified Email Customer',contactPhone:'0711222333'});
+ assert.equal(emailAgain.status,200);assert.equal(emailAgain.result.customer.balanceSantim,0);
+ const takeover=await customerAction('emailClone','wallet-register',{name:'Impostor',contactPhone:'0799999999'});
+ assert.equal(takeover.status,409);
+ assert.equal((await db.collection('walletAccounts').where('uid','==',profiles.emailBuyer.uid).get()).size,1);
+});
+test('only General Admin can update the central receiving account and changes are audited',async()=>{
+ const denied=await adminAction('assigned','wallet-receiving-account-set',{account:'1000000000009',holderName:'Changed Holder'});
+ assert.equal(denied.status,403);
+ const saved=await adminAction('general','wallet-receiving-account-set',{account:'1000000000000',holderName:'Synthetic Company'});
+ assert.equal(saved.status,200,JSON.stringify(saved.result));
+ const config=(await db.collection('companyWalletConfig').doc('tigray-lottery').get()).data();
+ assert.equal(config.receivingAccount,'1000000000000');assert.equal(config.updatedBy,profiles.general.uid);
+ const audits=await db.collection('walletFinancialAudits').where('operation','==','wallet_receiving_account_updated').get();
+ assert.equal(audits.size,1);
 });
 test('100 ETB minimum, pending deposit, repeat RF idempotency and customer separation',async()=>{
  const small=await customerAction('buyer','wallet-deposit',{amountEtb:'99.99',reference:'FTAPIEMUTOOLOW01'});

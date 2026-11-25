@@ -14,7 +14,9 @@ service cloud.firestore {
     // tickets/{id}: issued ticket allocation; server writes only.
     // publicStatus/{phoneHash}/requests/{id}: public lookup result; server writes only.
     // paymentClaims/{hash}: immutable payment replay ledger; server only.
-    // customerProfiles/{uid}: phone-verified private customer identity; server writes only.
+    // customerProfiles/{uid}: verified email/phone private customer identity; server writes only.
+    // walletCustomerIdentityClaims/{hash}: verified-auth-to-wallet uniqueness claim; server only.
+    // companyWalletConfig/{companyId}: central receiving account configuration; server only.
     // walletAccounts/{companyId_uid}: customer balance; server writes only.
     // walletLedger/{id}: immutable customer credit/debit/refund history; server writes only.
     // depositRequests/{id}: private CBE deposit request and review state; server writes only.
@@ -255,6 +257,12 @@ service cloud.firestore {
       allow read: if signed() &&
         (resource.data.uid == request.auth.uid || isGeneral());
       allow create, update, delete: if false;
+    }
+    match /walletCustomerIdentityClaims/{claimId} {
+      allow read, create, update, delete: if false;
+    }
+    match /companyWalletConfig/{companyId} {
+      allow read, create, update, delete: if false;
     }
     match /walletObligations/{obligationId} {
       allow read: if isGeneral() ||

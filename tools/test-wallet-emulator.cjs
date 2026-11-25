@@ -45,16 +45,17 @@ test('GM deposits: 100 ETB minimum, one permanent reference, immutable ledger an
 });
 test('deposit submissions and provider attempts are rate limited and one RF can trigger only one durable attempt',async()=>{
  const uid='wallet-rate-user',auth={uid,phone_number:'+251911111112',phone_number_verified:true};
+ const receiver={account:'1000000000000',holderName:'Tigray Lottery'};
  await db.collection('customerProfiles').doc(uid).set({uid,companyId:COMPANY_ID,phone:'0911111112',phoneVerified:true,name:'Rate User'});
- const first=await createDepositRequest(db,{uid,auth,amountEtb:'100',reference:'FTRATELIMIT0001',legalName:'Rate User'});
+ const first=await createDepositRequest(db,{uid,auth,amountEtb:'100',reference:'FTRATELIMIT0001',legalName:'Rate User',receiver});
  assert.equal(first.created,true);
- const duplicate=await createDepositRequest(db,{uid,auth,amountEtb:'100',reference:'FTRATELIMIT0001',legalName:'Rate User'});
+ const duplicate=await createDepositRequest(db,{uid,auth,amountEtb:'100',reference:'FTRATELIMIT0001',legalName:'Rate User',receiver});
  assert.equal(duplicate.created,false);
  assert.equal((await claimAutomaticDepositVerification(db,{depositId:first.depositId,uid})).claimed,true);
  assert.equal((await claimAutomaticDepositVerification(db,{depositId:first.depositId,uid})).claimed,false);
  await finishAutomaticDepositVerification(db,{depositId:first.depositId,state:'manual_review',reasons:['payer_ownership_unverified']});
- for(let i=2;i<=6;i++)await createDepositRequest(db,{uid,auth,amountEtb:'100',reference:'FTRATELIMIT000'+i,legalName:'Rate User'});
- await assert.rejects(createDepositRequest(db,{uid,auth,amountEtb:'100',reference:'FTRATELIMIT0007',legalName:'Rate User'}),/Too many/);
+ for(let i=2;i<=6;i++)await createDepositRequest(db,{uid,auth,amountEtb:'100',reference:'FTRATELIMIT000'+i,legalName:'Rate User',receiver});
+ await assert.rejects(createDepositRequest(db,{uid,auth,amountEtb:'100',reference:'FTRATELIMIT0007',legalName:'Rate User',receiver}),/Too many/);
  const attempt=(await db.collection('walletDepositVerificationAttempts').doc(first.depositId).get()).data();
  assert.equal(attempt.attempts,1);assert.equal(attempt.state,'manual_review');
 });

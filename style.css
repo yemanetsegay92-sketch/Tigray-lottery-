@@ -39,3 +39,7 @@
 
 /* RF-only lotteries must not expose hidden receipt upload controls. */
 label.upload-box[hidden],.mobile-upload-help[hidden]{display:none!important}
+
+/* Customer email authentication and centrally managed wallet receiver */
+.auth-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px;margin-top:20px}.auth-panel{border:1px solid var(--line);border-radius:15px;padding:18px;background:#fbfcfe}.auth-panel h2{margin:0 0 8px;font-size:1.15rem}.auth-panel label:first-of-type{margin-top:10px}.phone-auth-panel{grid-column:1/-1}.phone-auth-panel summary{cursor:pointer;color:var(--navy);font-weight:900}.auth-actions{display:flex;gap:10px;flex-wrap:wrap}.wallet-receiver{border:1px solid #b9d8c9;background:#eef8f3;border-radius:14px;padding:15px;margin:12px 0}.wallet-receiver>span,.wallet-receiver>strong{display:block}.wallet-receiver>span{font-size:.78rem;font-weight:900;color:var(--success);text-transform:uppercase}.wallet-receiver>strong{margin:4px 0 10px}.wallet-receiver>div{display:flex;gap:10px;align-items:center}.wallet-receiver code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;overflow-wrap:anywhere;flex:1;font-weight:900}.secondary{background:#edf3f9;color:var(--navy)}
+@media(max-width:700px){.auth-grid{grid-template-columns:1fr}.phone-auth-panel{grid-column:auto}.auth-actions{display:grid}.wallet-receiver>div{align-items:stretch;flex-direction:column}.wallet-receiver .copy-account{width:100%;min-height:44px}.wallet-auth-card input,.wallet-auth-card button{min-height:46px}}
