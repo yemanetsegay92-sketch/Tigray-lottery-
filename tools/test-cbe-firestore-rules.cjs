@@ -47,6 +47,8 @@ before(async()=>{
       ,setDoc(doc(db,'walletFinancialAudits','audit-1'),{operation:'deposit_credit',amountSantim:10000})
       ,setDoc(doc(db,'walletDepositVerificationAttempts','deposit-1'),{uid:'buyer-1',state:'started'})
       ,setDoc(doc(db,'walletDepositRateLimits','rate-1'),{count:1})
+      ,setDoc(doc(db,'walletCustomerIdentityClaims','identity-1'),{uid:'buyer-1',companyId:'tigray-lottery',identityType:'email'})
+      ,setDoc(doc(db,'companyWalletConfig','tigray-lottery'),{companyId:'tigray-lottery',bank:'CBE',receivingAccount:'1000123456789',receivingHolderName:'Test Holder'})
     ]);
   });
   general=testEnv.authenticatedContext('admin-1');
@@ -83,6 +85,16 @@ test('financial audit, provider-attempt and rate-limit records are server-only a
    await assertFails(getDoc(doc(c.firestore(),name,id)));
    await assertFails(setDoc(doc(c.firestore(),name,'forged'),{count:999,amountSantim:999999}));
    await assertFails(updateDoc(doc(c.firestore(),name,id),{count:999}));
+  }
+ }
+});
+test('customer identity claims and the central receiving account are server-only',async()=>{
+ for(const [name,id] of [['walletCustomerIdentityClaims','identity-1'],['companyWalletConfig','tigray-lottery']]){
+  for(const c of [buyer,general,assigned,unassigned,anonymous]){
+   await assertFails(getDoc(doc(c.firestore(),name,id)));
+   await assertFails(setDoc(doc(c.firestore(),name,'forged'),{uid:'attacker',receivingAccount:'99999999'}));
+   await assertFails(updateDoc(doc(c.firestore(),name,id),{uid:'attacker',receivingAccount:'99999999'}));
+   await assertFails(deleteDoc(doc(c.firestore(),name,id)));
   }
  }
 });

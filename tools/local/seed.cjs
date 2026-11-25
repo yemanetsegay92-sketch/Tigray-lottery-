@@ -25,6 +25,9 @@ async function createIfMissing(ref,data){if(!(await ref.get()).exists)await ref.
  await db.collection('users').doc('lottery-admin-rf').set({role:'lotteryAdmin',displayName:'Local RF Admin',email:'rf.admin.local@tigray.test',lotteryIds:['local-rf-lottery'],localSynthetic:true},{merge:true});
  await db.collection('users').doc('lottery-admin-standard').set({role:'lotteryAdmin',displayName:'Local Standard Admin',email:'standard.admin.local@tigray.test',lotteryIds:['local-standard-lottery'],localSynthetic:true},{merge:true});
  const now=FieldValue.serverTimestamp();
+ await db.collection('companyWalletConfig').doc('tigray-lottery').set({companyId:'tigray-lottery',bank:'CBE',
+  receivingAccount:'1000000000001',receivingHolderName:'Tigray Lottery Local',localSynthetic:true,
+  createdAt:now,updatedAt:now,updatedBy:'gm-local'},{merge:true});
  await createIfMissing(db.collection('lotteries').doc('local-rf-lottery'),{
   companyId:'tigray-lottery',name:'Local RF-only Lottery',description:'Synthetic RF-only local test lottery',
   price:25,min:1000,max:1099,nextTicketNumber:1000,status:'active',approvalMode:'manual',

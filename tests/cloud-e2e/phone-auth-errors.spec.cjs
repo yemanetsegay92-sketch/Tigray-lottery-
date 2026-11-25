@@ -46,11 +46,17 @@ test('customer sees safe Firebase SMS and captcha errors in the actual account f
    }
    export function onAuthStateChanged(_auth,handler) {handler(null);return ()=>{};}
    export async function signOut() {}
+   export async function createUserWithEmailAndPassword() {throw new Error('not used');}
+   export async function signInWithEmailAndPassword() {throw new Error('not used');}
+   export async function sendEmailVerification() {throw new Error('not used');}
+   export async function sendPasswordResetEmail() {throw new Error('not used');}
+   export async function updateProfile() {throw new Error('not used');}
   `
  }));
 
  await page.goto('/account.html');
  await expect(page.locator('#signedOut')).toBeVisible();
+ await page.locator('.phone-auth-panel summary').click();
  await page.locator('#walletPhone').fill('0791234567');
  await page.locator('#sendCode').click();
  await expect(page.locator('#walletMessage .error')).toContainText('Verification SMS is temporarily unavailable');

@@ -29,24 +29,26 @@ function readBearer(req){
 }
 async function authenticateCustomer(req){
   const token=readBearer(req);
-  if(!token)throw Object.assign(new Error('Sign in with a verified phone number.'),{statusCode:401});
+  if(!token)throw Object.assign(new Error('Sign in with a verified phone number or email address.'),{statusCode:401});
   // Wallet routes may be the first Firebase Admin call in a cold Vercel function.
   // Initialize the default Admin app before obtaining its Authentication service.
   adminDb();
   const auth=await getAuth().verifyIdToken(token);
-  if(!auth.phone_number)throw Object.assign(new Error('A verified phone number is required.'),{statusCode:403});
-  return {...auth,phone_number_verified:true};
+  if(auth.phone_number)return {...auth,phone_number_verified:true};
+  if(auth.email&&auth.email_verified===true)return auth;
+  throw Object.assign(new Error('Verify your email address or phone number before creating a wallet.'),{statusCode:403});
 }
 async function handleWalletAction(req,res,body){
   const wallet=require('../../lib/wallet-core');
   const {registerCustomer,createDepositRequest,purchaseWithWallet,COMPANY_ID}=wallet;
   if(body.action==='wallet-status'){
     const capabilities=require('../../lib/wallet-runtime-policy').walletCapabilities();
+    const receiver=await require('../../lib/wallet-company-config').readReceiver(adminDb());
     return res.status(200).json({ok:true,capabilities:{
       registration:capabilities.registration,
-      deposits:capabilities.deposit,
+      deposits:capabilities.deposit&&receiver.configured,
       purchases:capabilities.purchase
-    }});
+    },receivingAccount:receiver});
   }
   const capability={
     'wallet-register':'registration','wallet-deposit':'deposit','wallet-purchase':'purchase'
@@ -54,7 +56,7 @@ async function handleWalletAction(req,res,body){
   if(capability)require('../../lib/wallet-runtime-policy').assertWalletMutationAllowed(capability);
   const auth=await authenticateCustomer(req),db=adminDb();
   if(body.action==='wallet-register'){
-    const result=await registerCustomer(db,{uid:auth.uid,auth,name:body.name});
+    const result=await registerCustomer(db,{uid:auth.uid,auth,name:body.name,contactPhone:body.contactPhone});
     return res.status(200).json({ok:true,customer:result});
   }
   if(body.action==='wallet-summary'){
@@ -65,14 +67,16 @@ async function handleWalletAction(req,res,body){
       db.collection('walletLedger').where('uid','==',auth.uid).limit(50).get()
     ]);
     if(!profile.exists)throw Object.assign(new Error('Register the customer wallet first.'),{statusCode:404});
-    return res.status(200).json({ok:true,profile:{name:profile.data().name,phone:profile.data().phone},
+    return res.status(200).json({ok:true,profile:{name:profile.data().name,phone:profile.data().phone,email:profile.data().email||''},
       balanceSantim:Number(wallet.data()?.balanceSantim||0),
       deposits:deposits.docs.map(x=>({id:x.id,status:x.data().status,amountSantim:x.data().amountSantim,reference:x.data().reference})),
       ledger:ledger.docs.map(x=>({id:x.id,type:x.data().type,amountSantim:x.data().amountSantim,lotteryId:x.data().lotteryId||''}))});
   }
   if(body.action==='wallet-deposit'){
+    const receiver=await require('../../lib/wallet-company-config').readReceiver(db);
+    if(!receiver.configured)throw Object.assign(new Error('Wallet deposits are unavailable until the official CBE receiving account is configured.'),{statusCode:503});
     const result=await createDepositRequest(db,{uid:auth.uid,auth,amountEtb:body.amountEtb,
-      reference:body.reference,legalName:body.legalName});
+      reference:body.reference,legalName:body.legalName,receiver});
     let automaticCredit=false,automaticReviewReasons=[];
     let attemptClaimed=false;
     if(result.created&&process.env.WALLET_AUTO_DEPOSITS_ENABLED==='true'){
@@ -81,11 +85,10 @@ async function handleWalletAction(req,res,body){
         attemptClaimed=claim.claimed;
         if(!claim.claimed){automaticReviewReasons=['verification_already_attempted'];}
         else{
-        const account=String(process.env.CBE_WALLET_RECEIVING_ACCOUNT||'').replace(/\D/g,''),
-          holderName=String(process.env.CBE_WALLET_RECEIVER_NAME||'');
-        if(!/^\d{8,30}$/.test(account)||holderName.length<3)throw new Error('Wallet receiving account is not configured.');
-        const provider=await require('../../lib/checket-verify').verifyCheckEtPayment({bank:'cbe',transactionNumber:body.reference,accountNumber:account});
         const deposit=(await db.collection('depositRequests').doc(result.depositId).get()).data();
+        const account=String(deposit?.receivingAccount||'').replace(/\D/g,''),holderName=String(deposit?.receivingOwner||'');
+        if(!/^\d{8,30}$/.test(account)||holderName.length<2)throw new Error('Wallet receiving account is not configured.');
+        const provider=await require('../../lib/checket-verify').verifyCheckEtPayment({bank:'cbe',transactionNumber:body.reference,accountNumber:account});
         const assessment=require('../../lib/wallet-deposit-verification').assessAutomaticDeposit({deposit,provider,
           receiver:{account,holderName},providerReceiverAccountAssurance:process.env.CHECK_ET_CBE_RECEIVER_ASSURANCE==='authorized'});
         automaticReviewReasons=assessment.reasons;

@@ -58,6 +58,7 @@ document.querySelectorAll('#workspaceNav [data-view]').forEach(button=>
  button.addEventListener('click',()=>void openGeneralView(button.dataset.view)));
 showGeneralView('overview');
 $('refreshWalletFinance')?.addEventListener('click',()=>void loadWalletFinance());
+$('walletReceivingAccountForm')?.addEventListener('submit',saveWalletReceivingAccount);
 async function walletFinanceApi(action,body={}){
  const token=await auth.currentUser.getIdToken();
  const response=await fetch('/api/admin/approvals',{method:'POST',headers:{'content-type':'application/json',authorization:'Bearer '+token},body:JSON.stringify({action,...body})});
@@ -69,6 +70,8 @@ async function loadWalletFinance(){
  const host=$('walletFinance');if(!host)return;host.innerHTML='<p class="muted">Loading wallet finance…</p>';
  try{
   const data=await walletFinanceApi('wallet-finance-summary');
+  $('walletReceivingAccountNumber').value=data.receivingAccount?.account||'';
+  $('walletReceivingAccountHolder').value=data.receivingAccount?.holderName||'';
   const pending=data.deposits.filter(x=>x.status==='pending');
   const obligations=data.obligations.map(x=>({...x,remaining:Number(x.amountSantim||0)-Number(x.settledSantim||0)-Number(x.refundedSantim||0)}));
   host.innerHTML=`<h3>Pending deposits</h3>${pending.length?`<div class="table-wrap"><table><thead><tr><th>Reference</th><th>Amount</th><th>Customer</th><th>Action</th></tr></thead><tbody>${pending.map(x=>`<tr><td>${esc(x.reference)}</td><td>${(Number(x.amountSantim)/100).toFixed(2)} ETB</td><td>${esc(x.legalName||x.uid)}</td><td><button class="small-btn" data-deposit="${esc(x.id)}">Verify & approve</button></td></tr>`).join('')}</tbody></table></div>`:'<p class="muted">No pending deposits.</p>'}
@@ -78,6 +81,14 @@ async function loadWalletFinance(){
   host.querySelectorAll('[data-settle]').forEach(button=>button.addEventListener('click',()=>void settleWalletObligation(button.dataset.settle,Number(button.dataset.remaining))));
   host.querySelectorAll('[data-refund]').forEach(button=>button.addEventListener('click',()=>void refundWalletPurchase(button.dataset.refund)));
  }catch(error){host.innerHTML='<div class="error">'+esc(error.message)+'</div>';}
+}
+async function saveWalletReceivingAccount(event){
+ event.preventDefault();
+ const account=$('walletReceivingAccountNumber').value.replace(/\D/g,''),holderName=$('walletReceivingAccountHolder').value.trim();
+ if(!/^\d{8,30}$/.test(account)||holderName.length<2)return void ($('walletFinanceMessage').innerHTML='<div class="error">Enter a valid CBE account and account-holder name.</div>');
+ if(!confirm('Save this company-wide CBE wallet receiving account? Customers will see it immediately.'))return;
+ try{await walletFinanceApi('wallet-receiving-account-set',{account,holderName});$('walletFinanceMessage').innerHTML='<div class="success">Receiving account saved.</div>';await loadWalletFinance();}
+ catch(error){$('walletFinanceMessage').innerHTML='<div class="error">'+esc(error.message)+'</div>';}
 }
 async function approveWalletDeposit(id,deposit){
  const payerName=prompt('Verified CBE payer legal name',deposit?.legalName||'');if(payerName===null)return;
