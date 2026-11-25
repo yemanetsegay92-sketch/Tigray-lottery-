@@ -167,6 +167,7 @@ module.exports = async (req, res) => {
     const phone = normalizePhone(body.phone);
     const reference = String(body.reference || '').trim();
     const quantity = Number(body.quantity || 1);
+    const smsNotificationConsent=require('../../lib/ticket-sms-foundation').parseSmsConsent(body.smsNotificationConsent);
     if (body.paymentProofData) throw badRequest('Receipt upload has changed. Please refresh the checkout page.');
     const proof = body.proofUploadToken ? verifyToken(body.proofUploadToken, lotteryId) : null;
     if (!Number.isInteger(quantity) || quantity < 1 || quantity > 5) {
@@ -214,6 +215,8 @@ module.exports = async (req, res) => {
     const publicRef = db.collection('publicStatus').doc(phoneHash).collection('requests').doc(requestId);
     const requestData = {
       lotteryId, lotteryName: String(lottery.name || lotteryId), name, phone, reference,
+      smsNotificationConsent,
+      ...(smsNotificationConsent ? {smsNotificationConsentAt:FieldValue.serverTimestamp()} : {}),
       quantity, price, total, status: 'pending', ticketNumbers: [],
       phoneHash, proofUploadTokenHash: sha256(proofUploadToken),
       buyerLinkTokenHash: sha256(buyerLinkToken),
