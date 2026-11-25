@@ -39,3 +39,8 @@
 
 /* RF-only lotteries must not expose hidden receipt upload controls. */
 label.upload-box[hidden],.mobile-upload-help[hidden]{display:none!important}
+
+/* Optional transactional SMS consent: readable on narrow mobile screens. */
+label.sms-consent{display:flex;align-items:flex-start;gap:10px;font-size:.88rem;line-height:1.45;font-weight:600;margin:16px 0}
+label.sms-consent input[type="checkbox"]{width:20px;min-width:20px;height:20px;margin:2px 0 0;padding:0;accent-color:var(--navy)}
+label.sms-consent span{flex:1}
