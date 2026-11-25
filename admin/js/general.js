@@ -66,6 +66,7 @@ async function walletFinanceApi(action,body={}){
  if(!response.ok||!payload.ok)throw new Error(payload.error||'Wallet finance request failed.');
  return payload;
 }
+const walletHistoryPages={deposits:{cursor:'',previous:[]},balances:{cursor:'',previous:[]}};
 async function loadWalletFinance(){
  const host=$('walletFinance');if(!host)return;host.innerHTML='<p class="muted">Loading wallet finance…</p>';
  try{
@@ -77,10 +78,45 @@ async function loadWalletFinance(){
   host.innerHTML=`<h3>Pending deposits</h3>${pending.length?`<div class="table-wrap"><table><thead><tr><th>Reference</th><th>Amount</th><th>Customer</th><th>Action</th></tr></thead><tbody>${pending.map(x=>`<tr><td>${esc(x.reference)}</td><td>${(Number(x.amountSantim)/100).toFixed(2)} ETB</td><td>${esc(x.legalName||x.uid)}</td><td><button class="small-btn" data-deposit="${esc(x.id)}">Verify & approve</button></td></tr>`).join('')}</tbody></table></div>`:'<p class="muted">No pending deposits.</p>'}
   <h3>Owner obligations</h3>${obligations.length?`<div class="table-wrap"><table><thead><tr><th>Lottery</th><th>Request</th><th>Outstanding</th><th>Status</th><th>Actions</th></tr></thead><tbody>${obligations.map(x=>`<tr><td>${esc(x.lotteryId)}</td><td>${esc(x.requestId)}</td><td>${(x.remaining/100).toFixed(2)} ETB</td><td>${esc(x.status||'open')}</td><td>${x.remaining>0?`<button class="small-btn" data-settle="${esc(x.id)}" data-remaining="${x.remaining}">Settle</button> <button class="secondary small-btn" data-refund="${esc(x.requestId)}">Refund</button>`:'—'}</td></tr>`).join('')}</tbody></table></div>`:'<p class="muted">No wallet obligations.</p>'}
   <h3>Settlement history</h3>${data.settlements.length?`<div class="table-wrap"><table><thead><tr><th>Lottery</th><th>Reference</th><th>Amount</th><th>Obligation</th></tr></thead><tbody>${data.settlements.map(x=>`<tr><td>${esc(x.lotteryId)}</td><td>${esc(x.reference)}</td><td>${(Number(x.amountSantim)/100).toFixed(2)} ETB</td><td>${esc(x.obligationId)}</td></tr>`).join('')}</tbody></table></div>`:'<p class="muted">No settlements recorded.</p>'}`;
+  host.insertAdjacentHTML('beforeend','<h3>Approved customer deposits</h3><p class="muted">Permanent credit history, newest first. Only General Admin can access this.</p><div id="walletDepositHistory">Loading approved deposits…</div><h3>Current customer wallet balances</h3><p class="muted">Available balances after credits and purchases. This is separate from owner settlements.</p><div id="walletCustomerBalances">Loading balances…</div>');
+  walletHistoryPages.deposits={cursor:'',previous:[]};
+  walletHistoryPages.balances={cursor:'',previous:[]};
+  void loadWalletHistory('deposits');
+  void loadWalletHistory('balances');
   host.querySelectorAll('[data-deposit]').forEach(button=>button.addEventListener('click',()=>void approveWalletDeposit(button.dataset.deposit,pending.find(x=>x.id===button.dataset.deposit))));
   host.querySelectorAll('[data-settle]').forEach(button=>button.addEventListener('click',()=>void settleWalletObligation(button.dataset.settle,Number(button.dataset.remaining))));
   host.querySelectorAll('[data-refund]').forEach(button=>button.addEventListener('click',()=>void refundWalletPurchase(button.dataset.refund)));
  }catch(error){host.innerHTML='<div class="error">'+esc(error.message)+'</div>';}
+}
+async function loadWalletHistory(kind){
+ const isDeposit=kind==='deposits',state=walletHistoryPages[kind];
+ const host=$(isDeposit?'walletDepositHistory':'walletCustomerBalances');
+ if(!host)return;
+ host.innerHTML='<p class="muted">Loading history…</p>';
+ try{
+  const data=await walletFinanceApi(isDeposit?'wallet-deposit-history':'wallet-customer-balances',{cursor:state.cursor});
+  const rows=Array.isArray(data.rows)?data.rows:[];
+  const date=value=>{if(!value)return '—';const d=new Date(value);return Number.isFinite(d.getTime())?esc(d.toLocaleString()):'—';};
+  const etb=value=>(Number(value||0)/100).toFixed(2)+' ETB';
+  const contact=x=>esc(x.email||x.phone||'—');
+  const header=isDeposit
+   ?'<tr><th>Credited at</th><th>Customer</th><th>Contact</th><th>CBE reference</th><th>Amount</th><th>Approved by</th></tr>'
+   :'<tr><th>Customer</th><th>Contact</th><th>Available balance</th><th>Last updated</th></tr>';
+  const body=rows.map(x=>isDeposit
+   ?'<tr><td>'+date(x.creditedAt)+'</td><td>'+esc(x.name||x.uid)+'</td><td>'+contact(x)+'</td><td>'+esc(x.reference)+'</td><td>'+etb(x.amountSantim)+'</td><td>'+esc(x.creditedBy||'—')+'</td></tr>'
+   :'<tr><td>'+esc(x.name||x.uid)+'</td><td>'+contact(x)+'</td><td>'+etb(x.balanceSantim)+'</td><td>'+date(x.updatedAt)+'</td></tr>'
+  ).join('');
+  host.innerHTML=(rows.length?'<div class="table-wrap"><table><thead>'+header+'</thead><tbody>'+body+'</tbody></table></div>'
+   :'<p class="muted">No '+(isDeposit?'approved deposits':'wallet accounts')+' on this page.</p>')+
+   '<div class="actions"><button type="button" class="secondary small-btn" data-wallet-history-prev '+(state.previous.length?'':'disabled')+'>Previous</button> '+
+   '<button type="button" class="secondary small-btn" data-wallet-history-next '+(data.nextCursor?'':'disabled')+'>Next</button></div>';
+  host.querySelector('[data-wallet-history-prev]').addEventListener('click',()=>{
+   state.cursor=state.previous.pop()||'';void loadWalletHistory(kind);
+  });
+  host.querySelector('[data-wallet-history-next]').addEventListener('click',()=>{
+   if(!data.nextCursor)return;state.previous.push(state.cursor);state.cursor=data.nextCursor;void loadWalletHistory(kind);
+  });
+ }catch(error){host.innerHTML='<div class="error">'+esc(error.message||'Could not load wallet history.')+'</div>';}
 }
 async function saveWalletReceivingAccount(event){
  event.preventDefault();

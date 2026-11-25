@@ -812,8 +812,8 @@ module.exports = async (req, res) => {
     if (action === 'checket-verify') return await handleCheckEtVerification(req, res, body);
     if (action === 'lookup-reference') return await lookupReference(req, res, body);
     if (action.startsWith('lottery-cleanup-')) return await handleLotteryCleanup(req, res, body);
-    if(['wallet-finance-summary','wallet-receiving-account-set','wallet-deposit-approve','wallet-settle','wallet-refund'].includes(action)){
-      const {creditDeposit,settleObligation,refundWalletPurchase}=require('../../lib/wallet-core');
+    if(['wallet-finance-summary','wallet-deposit-history','wallet-customer-balances','wallet-receiving-account-set','wallet-deposit-approve','wallet-settle','wallet-refund'].includes(action)){
+      const {creditDeposit,settleObligation,refundWalletPurchase,COMPANY_ID}=require('../../lib/wallet-core');
       const db=adminDb(),{caller,profile}=await authenticateAdmin(req,db);
       res.setHeader('Cache-Control','no-store');
       if(action==='wallet-finance-summary'){
@@ -831,6 +831,48 @@ module.exports = async (req, res) => {
           receivingAccount:profile.role==='generalAdmin'?receivingAccount:{configured:receivingAccount.configured}});
       }
       if(profile.role!=='generalAdmin')throw Object.assign(new Error('Only General Manager may change wallet finances.'),{statusCode:403});
+
+      // Read-only, cursor-paginated customer financial history. Never expose this
+      // company-wide information to Lottery Admins or client Firestore reads.
+      if(action==='wallet-deposit-history'||action==='wallet-customer-balances'){
+        const PAGE_SIZE=20;
+        const cursor=String(body.cursor||'').trim();
+        if(cursor&&!/^[a-zA-Z0-9_-]{1,160}$/.test(cursor))
+          throw Object.assign(new Error('Invalid history cursor.'),{statusCode:400});
+        const deposits=action==='wallet-deposit-history';
+        const collectionName=deposits?'depositRequests':'walletAccounts';
+        const collection=db.collection(collectionName);
+        const field=deposits?'creditedAt':require('firebase-admin/firestore').FieldPath.documentId();
+        let query=collection.orderBy(field,deposits?'desc':'asc').limit(PAGE_SIZE+1);
+        if(cursor){
+          const marker=await collection.doc(cursor).get();
+          if(!marker.exists||marker.data()?.companyId!==COMPANY_ID||
+             (deposits&&(marker.data()?.status!=='credited'||!marker.data()?.creditedAt)))
+            throw Object.assign(new Error('History cursor is invalid or expired.'),{statusCode:400});
+          query=query.startAfter(marker);
+        }
+        const snapshot=await query.get();
+        const page=snapshot.docs.slice(0,PAGE_SIZE);
+        const names=await Promise.all(page.map(doc=>{
+          const uid=String(doc.data()?.uid||'');
+          return uid?db.collection('customerProfiles').doc(uid).get():Promise.resolve(null);
+        }));
+        const rows=page.filter(doc=>doc.data()?.companyId===COMPANY_ID&&
+          (!deposits||doc.data()?.status==='credited')).map(doc=>{
+          const data=doc.data()||{},index=page.indexOf(doc),profile=names[index]?.data?.()||{};
+          const customer={uid:String(data.uid||''),name:String(profile.name||data.legalName||''),
+            phone:String(profile.phone||''),email:String(profile.email||'')};
+          if(deposits)return {id:doc.id,...customer,amountSantim:Number(data.amountSantim||0),
+            reference:String(data.reference||''),status:'credited',creditedBy:String(data.creditedBy||''),
+            creditedAt:data.creditedAt?.toDate?.()?.toISOString?.()||null};
+          return {id:doc.id,...customer,balanceSantim:Number(data.balanceSantim||0),
+            updatedAt:data.updatedAt?.toDate?.()?.toISOString?.()||null};
+        });
+        return res.status(200).json({ok:true,rows,
+          nextCursor:snapshot.docs.length>PAGE_SIZE?page[page.length-1].id:null,
+          pageSize:PAGE_SIZE});
+      }
+
       if(action==='wallet-receiving-account-set'){
         const {isolatedTarget}=require('../../lib/wallet-runtime-policy');
         if(!isolatedTarget(process.env)&&process.env.VERCEL_ENV!=='production')

@@ -173,6 +173,62 @@ test('admin HTTP routes allow GM review, deny lottery admin and require matching
  assert.equal(summary.result.ledger.filter(x=>x.type==='deposit_credit').length,1);
  assert.equal((await db.collection('walletFinancialAudits').doc('deposit_'+depositId+'_credit').get()).exists,true);
 });
+test('General Admin can review credited deposits and customer balances, while other roles cannot',async()=>{
+ const anonymous=await adminAction('','wallet-deposit-history');
+ assert.equal(anonymous.status,401);
+ for(const role of ['assigned','unrelated']){
+  const deposits=await adminAction(role,'wallet-deposit-history');
+  const balances=await adminAction(role,'wallet-customer-balances');
+  assert.equal(deposits.status,403);
+  assert.equal(balances.status,403);
+ }
+ const deposits=await adminAction('general','wallet-deposit-history');
+ assert.equal(deposits.status,200,JSON.stringify(deposits.result));
+ const credited=deposits.result.rows.find(row=>row.id===depositId);
+ assert.ok(credited,'approved deposit should remain visible after pending approval');
+ assert.equal(credited.amountSantim,10000);
+ assert.equal(credited.status,'credited');
+ assert.equal(credited.name,'Synthetic One');
+ assert.equal(credited.reference,'FTAPIEMUPENDING01');
+ assert.equal(typeof credited.creditedAt,'string');
+ assert.ok(!deposits.result.rows.some(row=>row.status==='pending'));
+ const balances=await adminAction('general','wallet-customer-balances');
+ assert.equal(balances.status,200,JSON.stringify(balances.result));
+ const wallet=balances.result.rows.find(row=>row.uid===profiles.buyer.uid);
+ assert.ok(wallet);
+ assert.equal(wallet.balanceSantim,10000);
+ assert.equal(wallet.name,'Synthetic One');
+ assert.equal(wallet.phone,'0911111115');
+ const badCursor=await adminAction('general','wallet-customer-balances',{cursor:'%invalid'});
+ assert.equal(badCursor.status,400);
+});
+
+test('General Admin customer balances are paginated with stable, nonoverlapping cursors',async()=>{
+ const synthetic=Array.from({length:24},(_,i)=>'history-page-'+String(i).padStart(2,'0'));
+ const batch=db.batch();
+ for(const uid of synthetic){
+  batch.set(db.collection('walletAccounts').doc('tigray-lottery_'+uid),{
+   companyId:'tigray-lottery',uid,balanceSantim:1234,updatedAt:new Date()
+  });
+  batch.set(db.collection('customerProfiles').doc(uid),{
+   companyId:'tigray-lottery',uid,name:'Synthetic '+uid,phone:'0910000000'
+  });
+ }
+ await batch.commit();
+ const first=await adminAction('general','wallet-customer-balances');
+ assert.equal(first.status,200,JSON.stringify(first.result));
+ assert.equal(first.result.rows.length,20);
+ assert.ok(first.result.nextCursor);
+ const second=await adminAction('general','wallet-customer-balances',{cursor:first.result.nextCursor});
+ assert.equal(second.status,200,JSON.stringify(second.result));
+ assert.ok(second.result.rows.length>0);
+ assert.equal(second.result.nextCursor,null);
+ const combined=[...first.result.rows,...second.result.rows];
+ assert.equal(new Set(combined.map(row=>row.id)).size,combined.length);
+ assert.ok(combined.some(row=>row.name==='Synthetic history-page-23'));
+ const missing=await adminAction('general','wallet-customer-balances',{cursor:'nonexistent_cursor'});
+ assert.equal(missing.status,400);
+});
 test('HTTP wallet purchase is atomic and idempotent, rejects insufficient funds',async()=>{
  const insufficient=await customerAction('buyer','wallet-purchase',{
   lotteryId:'api-test-lottery',requestKey:'too-expensive',quantity:5
