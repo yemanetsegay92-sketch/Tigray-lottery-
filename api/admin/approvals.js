@@ -221,7 +221,8 @@ async function approveRequest(db, caller, profile, requestId, requestedLotteryId
     // The decision and the retryable notification are committed atomically.
     tx.create(db.collection('buyerNotificationQueue').doc(requestId + '_approved'), {
       requestId, lotteryId, decision: 'approved', state: 'pending',
-      attempts: 0, nextAttemptAt: now, createdAt: now
+      attempts: 0, nextAttemptAt: now, createdAt: now,
+      ...require('../../lib/ticket-sms-foundation').queueSmsMetadata(request)
     });
 
     const publicRef = db
@@ -320,7 +321,8 @@ async function cancelApproval(db, caller, profile, requestId, reason) {
 
     tx.create(db.collection('buyerNotificationQueue').doc(requestId + '_cancelled'), {
       requestId, lotteryId, decision: 'cancelled', state: 'pending',
-      attempts: 0, nextAttemptAt: now, createdAt: now
+      attempts: 0, nextAttemptAt: now, createdAt: now,
+      ...require('../../lib/ticket-sms-foundation').queueSmsMetadata(request)
     });
     tx.update(requestRef, {
       status: 'cancelled',
@@ -396,7 +398,8 @@ async function rejectRequest(db, caller, profile, requestId, requestedLotteryId,
     }, { merge: true });
     tx.create(db.collection('buyerNotificationQueue').doc(requestId + '_rejected'), {
       requestId, lotteryId, decision: 'rejected', state: 'pending',
-      attempts: 0, nextAttemptAt: now, createdAt: now
+      attempts: 0, nextAttemptAt: now, createdAt: now,
+      ...require('../../lib/ticket-sms-foundation').queueSmsMetadata(request)
     });
     tx.create(db.collection('auditLogs').doc(), {
       action: 'rejectRequest', lotteryId, requestId, adminId: caller.uid,
