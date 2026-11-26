@@ -49,6 +49,41 @@ test('corrected manual approval preserves original and atomically claims correct
  assert.equal((await db.collection('buyerNotificationQueue').doc(claim.requestId+'_approved').get()).exists,true);
  await assert.rejects(approve(db,{uid:'other'},{role:'lotteryAdmin',lotteryIds:[]},'correct-b',lotteryId,'',null,{...review,reference:'FTDIFFERENTFREE01'}),/assigned|reviewed/);
 });
+test('receipt verification sends the finalized file without the FT number and keeps the ticket pending',async()=>{
+ const lotteryId='upgrade-file-review',requestId='upgrade-file-review-request';
+ const expected='FTFILEEXPECTED01';
+ const proofPath='payment-proofs/'+lotteryId+'/receipt.pdf';
+ await db.collection('lotteries').doc(lotteryId).set(lottery);
+ const request=db.collection('ticketRequests').doc(requestId);
+ await request.set({lotteryId,status:'pending',total:100,reference:expected,proofPath,proofMime:'application/pdf',
+  receiptExtraction:{reference:expected}});
+ const body={action:'review-verify',requestId,lotteryId,bank:'cbe',correctedReference:expected,revision:0,
+  accountIndex:0,verifyReceipt:true,confirmCharge:true,proofPath:'ignored-untrusted-path'};
+ const bytes=Buffer.from('%PDF-synthetic original receipt bytes');
+ const {verifyCheckEtPayment}=require('../lib/checket-verify');
+ const deps={env:{VERCEL_ENV:'production',LOTTERY_CHECKET_READ_ONLY_ENABLED:'true'},budget:async()=>{},
+  readReceipt:async original=>{
+   assert.equal(original.proofPath,proofPath);
+   return {buffer:bytes,mime:'application/pdf'};
+  },
+  verify:input=>verifyCheckEtPayment(input,{apiKey:'mock-key',fetchImpl:async(_url,options)=>{
+   const form=options.body;
+   assert.equal(form.get('bank'),'cbe');
+   assert.equal(form.get('account_number'),lottery.paymentAccounts[0].number);
+   assert.equal(form.has('transaction_number'),false);
+   assert.deepEqual(Buffer.from(await form.get('receipt_file').arrayBuffer()),bytes);
+   return {status:200,json:async()=>({code:'verified',success:true,exists:true,duplicate:false,data:{
+    bank:'cbe',transaction_number:'FTDIFFERENT01',verification_method:'official',receipt:{status:'completed'}
+   }})};
+  }})};
+ const result=await reviewAction(db,{uid:'admin'},body,deps);
+ assert.equal(result.state,'reference_mismatch');
+ const history=await reviewAction(db,{uid:'admin'},{action:'review-details',requestId,lotteryId},deps);
+ assert.equal(history.attempts[0].inputMethod,'receipt');
+ assert.equal(history.attempts[0].result.reportedTransactionNumber,'FTDIFFERENT01');
+ assert.equal((await request.get()).data().status,'pending');
+ assert.equal((await paymentClaimRef(db,expected).get()).exists,false);
+});
 test('actual receipt-only checkout checks server OCR claim, ignores browser OCR and cleans rejected finalized file',async()=>{
  const vm=require('node:vm'),fs=require('node:fs');const {createRequire}=require('node:module');
  const filename=require.resolve('../api/customer/create-request');const localRequire=createRequire(filename);
