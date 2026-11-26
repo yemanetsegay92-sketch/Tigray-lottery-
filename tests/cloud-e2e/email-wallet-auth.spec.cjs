@@ -73,9 +73,7 @@ test.describe.serial('verified email customer wallet authentication',()=>{
   const verification=await latestCode(request,EMAIL,'VERIFY_EMAIL');
   await followEmulatorAction(page,verification);
   await page.goto('/account.html');
-  await page.locator('#loginEmail').fill(EMAIL);
-  await page.locator('#loginPassword').fill(PASSWORD);
-  await page.getByRole('button',{name:'Sign in'}).click();
+  await page.getByRole('button',{name:'I verified my email'}).click();
   await expect(page.locator('#registration')).toBeVisible();
   await page.locator('#registerWallet').click();
   await expect(page.locator('#walletDashboard')).toBeVisible();
