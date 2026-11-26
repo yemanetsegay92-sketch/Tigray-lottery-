@@ -5,6 +5,9 @@ function attemptMarkup(attempt, title) {
   const fields = [
     [attempt.inputMethod === 'receipt' ? 'Expected reference' : 'Submitted reference', attempt.reference || 'Unavailable in saved record'],
     ['Check input',attempt.inputMethod === 'receipt' ? 'Original receipt file' : null],
+    ['Receiver match required',attempt.receiverMatchRequired || null],
+    ['Selected account',attempt.receiverMatchRequired && attempt.receivingSuffix ? 'Ending '+attempt.receivingSuffix : null],
+    ['Check.et receiver result',result.providerReceiverMatch],
     ['Provider HTTP status',result.providerHttpStatus], ['Provider code',result.providerCode], ['Failure reason',result.failureReason], ['Outcome', attempt.state], ['Bank status', result.status], ['Bank reference', result.reportedTransactionNumber],
     ['Verification method',result.verificationMethod || result.verificationMethodValue], ['Verified', result.verified], ['Amount', result.amount == null ? null : result.amount+' '+(result.currency || '')],
     ['Bank date',result.transactionDate], ['Receiver', result.receiverName], ['Receiving account check', result.receiverAccountStatus],
@@ -31,7 +34,7 @@ export async function openReview(panel, item, accounts, send, approve, reject) {
     <div class="payment-results">${history.map((a,i)=>attemptMarkup(a,i?'Verification '+(i+1):'Original Check.et verification')).join('') || 'No recorded Check.et attempt.'}</div>
     <div class="actions"><button type="button" data-act="review-save">Save correction</button><button type="button" data-act="review-duplicate">Duplicate check</button>
     <button type="button" data-act="review-verify">Verify Again (CBE)</button>
-    ${item.proofPath ? '<button type="button" data-act="review-verify" data-verify-receipt>Verify Receipt (CBE)</button>' : ''}</div>
+    ${item.proofPath ? '<button type="button" data-act="review-verify" data-verify-receipt>Verify Receipt (CBE)</button><button type="button" data-act="review-verify" data-verify-receipt data-test-receiver>Test Receipt Receiver (CBE)</button>' : ''}</div>
     <label><input type="checkbox" data-paid> I confirmed the payment reached the receiving account for the required amount.</label>
     <div class="actions"><button type="button" data-act="approve">Approve &amp; Assign</button><button type="button" class="danger" data-act="reject">Reject</button></div>
     <p role="status" data-status></p></div>`;
@@ -59,8 +62,10 @@ export async function openReview(panel, item, accounts, send, approve, reject) {
     if (action === 'approve' && !paid.checked) {status.textContent='Confirm receipt of payment first.';return;}
     if (action === 'review-verify') {
       input.verifyReceipt = button.hasAttribute('data-verify-receipt');
+      input.testReceiver = button.hasAttribute('data-test-receiver');
       const source = input.verifyReceipt ? 'the original receipt file' : input.correctedReference;
-      if (!confirm('Send '+source+' to Check.et? This may use one verification credit.')) return;
+      const receiverCheck = input.testReceiver ? ' and require a receiving account match' : '';
+      if (!confirm('Send '+source+' to Check.et'+receiverCheck+'? This may use one verification credit.')) return;
       input.confirmCharge = true;
     }
     panel.dataset.busy = '1';

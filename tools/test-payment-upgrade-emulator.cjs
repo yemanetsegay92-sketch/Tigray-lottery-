@@ -71,6 +71,7 @@ test('receipt verification sends the finalized file without the FT number and ke
    assert.equal(form.get('bank'),'cbe');
    assert.equal(form.get('account_number'),lottery.paymentAccounts[0].number);
    assert.equal(form.has('transaction_number'),false);
+   assert.equal(form.has('require_receiver_match'),false);
    assert.deepEqual(Buffer.from(await form.get('receipt_file').arrayBuffer()),bytes);
    return {status:200,json:async()=>({code:'verified',success:true,exists:true,duplicate:false,data:{
     bank:'cbe',transaction_number:'FTDIFFERENT01',verification_method:'official',receipt:{status:'completed'}
@@ -83,6 +84,48 @@ test('receipt verification sends the finalized file without the FT number and ke
  assert.equal(history.attempts[0].result.reportedTransactionNumber,'FTDIFFERENT01');
  assert.equal((await request.get()).data().status,'pending');
  assert.equal((await paymentClaimRef(db,expected).get()).exists,false);
+});
+test('admin receipt receiver test records a match or mismatch without consuming the payment',async()=>{
+ const lotteryId='upgrade-receiver-test';
+ const alternateAccount='1000999999999';
+ await db.collection('lotteries').doc(lotteryId).set({...lottery,paymentAccounts:[
+  ...lottery.paymentAccounts,{bank:'CBE',number:alternateAccount,holderName:'ALTERNATE TEST RECEIVER'}
+ ]});
+ const {verifyCheckEtPayment}=require('../lib/checket-verify');
+ for(const accountIndex of [0,1]){
+  const requestId='receiver-test-'+accountIndex;
+  const reference='FTRECEIVERTEST0'+accountIndex;
+  const request=db.collection('ticketRequests').doc(requestId);
+  await request.set({lotteryId,status:'pending',total:100,reference,
+   proofPath:'payment-proofs/'+lotteryId+'/'+requestId+'.pdf',proofMime:'application/pdf',
+   receiptExtraction:{reference}});
+  const matches=accountIndex===0;
+  const account=matches?lottery.paymentAccounts[0].number:alternateAccount;
+  const deps={env:{VERCEL_ENV:'production',LOTTERY_CHECKET_READ_ONLY_ENABLED:'true'},budget:async()=>{},
+   readReceipt:async()=>({buffer:Buffer.from('%PDF-synthetic receipt test'),mime:'application/pdf'}),
+   verify:input=>verifyCheckEtPayment(input,{apiKey:'mock-key',fetchImpl:async(_url,{body})=>{
+    assert.equal(body.get('account_number'),account);
+    assert.equal(body.get('require_receiver_match'),'1');
+    assert.equal(body.has('transaction_number'),false);
+    if(!matches)return {status:422,json:async()=>({code:'receiver_mismatch',message:'private detail'})};
+    return {status:200,json:async()=>({code:'verified',success:true,exists:true,duplicate:false,
+     data:{bank:'cbe',transaction_number:reference,verification_method:'mobile_api',
+      receipt:{status:'completed',receiver_account:'1********6789'}},checks:{receiver:'match'}})};
+   }})};
+  const result=await reviewAction(db,{uid:'admin'},{action:'review-verify',requestId,lotteryId,bank:'cbe',
+   correctedReference:reference,revision:0,accountIndex,verifyReceipt:true,testReceiver:true,confirmCharge:true},deps);
+  assert.equal(result.state,matches?'returned':'receiver_check_failed');
+  assert.equal(result.result.providerCode,matches?'verified':'receiver_mismatch');
+  const history=await reviewAction(db,{uid:'admin'},{action:'review-details',requestId,lotteryId},deps);
+  const [attempt]=history.attempts;
+  assert.equal(attempt.receiverMatchRequired,true);
+  assert.equal(attempt.receivingSuffix,account.slice(-4));
+  assert.equal(attempt.result.providerReceiverMatch,matches?'match':undefined);
+  assert.equal(attempt.result.providerCbeAccountCheck,matches?false:undefined);
+  assert.ok(!JSON.stringify(attempt).includes('private detail'));
+  assert.equal((await request.get()).data().status,'pending');
+  assert.equal((await paymentClaimRef(db,reference).get()).exists,false);
+ }
 });
 test('actual receipt-only checkout checks server OCR claim, ignores browser OCR and cleans rejected finalized file',async()=>{
  const vm=require('node:vm'),fs=require('node:fs');const {createRequire}=require('node:module');
