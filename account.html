@@ -1,10 +1,30 @@
 <!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Customer Wallet · Tigray Lottery</title><link rel="stylesheet" href="style.css"></head><body>
 <header class="site-header"><a class="brand" href="index.html"><span class="brand-mark">✦</span><span>Tigray Lottery</span></a><nav><a href="index.html">Lotteries</a></nav></header>
-<main class="content narrow"><section class="card form-card wallet-auth-card"><div class="eyebrow dark">CUSTOMER WALLET</div><h1>Free verified customer account</h1><p class="form-note">Register with a verified email address or phone number. One wallet works across this company’s lotteries and starts at 0 ETB.</p>
-<div id="signedOut" class="auth-grid">
- <section class="auth-panel"><h2>Email registration</h2><form id="emailRegisterForm"><label>Full name<input id="emailFullName" maxlength="120" autocomplete="name" required></label><label>Email<input id="registerEmail" type="email" autocomplete="email" required></label><label>Password<input id="registerPassword" type="password" minlength="8" autocomplete="new-password" required></label><label>Contact phone number<input id="emailContactPhone" type="tel" placeholder="09… or 07…" autocomplete="tel" required></label><button class="btn btn-primary full" type="submit">Create account</button></form><p class="form-note">We send a Firebase verification link. Your wallet cannot be created until the link is confirmed.</p></section>
- <section class="auth-panel"><h2>Email login</h2><form id="emailLoginForm"><label>Email<input id="loginEmail" type="email" autocomplete="username" required></label><label>Password<input id="loginPassword" type="password" autocomplete="current-password" required></label><button class="btn btn-primary full" type="submit">Sign in</button></form><button id="forgotPassword" class="btn secondary full" type="button">Reset password</button></section>
- <details class="auth-panel phone-auth-panel"><summary>Use verified phone instead</summary><label>Phone number<input id="walletPhone" type="tel" placeholder="09… or 07…" autocomplete="tel"></label><p class="form-note">Firebase sends an SMS verification code. Standard message rates may apply.</p><div id="recaptcha"></div><button id="sendCode" type="button" class="btn btn-primary full">Send verification code</button><label>Verification code<input id="verificationCode" inputmode="numeric" autocomplete="one-time-code"></label><button id="confirmCode" type="button" class="btn secondary full" disabled>Verify phone</button></details>
+<main class="content narrow"><section class="card form-card wallet-auth-card"><div class="eyebrow dark">CUSTOMER WALLET</div><h1>Customer wallet</h1>
+<div id="signedOut" hidden>
+ <section id="walletLoginPanel" class="auth-panel">
+  <h2>Sign in</h2>
+  <form id="emailLoginForm"><label>Email<input id="loginEmail" type="email" autocomplete="username" required></label><label>Password<input id="loginPassword" type="password" autocomplete="current-password" required></label><button class="btn btn-primary full" type="submit">Sign in</button></form>
+  <div class="auth-actions">
+   <button id="showWalletRegister" class="btn secondary" type="button" aria-controls="walletRegisterPanel">Register now</button>
+   <button id="forgotPassword" class="btn secondary" type="button" aria-controls="walletResetPanel">Forgot password?</button>
+  </div>
+  <details class="auth-panel phone-auth-panel"><summary>Use verified phone instead</summary><label>Phone number<input id="walletPhone" type="tel" placeholder="09… or 07…" autocomplete="tel"></label><p class="form-note">Firebase sends an SMS verification code. Standard message rates may apply.</p><div id="recaptcha"></div><button id="sendCode" type="button" class="btn btn-primary full">Send verification code</button><label>Verification code<input id="verificationCode" inputmode="numeric" autocomplete="one-time-code"></label><button id="confirmCode" type="button" class="btn secondary full" disabled>Verify phone</button></details>
+ </section>
+ <section id="walletRegisterPanel" class="auth-panel" hidden>
+  <h2>Register</h2>
+  <form id="emailRegisterForm"><label>Full name<input id="emailFullName" maxlength="120" autocomplete="name" required></label><label>Email<input id="registerEmail" type="email" autocomplete="email" required></label><label>Password<input id="registerPassword" type="password" minlength="8" autocomplete="new-password" required></label><label>Contact phone number<input id="emailContactPhone" type="tel" placeholder="09… or 07…" autocomplete="tel" required></label><button class="btn btn-primary full" type="submit">Create account</button></form>
+  <p class="form-note">Verify your email to create your wallet.</p>
+  <button id="registerBackToSignIn" class="btn secondary" type="button">Back to sign in</button>
+ </section>
+ <section id="walletResetPanel" class="auth-panel" hidden>
+  <h2>Reset your password</h2>
+  <form id="walletPasswordResetForm">
+   <label>Email<input id="resetEmail" type="email" autocomplete="email" required></label>
+   <button class="btn btn-primary full" type="submit">Send reset link</button>
+  </form>
+  <button id="resetBackToSignIn" class="btn secondary" type="button">Back to sign in</button>
+ </section>
 </div>
 <div id="verifyEmail" class="auth-panel verification-panel" hidden><h2>Verify your email</h2><p>The email address <strong id="verificationEmail"></strong> is unverified. If you need a verification link, select Send verification link. After opening the link, return here and select I verified my email.</p><div class="auth-actions"><button id="checkEmailVerification" type="button" class="btn btn-primary">I verified my email</button><button id="resendEmailVerification" type="button" class="btn secondary">Send verification link</button><button id="verificationSignOut" type="button" class="btn secondary">Use another account</button></div></div>
 <div id="registration" hidden><h2>Create your wallet</h2><label>Legal full name<input id="walletName" maxlength="120" autocomplete="name"></label><label id="walletContactPhoneLabel">Contact phone number<input id="walletContactPhone" type="tel" placeholder="09… or 07…" autocomplete="tel"></label><button id="registerWallet" type="button" class="btn btn-primary full">Create free wallet</button></div>
