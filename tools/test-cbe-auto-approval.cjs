@@ -173,13 +173,49 @@ test('inspector safely verifies a reference and checks global claim',async()=>{
   assert.equal(result.decision,'eligible');
   assert.equal(result.immutableGuard.reference,'FTTEST12345');
 });
-test('receipt-only purchase sends only server-extracted reference to provider',async()=>{
- const db=fakeDb({p:{...purchase,reference:'',proofPath:'payment-proofs/safe-lottery/final.pdf',receiptExtraction:{ok:true,reference:'FTTEST12345'}}});
+const receiptPurchase={...purchase,reference:'',proofPath:'payment-proofs/safe-lottery/final.pdf',
+  proofMime:'application/pdf',receiptExtraction:{ok:true,reference:'FTTEST12345'}};
+const receiptFile={buffer:Buffer.from('%PDF-synthetic original receipt'),mime:'application/pdf'};
+test('an uploaded receipt is the first provider input, with the local reference kept for comparison',async()=>{
+ const image={buffer:Buffer.from('synthetic original CBE screenshot'),mime:'image/png'};
+ const {extractReferenceFromReceipt}=require('../lib/cbe-receipt-reference');
+ const extraction=await extractReferenceFromReceipt({...image,bank:'cbe',
+  recognizeImage:async()=>'CBE transfer reference FTTEST1234O'});
+ assert.equal(extraction.originalReference,'FTTEST1234O');
+ assert.equal(extraction.reference,'FTTEST12340');
+ for(const reference of ['',extraction.reference]){
+  const db=fakeDb({p:{...receiptPurchase,reference,receiptExtraction:extraction}});
+  let calls=0;
+  const result=await inspectRequest(db,'req-2',{env,readReceipt:async()=>image,verify:async input=>{
+   calls++;
+   assert.deepEqual(input,{bank:'cbe',accountNumber:'1000123456789',receiptFile:image});
+   assert.equal(db.queue.get('req-2').firstCheckEtInputMethod,'receipt');
+   assert.equal(db.queue.get('req-2').firstSubmittedReference,'FTTEST12340');
+   return {...verification,reportedTransactionNumber:'FTTEST12340'};
+  }});
+  assert.equal(calls,1);
+  assert.equal(result.decision,'eligible');
+ }
+});
+test('missing original receipt never falls back to sending the OCR number',async()=>{
+ const db=fakeDb({p:receiptPurchase});
  let calls=0;
- const result=await inspectRequest(db,'req-2',{env,verify:async input=>{
-  calls++;assert.equal(input.transactionNumber,'FTTEST12345');assert.equal(input.receiptFile,undefined);return verification;
- }});
- assert.equal(calls,1);assert.equal(result.decision,'eligible');
+ const result=await inspectRequest(db,'missing-receipt',{env,readReceipt:async()=>{throw Error('Missing storage object');},
+  verify:async()=>{calls++;return verification;}});
+ assert.deepEqual(result.reasons,['original_receipt_unavailable']);
+ assert.equal(calls,0);
+ assert.equal(db.queue.get('missing-receipt').verificationAttemptStartedAt,undefined);
+});
+test('verified mobile_api receipt with a masked receiver remains in manual review',async()=>{
+ const db=fakeDb({p:receiptPurchase});
+ let approvals=0;
+ const state=await processOne(db,'mobile-receipt',{env,readReceipt:async()=>receiptFile,
+  verify:async()=>({...verification,verificationMethod:'mobile_api',providerCbeAccountCheck:false,
+   providerHttpStatus:200,providerCode:'verified'}),
+  approve:async()=>{approvals++;}});
+ assert.equal(state,'manual_review');
+ assert.equal(approvals,0);
+ assert.equal(db.queue.get('mobile-receipt').firstCheckEtResult.providerHttpStatus,200);
 });
 test('failed receipt extraction never calls provider',async()=>{
  const db=fakeDb({p:{...purchase,reference:'',proofPath:'payment-proofs/safe-lottery/final.pdf',receiptExtraction:{ok:false,reason:'reference_not_found'}}});
