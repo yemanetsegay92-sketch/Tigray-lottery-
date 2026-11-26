@@ -812,7 +812,7 @@ module.exports = async (req, res) => {
     if (action === 'checket-verify') return await handleCheckEtVerification(req, res, body);
     if (action === 'lookup-reference') return await lookupReference(req, res, body);
     if (action.startsWith('lottery-cleanup-')) return await handleLotteryCleanup(req, res, body);
-    if(['wallet-finance-summary','wallet-deposit-history','wallet-customer-balances','wallet-receiving-account-set','wallet-deposit-approve','wallet-settle','wallet-refund'].includes(action)){
+    if(['wallet-finance-summary','wallet-deposit-diagnose','wallet-deposit-history','wallet-customer-balances','wallet-receiving-account-set','wallet-deposit-approve','wallet-settle','wallet-refund'].includes(action)){
       const {creditDeposit,settleObligation,refundWalletPurchase,COMPANY_ID}=require('../../lib/wallet-core');
       const db=adminDb(),{caller,profile}=await authenticateAdmin(req,db);
       res.setHeader('Cache-Control','no-store');
@@ -831,6 +831,63 @@ module.exports = async (req, res) => {
           receivingAccount:profile.role==='generalAdmin'?receivingAccount:{configured:receivingAccount.configured}});
       }
       if(profile.role!=='generalAdmin')throw Object.assign(new Error('Only General Manager may change wallet finances.'),{statusCode:403});
+
+      // Explicit Check.et diagnostics for an already submitted wallet deposit.
+      // This is NOT an approval path. It never mutates a wallet or payment ledger.
+      if(action==='wallet-deposit-diagnose'){
+        if(process.env.VERCEL_ENV!=='production'&&
+           !require('../../lib/wallet-runtime-policy').isolatedTarget(process.env))
+          throw Object.assign(new Error('Wallet Check.et diagnostics are available only on production or an isolated emulator.'),{statusCode:403});
+        if(body.confirmProviderCall!==true)
+          throw Object.assign(new Error('Confirm the Check.et verification charge before continuing.'),{statusCode:400});
+        const depositId=String(body.depositId||'').trim();
+        if(!/^[a-zA-Z0-9_-]{1,128}$/.test(depositId))
+          throw Object.assign(new Error('Invalid deposit identifier.'),{statusCode:400});
+        const doc=await db.collection('depositRequests').doc(depositId).get();
+        if(!doc.exists)throw Object.assign(new Error('Deposit not found.'),{statusCode:404});
+        const deposit=doc.data()||{};
+        if(deposit.companyId!==COMPANY_ID||!['pending','credited'].includes(deposit.status))
+          throw Object.assign(new Error('This deposit is not eligible for diagnostics.'),{statusCode:409});
+        const account=String(deposit.receivingAccount||'').replace(/\D/g,''),
+          holderName=String(deposit.receivingOwner||'').trim();
+        if(!/^\d{8,30}$/.test(account)||holderName.length<2)
+          throw Object.assign(new Error('Deposit has no valid captured receiving-account details.'),{statusCode:409});
+        // Claim the billable check atomically before contacting Check.et.
+        await require('../../lib/wallet-checket-diagnostic').claimDiagnosticLookup(db,{
+          depositId,actorId:caller.uid});
+        const provider=await require('../../lib/checket-verify').verifyCheckEtPayment({
+          bank:'cbe',transactionNumber:String(deposit.reference||''),accountNumber:account});
+        const assurance=process.env.CHECK_ET_CBE_RECEIVER_ASSURANCE==='authorized';
+        const assessment=require('../../lib/wallet-deposit-verification').assessAutomaticDeposit({
+          deposit,provider,receiver:{account,holderName},providerReceiverAccountAssurance:assurance});
+        const normalizeName=x=>String(x||'').normalize('NFKC').trim().replace(/\s+/g,' ').toUpperCase();
+        return res.status(200).json({ok:true,depositId,
+          diagnostic:{
+            providerHttpStatus:provider.providerHttpStatus??null,
+            providerCode:String(provider.providerCode||'unknown'),
+            verified:provider.verified===true,
+            providerDuplicate:provider.providerDuplicate===true,
+            reportedReferencePresent:!!provider.reportedTransactionNumber,
+            reportedReferenceMatches:String(provider.reportedTransactionNumber||'').toUpperCase()===String(deposit.reference||'').toUpperCase(),
+            bank:String(provider.reportedBank||''),
+            paymentStatus:String(provider.status||''),
+            verificationMethod:String(provider.verificationMethod||''),
+            amountEtb:provider.amount,
+            expectedAmountEtb:Number(deposit.amountSantim||0)/100,
+            currency:String(provider.currency||''),
+            payerName:String(provider.payerName||'').slice(0,120),
+            registeredPayerName:String(deposit.legalName||'').slice(0,120),
+            payerNameMatches:normalizeName(provider.payerName)===normalizeName(deposit.legalName),
+            receiverName:String(provider.receiverName||'').slice(0,120),
+            receiverNameMatches:normalizeName(provider.receiverName)===normalizeName(holderName),
+            receiverAccountStatus:String(provider.receiverAccountStatus||''),
+            receiverAssuranceConfigured:assurance,
+            providerAccountCheck:provider.providerCbeAccountCheck===true,
+            payerIdentityBoundToWallet:provider.payerIdentityVerified===true&&provider.payerCustomerUid===deposit.uid,
+            automaticCreditEligible:assessment.eligible,
+            blockingReasons:assessment.reasons
+          }});
+      }
 
       // Read-only, cursor-paginated customer financial history. Never expose this
       // company-wide information to Lottery Admins or client Firestore reads.

@@ -75,7 +75,7 @@ async function loadWalletFinance(){
   $('walletReceivingAccountHolder').value=data.receivingAccount?.holderName||'';
   const pending=data.deposits.filter(x=>x.status==='pending');
   const obligations=data.obligations.map(x=>({...x,remaining:Number(x.amountSantim||0)-Number(x.settledSantim||0)-Number(x.refundedSantim||0)}));
-  host.innerHTML=`<h3>Pending deposits</h3>${pending.length?`<div class="table-wrap"><table><thead><tr><th>Reference</th><th>Amount</th><th>Customer</th><th>Action</th></tr></thead><tbody>${pending.map(x=>`<tr><td>${esc(x.reference)}</td><td>${(Number(x.amountSantim)/100).toFixed(2)} ETB</td><td>${esc(x.legalName||x.uid)}</td><td><button class="small-btn" data-deposit="${esc(x.id)}">Verify & approve</button></td></tr>`).join('')}</tbody></table></div>`:'<p class="muted">No pending deposits.</p>'}
+  host.innerHTML=`<h3>Pending deposits</h3>${pending.length?`<div class="table-wrap"><table><thead><tr><th>Reference</th><th>Amount</th><th>Customer</th><th>Action</th></tr></thead><tbody>${pending.map(x=>`<tr><td>${esc(x.reference)}</td><td>${(Number(x.amountSantim)/100).toFixed(2)} ETB</td><td>${esc(x.legalName||x.uid)}</td><td><button class="small-btn" data-deposit="${esc(x.id)}">Verify & approve</button> <button class="secondary small-btn" data-deposit-diagnose="${esc(x.id)}">Check.et diagnostic</button></td></tr>`).join('')}</tbody></table></div>`:'<p class="muted">No pending deposits.</p>'}
   <h3>Owner obligations</h3>${obligations.length?`<div class="table-wrap"><table><thead><tr><th>Lottery</th><th>Request</th><th>Outstanding</th><th>Status</th><th>Actions</th></tr></thead><tbody>${obligations.map(x=>`<tr><td>${esc(x.lotteryId)}</td><td>${esc(x.requestId)}</td><td>${(x.remaining/100).toFixed(2)} ETB</td><td>${esc(x.status||'open')}</td><td>${x.remaining>0?`<button class="small-btn" data-settle="${esc(x.id)}" data-remaining="${x.remaining}">Settle</button> <button class="secondary small-btn" data-refund="${esc(x.requestId)}">Refund</button>`:'—'}</td></tr>`).join('')}</tbody></table></div>`:'<p class="muted">No wallet obligations.</p>'}
   <h3>Settlement history</h3>${data.settlements.length?`<div class="table-wrap"><table><thead><tr><th>Lottery</th><th>Reference</th><th>Amount</th><th>Obligation</th></tr></thead><tbody>${data.settlements.map(x=>`<tr><td>${esc(x.lotteryId)}</td><td>${esc(x.reference)}</td><td>${(Number(x.amountSantim)/100).toFixed(2)} ETB</td><td>${esc(x.obligationId)}</td></tr>`).join('')}</tbody></table></div>`:'<p class="muted">No settlements recorded.</p>'}`;
   host.insertAdjacentHTML('beforeend','<h3>Approved customer deposits</h3><p class="muted">Permanent credit history, newest first. Only General Admin can access this.</p><div id="walletDepositHistory">Loading approved deposits…</div><h3>Current customer wallet balances</h3><p class="muted">Available balances after credits and purchases. This is separate from owner settlements.</p><div id="walletCustomerBalances">Loading balances…</div>');
@@ -84,6 +84,7 @@ async function loadWalletFinance(){
   void loadWalletHistory('deposits');
   void loadWalletHistory('balances');
   host.querySelectorAll('[data-deposit]').forEach(button=>button.addEventListener('click',()=>void approveWalletDeposit(button.dataset.deposit,pending.find(x=>x.id===button.dataset.deposit))));
+  host.querySelectorAll('[data-deposit-diagnose]').forEach(button=>button.addEventListener('click',()=>void diagnoseWalletDeposit(button.dataset.depositDiagnose)));
   host.querySelectorAll('[data-settle]').forEach(button=>button.addEventListener('click',()=>void settleWalletObligation(button.dataset.settle,Number(button.dataset.remaining))));
   host.querySelectorAll('[data-refund]').forEach(button=>button.addEventListener('click',()=>void refundWalletPurchase(button.dataset.refund)));
  }catch(error){host.innerHTML='<div class="error">'+esc(error.message)+'</div>';}
@@ -100,16 +101,17 @@ async function loadWalletHistory(kind){
   const etb=value=>(Number(value||0)/100).toFixed(2)+' ETB';
   const contact=x=>esc(x.email||x.phone||'—');
   const header=isDeposit
-   ?'<tr><th>Credited at</th><th>Customer</th><th>Contact</th><th>CBE reference</th><th>Amount</th><th>Approved by</th></tr>'
+   ?'<tr><th>Credited at</th><th>Customer</th><th>Contact</th><th>CBE reference</th><th>Amount</th><th>Approved by</th><th>Check.et</th></tr>'
    :'<tr><th>Customer</th><th>Contact</th><th>Available balance</th><th>Last updated</th></tr>';
   const body=rows.map(x=>isDeposit
-   ?'<tr><td>'+date(x.creditedAt)+'</td><td>'+esc(x.name||x.uid)+'</td><td>'+contact(x)+'</td><td>'+esc(x.reference)+'</td><td>'+etb(x.amountSantim)+'</td><td>'+esc(x.creditedBy||'—')+'</td></tr>'
+   ?'<tr><td>'+date(x.creditedAt)+'</td><td>'+esc(x.name||x.uid)+'</td><td>'+contact(x)+'</td><td>'+esc(x.reference)+'</td><td>'+etb(x.amountSantim)+'</td><td>'+esc(x.creditedBy||'—')+'</td><td><button type="button" class="secondary small-btn" data-deposit-diagnose="'+esc(x.id)+'">Diagnose</button></td></tr>'
    :'<tr><td>'+esc(x.name||x.uid)+'</td><td>'+contact(x)+'</td><td>'+etb(x.balanceSantim)+'</td><td>'+date(x.updatedAt)+'</td></tr>'
   ).join('');
   host.innerHTML=(rows.length?'<div class="table-wrap"><table><thead>'+header+'</thead><tbody>'+body+'</tbody></table></div>'
    :'<p class="muted">No '+(isDeposit?'approved deposits':'wallet accounts')+' on this page.</p>')+
    '<div class="actions"><button type="button" class="secondary small-btn" data-wallet-history-prev '+(state.previous.length?'':'disabled')+'>Previous</button> '+
    '<button type="button" class="secondary small-btn" data-wallet-history-next '+(data.nextCursor?'':'disabled')+'>Next</button></div>';
+  host.querySelectorAll('[data-deposit-diagnose]').forEach(button=>button.addEventListener('click',()=>void diagnoseWalletDeposit(button.dataset.depositDiagnose)));
   host.querySelector('[data-wallet-history-prev]').addEventListener('click',()=>{
    state.cursor=state.previous.pop()||'';void loadWalletHistory(kind);
   });
@@ -117,6 +119,32 @@ async function loadWalletHistory(kind){
    if(!data.nextCursor)return;state.previous.push(state.cursor);state.cursor=data.nextCursor;void loadWalletHistory(kind);
   });
  }catch(error){host.innerHTML='<div class="error">'+esc(error.message||'Could not load wallet history.')+'</div>';}
+}
+async function diagnoseWalletDeposit(depositId){
+ if(!confirm('Run one Check.et verification for this saved CBE deposit? This may use a paid Check.et credit. This diagnostic cannot approve or credit a wallet.'))return;
+ const host=$('walletFinanceMessage');
+ host.innerHTML='<p class="muted">Checking this payment through Check.et without crediting it…</p>';
+ try{
+  const data=await walletFinanceApi('wallet-deposit-diagnose',{depositId,confirmProviderCall:true});
+  const x=data.diagnostic||{};
+  const yes=value=>value===true?'Yes':'No';
+  const blocking=(Array.isArray(x.blockingReasons)?x.blockingReasons:[]);
+  host.innerHTML='<div class="review-box"><h3>Check.et deposit diagnostic</h3>'+
+    '<p><b>Check.et confirmed payment:</b> '+yes(x.verified)+' · <b>API status:</b> '+esc(x.providerHttpStatus||'unknown')+
+    ' · <b>Provider duplicate:</b> '+yes(x.providerDuplicate)+'</p>'+
+    '<p><b>Bank status:</b> '+esc(x.paymentStatus||'unknown')+' · <b>Method:</b> '+esc(x.verificationMethod||'unknown')+
+    ' · <b>Amount:</b> '+esc(x.amountEtb)+' ETB (expected '+esc(x.expectedAmountEtb)+' ETB)</p>'+
+    '<p><b>Reference reported and matching:</b> '+yes(x.reportedReferencePresent&&x.reportedReferenceMatches)+
+    ' · <b>Receiver account status:</b> '+esc(x.receiverAccountStatus||'unknown')+
+    ' · <b>Receiver assurance enabled:</b> '+yes(x.receiverAssuranceConfigured)+'</p>'+
+    '<p><b>Bank payer:</b> '+esc(x.payerName||'not returned')+
+    ' · <b>Registered payer:</b> '+esc(x.registeredPayerName||'not recorded')+
+    ' · <b>Name matches:</b> '+yes(x.payerNameMatches)+'</p>'+
+    '<p><b>Bank payer bound to wallet identity:</b> '+yes(x.payerIdentityBoundToWallet)+
+    ' · <b>Automatic credit eligible:</b> '+yes(x.automaticCreditEligible)+'</p>'+
+    '<p><b>Blocking reasons:</b> '+esc(blocking.length?blocking.join(', '):'none')+'</p>'+
+    '<p class="muted">Diagnostic only: no wallet credit or approval was performed. A matching payer name alone does not prove wallet ownership.</p></div>';
+ }catch(error){host.innerHTML='<div class="error">'+esc(error.message||'Could not complete Check.et diagnostic.')+'</div>';}
 }
 async function saveWalletReceivingAccount(event){
  event.preventDefault();
