@@ -56,15 +56,15 @@ function setWhatsAppContact(number){const el=document.getElementById('whatsappCo
 function awardsList(lot){
   if(Array.isArray(lot.awards) && lot.awards.length) return lot.awards.filter(x=>String(x||'').trim()).map(x=>String(x).trim());
   const legacy=[lot.firstPrize,lot.secondPrize,lot.thirdPrize].filter(x=>String(x||'').trim());
-  return legacy.length?legacy:[getLang()==='ti'?'ዕጫ ገና ኣይተገልጸን።':'Awards have not been announced yet.'];
+  return legacy.length?legacy:[getLang()==='ti'?'ዕጫታት ገና ኣይተገልጹን።':'Awards have not been announced yet.'];
 }
 function openAwards(lot){
   const modal=document.getElementById('awardModal'),body=document.getElementById('awardModalBody'),title=document.getElementById('awardModalTitle');
   if(!modal||!body||!title)return;
-  title.textContent = getLang()==='ti' ? `ዕጫ · ${lot.name}` : `Winner awards · ${lot.name}`;
+  title.textContent = getLang()==='ti' ? `ዕጫታት · ${lot.name}` : `Winner awards · ${lot.name}`;
   const items=awardsList(lot);
   const ti=getLang()==='ti';
-  body.innerHTML=`<div class="award-intro">${ti?'እዚ ዕጫ ነዚ ሎተሪ ዝተዳለወ እዩ።':'These are the published awards for this lottery.'}</div><div class="award-list">${items.map((a,i)=>`<div class="award-row"><span>${i+1}</span><b>${esc(a)}</b></div>`).join('')}</div>`;
+  body.innerHTML=`<div class="award-intro">${ti?'እዞም ዕጫታት ነዚ ሎተሪ ዝተዳለዉ እዮም።':'These are the published awards for this lottery.'}</div><div class="award-list">${items.map((a,i)=>`<div class="award-row"><span>${i+1}</span><b>${esc(a)}</b></div>`).join('')}</div>`;
   modal.hidden=false;document.body.classList.add('modal-open');
 }
 function closeAwards(){const m=document.getElementById('awardModal');if(m){m.hidden=true;document.body.classList.remove('modal-open')}}
@@ -87,7 +87,7 @@ document.addEventListener('pointerup',handleAwardsEvent,true);
 document.addEventListener('touchend',handleAwardsEvent,true);
 document.addEventListener('keydown',e=>{if(e.key==='Escape')closeAwards()});
 async function loadSiteSettings(){try{const snap=await getDoc(doc(db,'settings','site'));if(snap.exists())setWhatsAppContact(snap.data().whatsappNumber||'');}catch(e){console.warn('Could not load contact settings:',e.message)}}
-async function home(){try{const snap=await getDocs(collection(db,'lotteries'));const lots=snap.docs.map(d=>({id:d.id,...d.data()})).filter(x=>x.status!=='hidden');window.__lots=lots;lots.sort((a,b)=>(a.status==='active'?0:1)-(b.status==='active'?0:1));list.innerHTML=lots.length?lots.map(x=>{const active=x.status==='active';return `<article class="card lottery-card"><div class="card-top"><span class="status-badge status-${esc(x.status)}">${statusText(x.status)}</span><span class="price">${Number(x.price||0)} Birr</span></div><h2>${esc(x.name)}</h2><p class="muted">${esc(x.description||'Ticket numbers are assigned after approval.')}</p>${paymentAccountsHtml(x)}<div class="card-actions three-actions">${active?`<a class="btn btn-primary" href="buy.html?lot=${encodeURIComponent(x.id)}">${getLang()==='ti'?'ቲኬት ዓድግ':'Buy Ticket'} →</a>`:`<button class="btn" disabled>${statusText(x.status)}</button>`}<a class="btn btn-outline" href="check.html?lot=${encodeURIComponent(x.id)}">${getLang()==='ti'?'ቲኬት መርምር':'Check Ticket'}</a><button class="btn btn-gold-outline" type="button" data-awards="${esc(x.id)}">${getLang()==='ti'?'ዕጫ':'Winner Awards'}</button></div></article>`}).join(''):'<div class="loading-card">No lotteries are available yet.</div>'}catch(e){console.error(e);list.innerHTML='<div class="error">Unable to load lotteries. Please try again.</div>'}}
+async function home(){try{const snap=await getDocs(collection(db,'lotteries'));const lots=snap.docs.map(d=>({id:d.id,...d.data()})).filter(x=>x.status!=='hidden');window.__lots=lots;lots.sort((a,b)=>(a.status==='active'?0:1)-(b.status==='active'?0:1));list.innerHTML=lots.length?lots.map(x=>{const active=x.status==='active';return `<article class="card lottery-card"><div class="card-top"><span class="status-badge status-${esc(x.status)}">${statusText(x.status)}</span><span class="price">${Number(x.price||0)} Birr</span></div><h2>${esc(x.name)}</h2><p class="muted">${esc(x.description||'Ticket numbers are assigned after approval.')}</p>${paymentAccountsHtml(x)}<div class="card-actions three-actions">${active?`<a class="btn btn-primary" href="buy.html?lot=${encodeURIComponent(x.id)}">${getLang()==='ti'?'ቲኬት ዓድግ':'Buy Ticket'} →</a>`:`<button class="btn" disabled>${statusText(x.status)}</button>`}<a class="btn btn-outline" href="check.html?lot=${encodeURIComponent(x.id)}">${getLang()==='ti'?'ቲኬት መርምር':'Check Ticket'}</a><button class="btn btn-gold-outline" type="button" data-awards="${esc(x.id)}">${getLang()==='ti'?'ዕጫታት':'Winner Awards'}</button></div></article>`}).join(''):'<div class="loading-card">No lotteries are available yet.</div>'}catch(e){console.error(e);list.innerHTML='<div class="error">Unable to load lotteries. Please try again.</div>'}}
 applyLang();
 Promise.all([loadSiteSettings(),home()]).then(()=>{
   document.querySelectorAll('[data-awards]').forEach(btn=>{
