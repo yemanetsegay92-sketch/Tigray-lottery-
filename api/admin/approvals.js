@@ -852,16 +852,9 @@ module.exports = async (req, res) => {
           holderName=String(deposit.receivingOwner||'').trim();
         if(!/^\d{8,30}$/.test(account)||holderName.length<2)
           throw Object.assign(new Error('Deposit has no valid captured receiving-account details.'),{statusCode:409});
-        // Avoid accidental repeated billable lookups, including parallel tabs.
-        const attemptRef=db.collection('walletDepositChecketDiagnostics').doc(depositId);
-        const nowMs=Date.now();
-        await db.runTransaction(async tx=>{
-          const prior=await tx.get(attemptRef);
-          if(prior.exists&&nowMs-Number(prior.data()?.lastAttemptAtMs||0)<10*60*1000)
-            throw Object.assign(new Error('This deposit was checked recently. Try again after 10 minutes.'),{statusCode:429});
-          tx.set(attemptRef,{companyId:COMPANY_ID,depositId,lastAttemptAtMs:nowMs,
-            lastCheckedBy:caller.uid,attempts:Number(prior.data()?.attempts||0)+1},{merge:true});
-        });
+        // Claim the billable check atomically before contacting Check.et.
+        await require('../../lib/wallet-checket-diagnostic').claimDiagnosticLookup(db,{
+          depositId,actorId:caller.uid});
         const provider=await require('../../lib/checket-verify').verifyCheckEtPayment({
           bank:'cbe',transactionNumber:String(deposit.reference||''),accountNumber:account});
         const assurance=process.env.CHECK_ET_CBE_RECEIVER_ASSURANCE==='authorized';
