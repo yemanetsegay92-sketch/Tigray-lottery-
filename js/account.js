@@ -35,15 +35,42 @@ function showVerifiedCustomer(current){
  else{$('walletContactPhone').value=$('walletContactPhone').value||saved.phone||'';$('walletContactPhoneLabel').hidden=false;}
  void refresh();
 }
+function showWalletAuthPanel(panel, focusInput) {
+ $('walletLoginPanel').hidden = panel !== 'walletLoginPanel';
+ $('walletRegisterPanel').hidden = panel !== 'walletRegisterPanel';
+ $('walletResetPanel').hidden = panel !== 'walletResetPanel';
+ $('walletMessage').textContent = '';
+ if (focusInput) $(focusInput).focus();
+}
 onAuthStateChanged(auth,current=>{
  const verified=!!current?.phoneNumber||current?.emailVerified===true;
- if(!current){$('signedOut').hidden=false;$('verifyEmail').hidden=true;$('registration').hidden=true;$('walletDashboard').hidden=true;return;}
+ if(!current){$('signedOut').hidden=false;showWalletAuthPanel('walletLoginPanel');$('verifyEmail').hidden=true;$('registration').hidden=true;$('walletDashboard').hidden=true;return;}
  if(!verified){$('signedOut').hidden=true;$('registration').hidden=true;$('walletDashboard').hidden=true;$('verifyEmail').hidden=false;$('verificationEmail').textContent=current.email||'';return;}
  showVerifiedCustomer(current);
 });
 $('emailRegisterForm').addEventListener('submit',async event=>{event.preventDefault();try{const name=$('emailFullName').value.trim(),phone=localPhone($('emailContactPhone').value);rememberProfile(name,phone);const credential=await createUserWithEmailAndPassword(auth,$('registerEmail').value.trim(),$('registerPassword').value);await updateProfile(credential.user,{displayName:name});await sendEmailVerification(credential.user,{url:location.origin+'/account.html'});message('Verification link sent. Check your email before creating the wallet.');}catch(error){message(emailAuthErrorMessage(error),true);}});
 $('emailLoginForm').addEventListener('submit',async event=>{event.preventDefault();try{const credential=await signInWithEmailAndPassword(auth,$('loginEmail').value.trim(),$('loginPassword').value);if(!credential.user.emailVerified)message('Verify your email before creating or opening a wallet.',true);else{showVerifiedCustomer(credential.user);message('Signed in.');}}catch(error){message(emailAuthErrorMessage(error),true);}});
-$('forgotPassword').addEventListener('click',async()=>{const email=$('loginEmail').value.trim()||$('registerEmail').value.trim();try{if(!email)throw new Error('Enter your email address first.');await sendPasswordResetEmail(auth,email,{url:location.origin+'/account.html'});message('Password reset email sent if the account exists.');}catch(error){message(error.message==='Enter your email address first.'?error.message:emailAuthErrorMessage(error),true);}});
+$('showWalletRegister').addEventListener('click', () => showWalletAuthPanel('walletRegisterPanel', 'emailFullName'));
+$('forgotPassword').addEventListener('click', () => {
+ $('resetEmail').value = $('loginEmail').value.trim();
+ showWalletAuthPanel('walletResetPanel', 'resetEmail');
+});
+$('registerBackToSignIn').addEventListener('click', () => showWalletAuthPanel('walletLoginPanel', 'loginEmail'));
+$('resetBackToSignIn').addEventListener('click', () => showWalletAuthPanel('walletLoginPanel', 'loginEmail'));
+$('walletPasswordResetForm').addEventListener('submit', async event => {
+ event.preventDefault();
+ const email = $('resetEmail').value.trim();
+ try {
+  await sendPasswordResetEmail(auth, email, {url: location.origin + '/account.html'});
+  message('If an account exists for this email, a password reset link will be sent.');
+ } catch (error) {
+  if (error.code === 'auth/user-not-found') {
+   message('If an account exists for this email, a password reset link will be sent.');
+  } else {
+   message(emailAuthErrorMessage(error), true);
+  }
+ }
+});
 $('checkEmailVerification').addEventListener('click',async()=>{try{await auth.currentUser.reload();await auth.currentUser.getIdToken(true);if(!auth.currentUser.emailVerified)throw new Error('Email is not verified yet. Open the link and try again.');showVerifiedCustomer(auth.currentUser);message('Email verified. You can now create your wallet.');}catch(error){message(error.message,true);}});
 $('resendEmailVerification').addEventListener('click',async()=>{try{await sendEmailVerification(auth.currentUser,{url:location.origin+'/account.html'});message('A new verification link was sent.');}catch(error){message(emailAuthErrorMessage(error),true);}});
 $('verificationSignOut').addEventListener('click',()=>signOut(auth));
