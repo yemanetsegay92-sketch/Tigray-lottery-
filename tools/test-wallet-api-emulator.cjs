@@ -315,3 +315,30 @@ test('mock Check.et cannot auto-credit a reference when payer ownership is missi
   delete process.env.CHECK_ET_CBE_RECEIVER_ASSURANCE;
  }
 });
+
+test('wallet Check.et diagnostics require General Admin, explicit confirmation, and never credit money',async()=>{
+ const before=(await db.collection('walletAccounts').doc('tigray-lottery_'+profiles.buyer.uid).get()).data().balanceSantim;
+ const anonymous=await adminAction('','wallet-deposit-diagnose',{depositId,confirmProviderCall:true});
+ assert.equal(anonymous.status,401);
+ const lotteryAdmin=await adminAction('assigned','wallet-deposit-diagnose',{depositId,confirmProviderCall:true});
+ assert.equal(lotteryAdmin.status,403);
+ const unconfirmed=await adminAction('general','wallet-deposit-diagnose',{depositId});
+ assert.equal(unconfirmed.status,400);
+ const badId=await adminAction('general','wallet-deposit-diagnose',{depositId:'../../bad',confirmProviderCall:true});
+ assert.equal(badId.status,400);
+ const startCalls=providerCalls;
+ const result=await adminAction('general','wallet-deposit-diagnose',{depositId,confirmProviderCall:true});
+ assert.equal(result.status,200,JSON.stringify(result.result));
+ assert.equal(providerCalls,startCalls+1);
+ assert.equal(result.result.diagnostic.verified,true);
+ assert.equal(result.result.diagnostic.automaticCreditEligible,false);
+ assert.ok(result.result.diagnostic.blockingReasons.includes('payer_ownership_unverified'));
+ assert.equal(result.result.diagnostic.payerIdentityBoundToWallet,false);
+ assert.equal(result.result.diagnostic.payerNameMatches,false);
+ assert.equal((await db.collection('walletAccounts').doc('tigray-lottery_'+profiles.buyer.uid).get()).data().balanceSantim,before);
+ const replay=await adminAction('general','wallet-deposit-diagnose',{depositId,confirmProviderCall:true});
+ assert.equal(replay.status,429);
+ assert.equal(providerCalls,startCalls+1,'Repeated diagnostic must not spend another Check.et call');
+ const audit=(await db.collection('walletDepositChecketDiagnostics').doc(depositId).get()).data();
+ assert.equal(audit.lastCheckedBy,profiles.general.uid);
+});
