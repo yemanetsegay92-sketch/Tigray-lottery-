@@ -40,6 +40,10 @@ test.describe.serial('verified email customer wallet authentication',()=>{
 
  test('unverified email cannot call wallet registration',async({page})=>{
   await page.goto('/account.html');
+  await expect(page.locator('#walletLoginPanel')).toBeVisible();
+  await expect(page.locator('#walletRegisterPanel')).toBeHidden();
+  await expect(page.locator('#walletResetPanel')).toBeHidden();
+  await page.getByRole('button',{name:'Register now'}).click();
   await page.locator('#emailFullName').fill('Unverified Wallet Customer');
   await page.locator('#registerEmail').fill(UNVERIFIED_EMAIL);
   await page.locator('#registerPassword').fill(PASSWORD);
@@ -59,6 +63,7 @@ test.describe.serial('verified email customer wallet authentication',()=>{
 
  test('registration link verification creates exactly one zero-balance wallet',async({page,request})=>{
   await page.goto('/account.html');
+  await page.getByRole('button',{name:'Register now'}).click();
   await page.locator('#emailFullName').fill('Verified Email Customer');
   await page.locator('#registerEmail').fill(EMAIL);
   await page.locator('#registerPassword').fill(PASSWORD);
@@ -96,9 +101,15 @@ test.describe.serial('verified email customer wallet authentication',()=>{
 
   await page.locator('#loginEmail').fill(EMAIL);
   await page.locator('#forgotPassword').click();
-  await expect(page.locator('#walletMessage')).toContainText(/reset email sent/i);
+  await expect(page.locator('#resetEmail')).toHaveValue(EMAIL);
+  const codes=await oobCodes(request);
+  expect(codes.some(item=>item.email===EMAIL&&(item.requestType==='PASSWORD_RESET'||item.mode==='PASSWORD_RESET'))).toBe(false);
+  await page.getByRole('button',{name:'Send reset link'}).click();
+  await expect(page.locator('#walletMessage')).toContainText(/password reset link will be sent/i);
   expect(await latestCode(request,EMAIL,'PASSWORD_RESET')).toBeTruthy();
 
+  await page.getByRole('button',{name:'Back to sign in'}).click();
+  await page.getByRole('button',{name:'Register now'}).click();
   await page.locator('#emailFullName').fill('Duplicate Customer');
   await page.locator('#registerEmail').fill(EMAIL);
   await page.locator('#registerPassword').fill(PASSWORD);
