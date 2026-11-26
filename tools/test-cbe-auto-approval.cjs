@@ -6,6 +6,7 @@ const {checkWorkerSecret,inspectRequest,processOne,runQueueItem}=require('../lib
 const {enabledFor,configuredCbe}=require('../lib/cbe-auto-activation');
 const {cutoverMs,isAfterCutover}=require('../lib/cbe-auto-cutover');
 const {approvalModeFor,usesAutomaticApproval}=require('../lib/lottery-approval-mode');
+const {verifyCheckEtPayment}=require('../lib/checket-verify');
 const created=new Date(Date.now()-10*60000).toISOString();
 const purchase={status:'pending',lotteryId:'safe-lottery',reference:'FTTEST12345',
   total:1000,quantity:1,createdAt:created};
@@ -258,11 +259,25 @@ test('amount mismatch results in manual review, no issuance callback invoked',as
 });
 test('uncertain Check.et responses go to manual review, never blindly reverify',async()=>{
   const db=fakeDb();
-  const state=await processOne(db,'req-1',{env,verify:async()=>{
-    throw Object.assign(new Error('network timeout'),{statusCode:503});
-  },approve:()=>{throw Error('must not approve');}});
+  let approvals=0;
+  const state=await processOne(db,'req-1',{env,verify:input=>verifyCheckEtPayment(input,{
+    apiKey:'mock-key',fetchImpl:async()=>({status:503,json:async()=>({message:'Private provider detail'})})
+  }),approve:()=>{approvals++;}});
   assert.equal(state,'manual_review');
+  assert.equal(approvals,0);
+  assert.equal(db.queue.get('req-1').firstCheckEtState,'uncertain');
+  assert.deepEqual(db.queue.get('req-1').firstCheckEtResult,{
+    providerHttpStatus:503,failureReason:'provider_http_error'
+  });
   assert.equal(db.logs.at(-1).update.state,'manual_review');
+});
+
+test('automatic review distinguishes a local timeout from an upstream HTTP 503',async()=>{
+  const db=fakeDb();
+  await inspectRequest(db,'req-timeout',{env,verify:input=>verifyCheckEtPayment(input,{
+    apiKey:'mock-key',fetchImpl:async()=>{throw Object.assign(new Error('Private detail'),{name:'AbortError'});}
+  })});
+  assert.deepEqual(db.queue.get('req-timeout').firstCheckEtResult,{failureReason:'request_timeout'});
 });
 
 test('historical test-only receipts are rejected by explicit cutover in both purchase and bank dates',()=>{
