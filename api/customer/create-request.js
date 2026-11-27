@@ -88,7 +88,9 @@ async function handleWalletAction(req,res,body){
         const deposit=(await db.collection('depositRequests').doc(result.depositId).get()).data();
         const account=String(deposit?.receivingAccount||'').replace(/\D/g,''),holderName=String(deposit?.receivingOwner||'');
         if(!/^\d{8,30}$/.test(account)||holderName.length<2)throw new Error('Wallet receiving account is not configured.');
-        const provider=await require('../../lib/checket-verify').verifyCheckEtPayment({bank:'cbe',transactionNumber:body.reference,accountNumber:account});
+        const provider=await require('../../lib/checket-verify').verifyCheckEtPayment({
+          bank:'cbe',transactionNumber:body.reference,accountNumber:account,
+          expectedAmount:Number(deposit.amountSantim||0)/100});
         const assessment=require('../../lib/wallet-deposit-verification').assessAutomaticDeposit({deposit,provider,
           receiver:{account,holderName},providerReceiverAccountAssurance:process.env.CHECK_ET_CBE_RECEIVER_ASSURANCE==='authorized'});
         automaticReviewReasons=assessment.reasons;

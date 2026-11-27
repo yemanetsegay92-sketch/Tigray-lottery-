@@ -15,17 +15,22 @@ function mock(status, data, onCall) {
 const base = { bank:'cbe', transactionNumber:'FTTEST12345', accountNumber:'1000123456789' };
 const receipt = { status:'completed', amount:1280, currency:'ETB',
   payer_name:'Test Sender', receiver_name:'Test Receiver', receiver_account:'1000123456789'};
-const official = { success:true, exists:true, duplicate:false,
+const official = { success:true, exists:true, duplicate:false,code:'verified',
+  checks:{status:'pass',receiver:'match',amount:'match'},warnings:[],
   data:{ bank:'cbe',transaction_number:'FTTEST12345', verification_method:'official', receipt } };
 const options = fetchImpl => ({apiKey:'chk_test_only', fetchImpl});
 
 test('successful verification is read-only and reports matching account', async () => {
-  const result = await verifyCheckEtPayment(base, options(mock(200, official, body => {
-    assert.deepEqual(body, {bank:'cbe',transaction_number:'FTTEST12345',account_number:'1000123456789'});
+  const result = await verifyCheckEtPayment({...base,expectedAmount:1280}, options(mock(200, official, body => {
+    assert.deepEqual(body, {bank:'cbe',transaction_number:'FTTEST12345',
+      require_receiver_match:true,account_number:'1000123456789',expected_amount:1280});
   })));
   assert.equal(result.verified, true);
   assert.equal(result.amount, 1280);
   assert.equal(result.receiverAccountMatches, true);
+  assert.equal(result.providerCheckStatus,'pass');
+  assert.equal(result.providerReceiverCheck,'match');
+  assert.equal(result.providerAmountCheck,'match');
   assert.match(result.note, /Approval requires/);
   assert.ok(!JSON.stringify(result).includes('chk_test_only'));
 });
@@ -54,6 +59,61 @@ test('masked receiver is not incorrectly called a full mismatch or exact match',
   assert.equal(result.verified, true);
   assert.equal(result.receiverAccountMatches, null);
   assert.equal(result.receiverAccountStatus, 'masked_unverifiable');
+  assert.equal(result.providerCbeAccountCheck,true);
+});
+
+test('strict provider receiver match accepts an insufficient mask only for the submitted account',async()=>{
+  const result=await verifyCheckEtPayment({...base,expectedAmount:1280},options(mock(200,{
+    ...official,data:{...official.data,receipt:{...receipt,receiver_account:'1*********89'}}
+  })));
+  assert.equal(result.receiverAccountStatus,'masked_unverifiable');
+  assert.equal(result.maskedReceiverSuffix,'89');
+  assert.equal(result.strictReceiverMatchRequested,true);
+  assert.equal(result.providerReceiverCheck,'match');
+  assert.equal(result.providerCbeAccountCheck,true);
+});
+
+test('contradictory returned account defeats provider receiver match',async()=>{
+  for(const receiver_account of ['1000999999999','1********9999']){
+    const result=await verifyCheckEtPayment({...base,expectedAmount:1280},options(mock(200,{
+      ...official,data:{...official.data,receipt:{...receipt,receiver_account}}
+    })));
+    assert.equal(result.providerReceiverCheck,'match');
+    assert.equal(result.providerCbeAccountCheck,false);
+  }
+});
+
+test('documented failed checks are parsed and preserved without approval',async()=>{
+  for(const [code,receiverCheck,amountCheck] of [
+    ['receiver_mismatch','mismatch','match'],['account_mismatch','mismatch','match'],
+    ['receiver_unknown','unknown','match'],['amount_mismatch','match','lower']
+  ]){
+    const result=await verifyCheckEtPayment({...base,expectedAmount:1280},options(mock(422,{
+      success:false,exists:true,duplicate:false,code,
+      checks:{status:'pass',receiver:receiverCheck,amount:amountCheck},
+      warnings:[],data:official.data
+    })));
+    assert.equal(result.verified,false);
+    assert.equal(result.providerCode,code);
+    assert.equal(result.providerReceiverCheck,receiverCheck);
+    assert.equal(result.providerAmountCheck,amountCheck);
+    assert.equal(result.providerCbeAccountCheck,false);
+  }
+});
+
+test('missing provider checks never establish receiver confirmation',async()=>{
+  const {checks,...withoutChecks}=official;
+  const result=await verifyCheckEtPayment({...base,expectedAmount:1280},options(mock(200,withoutChecks)));
+  assert.equal(result.verified,true);
+  assert.equal(result.providerReceiverCheck,'unknown');
+  assert.equal(result.providerCbeAccountCheck,false);
+});
+
+test('documented provider warnings are preserved and unknown values are dropped',async()=>{
+  const result=await verifyCheckEtPayment({...base,expectedAmount:1280},options(mock(200,{
+    ...official,warnings:['amount_higher','old_receipt','private_unrecognized_warning']
+  })));
+  assert.deepEqual(result.warnings,['amount_higher','old_receipt']);
 });
 
 test('a genuinely different fully specified receiver account is marked mismatch', async () => {
@@ -148,7 +208,7 @@ test('provider queue response 202 is not mistaken for a confirmed payment', asyn
 
 test('BOA reference can be checked with five-digit SENDER account suffix',async()=>{
   const body={bank:'boa',transactionNumber:'FTTESTBOA123',accountNumber:'59016'};
-  const response={success:true,exists:true,duplicate:false,data:{
+  const response={success:true,exists:true,duplicate:false,code:'verified',data:{
     bank:'boa',transaction_number:'FTTESTBOA123',verification_method:'official',
     receipt:{status:'completed',amount:100,currency:'ETB',
       receiver_name:'Test Recipient',receiver_account:'1********2968'}

@@ -38,6 +38,8 @@ const verified=(ref)=>({
   verified:true,bank:'cbe',reportedBank:'cbe',status:'completed',
   verificationMethod:'official',amount:100,currency:'ETB',
   providerDuplicate:false,providerCbeAccountCheck:true,
+  providerCheckStatus:'pass',providerReceiverCheck:'match',providerAmountCheck:'match',
+  strictReceiverMatchRequested:true,warnings:[],
   receiverAccountStatus:'masked_unverifiable',maskedReceiverSuffix:'2968',
   receiverName:holder,reportedTransactionNumber:ref,transactionDate:bankTime
 });
@@ -72,8 +74,8 @@ async function run(id,lotteryId,ref,extraGuard={}){
     requestId:id,lotteryId,reference:ref,account,
     expectedAmount:request.total,transactionDate:bankTime,
     verifiedAt:now,fingerprint:ev?.fingerprint||'evidence-missing',
-    cutoffMs:cutoverMs(),policy:'CBE_UNATTENDED_V1',
-    bankMethod:'official',receiveName:holder,...extraGuard
+    cutoffMs:cutoverMs(),policy:'CBE_UNATTENDED_V2',
+    bankMethod:'strict_receiver_match',receiveName:holder,...extraGuard
   };
   return approve(db,{uid:'system:checket-cbe'},{role:'generalAdmin'},
     id,lotteryId,ref,guard);
