@@ -89,18 +89,26 @@ $('screenshot')?.addEventListener('change',async e=>{
     e.target.value='';$('screenshotInfo').textContent=error.message||'Could not use this receipt.';
   }
 });
-function referenceOnly(){return lot?.paymentEvidenceMode==='reference_only'}
+let serverEvidenceMode='';
+function evidenceMode(){return serverEvidenceMode||(lot?.paymentEvidenceMode==='reference_only'?'reference_only':'standard')}
+function referenceOnly(){return evidenceMode()==='reference_only'}
+function receiptRequired(){return evidenceMode()==='receipt_required'}
 function applyEvidenceMode(){
- const only=referenceOnly();
+ const only=referenceOnly(),receipt=receiptRequired();
  const upload=document.querySelector('label.upload-box'),help=document.querySelector('.mobile-upload-help');
  if(upload)upload.hidden=only;
  if(help)help.hidden=only;
  $('screenshot').disabled=only;
+ $('screenshot').required=receipt;
+ const referenceLabel=$('reference').closest('label');
+ if(referenceLabel){referenceLabel.hidden=receipt;referenceLabel.style.display=receipt?'none':'';}
+ $('reference').disabled=receipt;
  $('reference').required=only;
  const note=document.querySelector('.proof-rule');
  if(note)note.textContent=only?(lang==='ti'?'ቁጽሪ ግብይት ጥራይ ኣእቱ።':'Enter transaction reference only. No file upload needed.'):t.proofRule;
  const description=document.querySelector('[data-i18n="proofNote"]');
  if(description)description.textContent=only?(lang==='ti'?'ቁጽሪ ግብይት ጥራይ ኣእቱ።':'Enter the bank transaction reference only.'):t.proofNote;
+ if(receipt){if(note)note.textContent='Upload the original CBE receipt PDF or screenshot.';if(description)description.textContent='An original CBE receipt PDF or screenshot is required.';}
 }
 function qty(){return Math.max(1,Math.min(5,Number($('quantity').value)||1))}function updateTotal(){const q=qty(),price=Number(lot?.price||0);$('quantity').value=q;$('total').textContent=`${t.total}: ${q*price} Birr`;$('reviewQty').textContent=q;$('reviewPrice').textContent=`${price} Birr`;$('reviewTotal').textContent=`${q*price} Birr`}$('qtyMinus').addEventListener('click',()=>{$('quantity').value=Math.max(1,qty()-1);updateTotal()});$('qtyPlus').addEventListener('click',()=>{$('quantity').value=Math.min(5,qty()+1);updateTotal()});$('quantity').addEventListener('input',updateTotal);
 async function init(){if(!lotId){$('lotteryInfo').innerHTML=`<div class="error">${t.lotUnavailable}</div>`;$('buyForm').style.display='none';return}try{const snap=await getDoc(doc(db,'lotteries',lotId));if(!snap.exists()||snap.data().status!=='active'){$('lotteryInfo').innerHTML=`<div class="card lottery-head-card"><h2>${t.lotUnavailable}</h2><a class="btn btn-primary" href="index.html">${t.goBack}</a></div>`;$('buyForm').style.display='none';return}lot={id:snap.id,...snap.data()};$('lotteryInfo').innerHTML=`<div class="card lottery-head-card"><div class="eyebrow dark">OPEN LOTTERY</div><h1>${esc(lot.name)}</h1><div class="lottery-head-meta"><span class="meta-pill">${Number(lot.price)} Birr / ticket</span><span class="meta-pill">${esc(lot.min)} – ${esc(lot.max)}</span></div><p class="form-note">${t.ticketPending}</p></div>`;applyEvidenceMode();updateTotal()}catch(e){console.error(e);$('lotteryInfo').innerHTML='<div class="error">Could not load this lottery.</div>'}}
@@ -175,4 +183,11 @@ $('walletBuyBtn')?.addEventListener('click',async()=>{
   $('message').innerHTML=`<div class="success"><b>✓ Tickets assigned instantly</b><p>${result.ticketNumbers.map(x=>esc(x)).join(', ')}</p><a class="btn btn-primary" href="account.html">Open wallet</a></div>`;
  }catch(error){$('message').innerHTML='<div class="error">'+esc(error.message)+'</div>';button.disabled=false;button.textContent='Buy instantly with wallet';}
 });
-init();
+async function loadEvidencePolicy(){
+ const response=await fetch('/api/customer/create-request',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({action:'purchase-evidence-policy',lotteryId:lotId})});
+ const result=await response.json();
+ if(!response.ok||!result.ok)throw new Error(result.error||'Could not load purchase policy.');
+ serverEvidenceMode=result.mode;applyEvidenceMode();$('submitBtn').disabled=false;
+}
+$('submitBtn').disabled=true;
+init().then(loadEvidencePolicy).catch(error=>{console.error(error);$('buyForm').style.display='none';$('message').innerHTML='<div class="error">Could not load the secure purchase policy. Please refresh.</div>';});

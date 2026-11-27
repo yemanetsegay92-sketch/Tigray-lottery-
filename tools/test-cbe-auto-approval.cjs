@@ -368,7 +368,7 @@ test('event dispatch leases one exact request, approves once, and ignores repeat
   let approvals=0;
   const options={env,verify:async()=>verification,approve:async()=>{approvals++;}};
   const first=await runQueueItem(db,id,options);
-  assert.deepEqual(first,{processed:1,approved:1,manual_review:0,retry:0});
+  assert.deepEqual(first,{processed:1,approved:1,rejected:0,manual_review:0,retry:0});
   assert.equal(approvals,1);
   assert.equal(db.queue.get(id).attempts,1);
   const repeated=await runQueueItem(db,id,{...options,verify:async()=>{
@@ -391,14 +391,36 @@ test('event dispatch fails closed for preview or malformed queue IDs',async()=>{
 });
 test('consumed database reference blocks provider before an attempt marker',async()=>{
  let calls=0;const db=fakeDb({claim:true});const r=await inspectRequest(db,'consumed-before-call',{env,verify:async()=>{calls++;return verification;}});
- assert.equal(calls,0);assert.equal(r.decision,'manual_review');assert.ok(!db.queue.get('consumed-before-call').verificationAttemptStartedAt);
+ assert.equal(calls,0);assert.equal(r.decision,'reject');assert.equal(r.rejection.code,'duplicate');assert.ok(!db.queue.get('consumed-before-call').verificationAttemptStartedAt);
 });
 for(const [name,response] of [
  ['insufficient amount',{...verification,amount:80}],
- ['HTTP 404',{...verification,verified:false,exists:false,providerHttpStatus:404,providerCode:'not_found'}],
- ['HTTP 409',{...verification,verified:false,exists:true,providerDuplicate:true,providerCbeAccountCheck:false,providerHttpStatus:409,providerCode:'duplicate'}]
+ ['HTTP 404',{...verification,verified:false,exists:false,providerHttpStatus:404,providerCode:'not_found'}]
 ])test(name+' remains manual review with one call and no automatic retry',async()=>{
  const db=fakeDb();let calls=0;const options={env,verify:async()=>{calls++;return response}};
  assert.equal((await inspectRequest(db,'manual-'+name,options)).decision,'manual_review');
  assert.equal((await inspectRequest(db,'manual-'+name,options)).decision,'manual_review');assert.equal(calls,1);
+});
+test('only corroborated documented provider failures are automatically rejected',async()=>{
+ const cases=[
+  [{providerHttpStatus:409,providerCode:'duplicate',providerDuplicate:true},'duplicate'],
+  [{providerHttpStatus:422,providerCode:'receiver_mismatch',providerReceiverCheck:'mismatch'},'receiver_mismatch'],
+  [{providerHttpStatus:422,providerCode:'account_mismatch',providerReceiverCheck:'mismatch'},'account_mismatch'],
+  [{providerHttpStatus:422,providerCode:'amount_mismatch',providerAmountCheck:'lower',amount:80},'amount_mismatch']
+ ];
+ for(const [change,code] of cases){
+  const db=fakeDb();
+  const result=await inspectRequest(db,'reject-'+code,{env,verify:async()=>({...verification,verified:false,exists:true,...change})});
+  assert.equal(result.decision,'reject');assert.equal(result.rejection.code,code);
+ }
+ for(const change of [
+  {providerHttpStatus:422,providerCode:'receiver_unknown',providerReceiverCheck:'unknown'},
+  {providerHttpStatus:422,providerCode:'amount_mismatch',providerAmountCheck:'unknown',amount:80},
+  {providerHttpStatus:422,providerCode:'receiver_mismatch',providerReceiverCheck:'unknown'},
+  {providerHttpStatus:422,providerCode:'unreadable_image'}
+ ]){
+  const db=fakeDb();
+  const result=await inspectRequest(db,'manual-unknown-'+Math.random(),{env,verify:async()=>({...verification,verified:false,exists:true,...change})});
+  assert.equal(result.decision,'manual_review');
+ }
 });

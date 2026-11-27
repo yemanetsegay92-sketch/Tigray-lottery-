@@ -412,6 +412,67 @@ async function rejectRequest(db, caller, profile, requestId, requestedLotteryId,
   });
 }
 
+async function rejectRequestAutoCbe(db,requestId,requestedLotteryId,reference,rejection){
+  await db.runTransaction(async tx=>{
+    const requestRef=db.collection('ticketRequests').doc(requestId);
+    const requestSnap=await tx.get(requestRef);
+    if(!requestSnap.exists)throw new Error('Request not found.');
+    const request=requestSnap.data()||{};
+    const lotteryId=String(request.lotteryId||'');
+    if(lotteryId!==requestedLotteryId)throw new Error('Request does not belong to the selected lottery.');
+    if(request.status==='rejected' && request.automaticRejection?.code===rejection.code)return;
+    if(request.status!=='pending')throw new Error('This request has already been reviewed.');
+    const lotterySnap=await tx.get(db.collection('lotteries').doc(lotteryId));
+    if(!lotterySnap.exists||lotterySnap.data()?.cleanupInProgress===true)
+      throw new Error('Lottery cleanup is in progress. Payment decisions are disabled.');
+    const now=FieldValue.serverTimestamp();
+    const phone=normalizePhone(request.phone),phoneHash=String(request.phoneHash||sha256(phone));
+    const detail={code:rejection.code,reference:normalizePaymentReference(reference),actor:'system:checket-cbe'};
+    tx.update(requestRef,{status:'rejected',rejectionReason:rejection.reason,
+      automaticRejection:detail,reviewedBy:'system:checket-cbe',reviewedAt:now});
+    tx.set(db.collection('publicStatus').doc(phoneHash).collection('requests').doc(requestId),{
+      lotteryId,status:'rejected',rejectionReason:rejection.reason,reviewedAt:now
+    },{merge:true});
+    tx.set(db.collection('buyerNotificationQueue').doc(requestId+'_rejected'),{
+      requestId,lotteryId,decision:'rejected',state:'pending',attempts:0,nextAttemptAt:now,createdAt:now
+    },{merge:true});
+    tx.set(db.collection('autoPaymentQueue').doc(requestId),{
+      state:'rejected',reasonCode:rejection.code,leaseUntil:null,nextAttemptAt:null,updatedAt:now
+    },{merge:true});
+    tx.set(db.collection('auditLogs').doc('auto_cbe_reject_'+requestId),{
+      action:'rejectRequestAutoCBE',lotteryId,requestId,adminId:'system:checket-cbe',
+      rejectionCode:rejection.code,rejectionReason:rejection.reason,reference:detail.reference,createdAt:now
+    },{merge:true});
+  });
+}
+
+async function reconcileAutomaticRejection(db,caller,profile,requestId,requestedLotteryId,reason){
+  await db.runTransaction(async tx=>{
+    const ref=db.collection('ticketRequests').doc(requestId),snap=await tx.get(ref);
+    if(!snap.exists)throw new Error('Request not found.');
+    const request=snap.data()||{},lotteryId=String(request.lotteryId||'');
+    if(requestedLotteryId!==lotteryId)throw new Error('Request does not belong to the selected lottery.');
+    assertLotteryAccess(profile,lotteryId);
+    if(request.status!=='rejected'||!request.automaticRejection?.code)
+      throw new Error('Only an automatically rejected request can be reconciled.');
+    const now=FieldValue.serverTimestamp(),phone=normalizePhone(request.phone);
+    const phoneHash=String(request.phoneHash||sha256(phone));
+    tx.update(ref,{status:'pending',rejectionReason:FieldValue.delete(),
+      reconciliation:{reason,adminId:caller.uid,at:now},reviewedBy:FieldValue.delete(),reviewedAt:FieldValue.delete()});
+    tx.set(db.collection('publicStatus').doc(phoneHash).collection('requests').doc(requestId),{
+      status:'pending',rejectionReason:FieldValue.delete(),reconciledAt:now
+    },{merge:true});
+    tx.set(db.collection('autoPaymentQueue').doc(requestId),{
+      state:'manual_review',reasonCode:'administrator_reconciliation',leaseUntil:null,nextAttemptAt:null,updatedAt:now
+    },{merge:true});
+    tx.update(db.collection('buyerNotificationQueue').doc(requestId+'_rejected'),{
+      state:'cancelled',cancelReason:'administrator_reconciliation',updatedAt:now
+    });
+    tx.set(db.collection('auditLogs').doc(),{action:'reconcileAutomaticRejection',lotteryId,requestId,
+      adminId:caller.uid,reconciliationReason:reason,originalRejectionCode:request.automaticRejection.code,createdAt:now});
+  });
+}
+
 // Admin-authenticated, short-lived read link. Private bucket rules stay deny-all;
 // only a verified admin assigned to this lottery may obtain the signed URL.
 // Actual receipt bytes travel Storage -> browser, not Storage -> Vercel -> browser.
@@ -794,7 +855,9 @@ async function handleAutoCbeWorker(req,res,body={}){
     approve:async(requestId,lotteryId,reference,guard)=>{
       await approveRequest(db,{uid:'system:checket-cbe'},{role:'generalAdmin'},
         requestId,lotteryId,reference,guard);
-    }
+    },
+    reject:(requestId,lotteryId,reference,rejection)=>
+      rejectRequestAutoCbe(db,requestId,lotteryId,reference,rejection)
   };
   const result=targeted
     ? await runQueueItem(db,requestId,options)
@@ -1004,12 +1067,19 @@ module.exports = async (req, res) => {
       res.setHeader('Cache-Control','no-store');
       return res.status(200).json({ok:true,...await reviewAction(db,caller,{...body,action,requestId,lotteryId:requestedLotteryId})});
     }
-    if (!['approve', 'reject', 'cancel'].includes(action)) {
+    if (!['approve', 'reject', 'cancel','reconcile-auto-rejection'].includes(action)) {
       return res.status(400).json({ ok: false, error: 'action must be approve, reject, or cancel.' });
     }
 
     const db = adminDb();
     const { caller, profile } = await authenticateAdmin(req, db);
+
+    if(action==='reconcile-auto-rejection'){
+      const reason=String(body.reason||'').trim().slice(0,300);
+      if(!reason)return res.status(400).json({ok:false,error:'Reconciliation reason required.'});
+      await reconcileAutomaticRejection(db,caller,profile,requestId,requestedLotteryId,reason);
+      return res.status(200).json({ok:true,reconciled:true});
+    }
 
     if (action === 'approve') {
       const result = await approveRequest(
@@ -1102,4 +1172,7 @@ module.exports = async (req, res) => {
 
 // Expose the same production transaction function only to Firebase emulator tests.
 // Never add an unauthenticated HTTP action for this helper.
-if (process.env.FIRESTORE_EMULATOR_HOST) module.exports._approveRequestForEmulator = approveRequest;
+if (process.env.FIRESTORE_EMULATOR_HOST) {
+  module.exports._approveRequestForEmulator = approveRequest;
+  module.exports._rejectRequestAutoCbeForEmulator = rejectRequestAutoCbe;
+}

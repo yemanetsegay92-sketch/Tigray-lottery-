@@ -10,7 +10,7 @@ const checkout=require('../api/customer/create-request');
 async function submit(lotteryId,reference){let status,result;const res={setHeader(){},status(n){status=n;return this},json(x){result=x;return this}};await checkout({method:'POST',headers:{},body:{lotteryId,reference,name:'Synthetic',phone:'0912345678',quantity:1}},res);return {status,result};}
 const lottery={status:'active',price:100,min:1,max:100,nextTicketNumber:1,paymentAccounts:[{bank:'CBE',number:'1000123456789',holderName:'TEST RECEIVER'}]};
 test('checkout rejects consumed cross-lottery reference before provider, accepts unused and preserves idempotency under concurrency',async()=>{
- await db.collection('lotteries').doc('upgrade-checkout').set(lottery);
+ await db.collection('lotteries').doc('upgrade-checkout').set({...lottery,paymentAccounts:[{bank:'BOA',number:'12345',holderName:'TEST RECEIVER'}]});
  await paymentClaimRef(db,'FTUPGRADEUSED01').set({requestId:'approved-in-deleted-lottery',lotteryId:'deleted',status:'consumed'});
  const used=await submit('upgrade-checkout',' ftupgradeused01 ');assert.equal(used.status,409);
  const results=await Promise.all([submit('upgrade-checkout','FTUPGRADEUNUSED01'),submit('upgrade-checkout','FTUPGRADEUNUSED01')]);

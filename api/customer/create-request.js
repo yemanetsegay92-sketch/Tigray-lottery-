@@ -1,6 +1,6 @@
 const {normalizePaymentReference,assertReferenceUnusedAtCheckout}=require('../../lib/payment-claims');
 const crypto = require('crypto');
-const {assertPurchaseEvidence,assertUploadAllowed}=require('../../lib/payment-evidence-mode');
+const {assertPurchaseEvidence,assertUploadAllowed,customerEvidenceMode}=require('../../lib/payment-evidence-mode');
 const { getStorage } = require('firebase-admin/storage');
 const { getAuth } = require('firebase-admin/auth');
 const { BUCKET: PRIVATE_BUCKET, TYPES, POLICY_TTL_MS, FINISH_TTL_MS, signToken, receiptPath, verifyToken, validateStagedFile, sha256: proofHash } = require('./_receipt-upload');
@@ -163,6 +163,13 @@ module.exports = async (req, res) => {
     res.setHeader('Cache-Control','no-store');
     assertReasonableBody(req, body);
     if(String(body.action||'').startsWith('wallet-'))return await handleWalletAction(req,res,body);
+    if(body.action==='purchase-evidence-policy'){
+      const lotteryId=String(body.lotteryId||'').trim();
+      if(!/^[a-zA-Z0-9_-]{1,128}$/.test(lotteryId))throw badRequest('Invalid lottery ID.');
+      const snap=await adminDb().collection('lotteries').doc(lotteryId).get();
+      if(!snap.exists||snap.data()?.status!=='active')throw badRequest('Lottery is not open.');
+      return res.status(200).json({ok:true,mode:customerEvidenceMode(snap.data())});
+    }
     if (body.action === 'authorize-receipt-upload') {
       await enforcePublicPurchaseLimit(req, 'upload', adminDb);
       return await authorizeReceiptUpload(body, res);

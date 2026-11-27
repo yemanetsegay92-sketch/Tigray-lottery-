@@ -109,22 +109,18 @@ test.describe.serial('demo wallet browser flows',()=>{
   await expect(page.locator('#walletBalance')).toHaveText('100.00 ETB');
  });
 
- test('RF-only checkout rejects uploads, submits a reference, rejects insufficient funds and assigns wallet tickets',async({page})=>{
+ test('CBE checkout requires a receipt while wallet purchases remain available',async({page})=>{
   await signIn(page,'customer2.local@tigray.test','/account.html');
   await page.goto('/buy.html?lot=local-rf-lottery');
   await expect(page.locator('#lotteryInfo')).toContainText('Local RF-only Lottery');
-  await expect(page.locator('#screenshot')).toBeDisabled();
+  await expect(page.locator('#screenshot')).toBeEnabled();
+  await expect(page.locator('#screenshot')).toHaveAttribute('required','');
+  await expect(page.locator('#reference').locator('..')).toBeHidden();
   await page.locator('#name').fill('Local Customer Two');
   await page.locator('#phone').fill('0911000102');
   await page.locator('#submitBtn').click();
-  expect(await page.locator('#reference').evaluate(element=>element.validity.valueMissing)).toBe(true);
-  await page.locator('#reference').fill('FTRFONLYE2E01');
-  await page.locator('#submitBtn').click();
-  await expect(page.locator('#message .success')).toBeVisible();
-  await expect(page.locator('#buyForm')).toBeHidden();
+  expect(await page.locator('#screenshot').evaluate(element=>element.validity.valueMissing)).toBe(true);
 
-  await page.goto('/buy.html?lot=local-rf-lottery');
-  await expect(page.locator('#lotteryInfo')).toContainText('Local RF-only Lottery');
   await expect(page.locator('#walletBuyBtn')).toBeVisible();
   await page.locator('#quantity').fill('5');
   await page.locator('#walletBuyBtn').click();
