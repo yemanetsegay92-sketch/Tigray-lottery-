@@ -425,6 +425,30 @@ async function rejectRequestAutoCbe(db,requestId,requestedLotteryId,reference,re
     const lotterySnap=await tx.get(db.collection('lotteries').doc(lotteryId));
     if(!lotterySnap.exists||lotterySnap.data()?.cleanupInProgress===true)
       throw new Error('Lottery cleanup is in progress. Payment decisions are disabled.');
+    // Revalidate the exact private receipt and receiver binding before applying
+    // the special file-based account_mismatch decision. Never use client data.
+    if(rejection.receiptMismatchFingerprint){
+      const {activationRef,configuredCbe,enabledFor}=require('../../lib/cbe-auto-activation');
+      const {paymentFingerprint}=require('../../lib/cbe-verification-evidence');
+      const lottery=lotterySnap.data()||{};
+      const [activationSnap,queueSnap]=await Promise.all([
+        tx.get(activationRef(db,lotteryId)),
+        tx.get(db.collection('autoPaymentQueue').doc(requestId))
+      ]);
+      const q=queueSnap.data()||{},v=q.firstCheckEtResult||{};
+      const account=configuredCbe(lottery)?.account;
+      if(!account||!enabledFor(lottery,activationSnap.data())||!request.proofPath||
+        !queueSnap.exists||q.state!=='processing'||q.firstCheckEtInputMethod!=='receipt'||
+        q.firstCheckEtState!=='returned'||q.firstSubmittedReference!==reference||
+        q.verificationAttemptFingerprint!==rejection.receiptMismatchFingerprint||
+        paymentFingerprint(requestId,request,account)!==rejection.receiptMismatchFingerprint||
+        v.bank!=='cbe'||!['pdf','image'].includes(v.inputMethod)||
+        v.strictReceiverMatchRequested!==true||v.providerHttpStatus!==422||
+        v.providerCode!=='account_mismatch'||v.providerSuccess!==false||v.verified!==false||
+        v.providerDuplicate===true||v.providerReceiverCheck==='match'||v.receiverAccountStatus==='exact_match'){
+        throw new Error('Receipt mismatch evidence changed; manual reconciliation required.');
+      }
+    }
     const now=FieldValue.serverTimestamp();
     const phone=normalizePhone(request.phone),phoneHash=String(request.phoneHash||sha256(phone));
     const detail={code:rejection.code,reference:normalizePaymentReference(reference),actor:'system:checket-cbe'};
