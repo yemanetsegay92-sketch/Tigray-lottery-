@@ -319,7 +319,8 @@ test('uncertain Check.et responses go to manual review, never blindly reverify',
   assert.equal(approvals,0);
   assert.equal(db.queue.get('req-1').firstCheckEtState,'uncertain');
   assert.deepEqual(db.queue.get('req-1').firstCheckEtResult,{
-    providerHttpStatus:503,failureReason:'provider_http_error'
+    providerHttpStatus:503,providerCode:'unknown',providerValidationFields:[],
+    providerErrorReasons:[],failureReason:'provider_http_error'
   });
   assert.equal(db.logs.at(-1).update.state,'manual_review');
 });

@@ -5,9 +5,13 @@ function attemptMarkup(attempt, title) {
   const fields = [
     [attempt.inputMethod === 'receipt' ? 'Expected reference' : 'Submitted reference', attempt.reference || 'Unavailable in saved record'],
     ['Check input',attempt.inputMethod === 'receipt' ? 'Original receipt file' : null],
-    ['Provider HTTP status',result.providerHttpStatus], ['Provider code',result.providerCode], ['Failure reason',result.failureReason], ['Outcome', attempt.state], ['Bank status', result.status], ['Bank reference', result.reportedTransactionNumber],
+    ['Provider HTTP status',result.providerHttpStatus], ['Provider code',result.providerCode],
+    ['Validation fields',Array.isArray(result.providerValidationFields)?result.providerValidationFields.join(', '):null],
+    ['Provider reason',Array.isArray(result.providerErrorReasons)?result.providerErrorReasons.join(' · '):null],
+    ['Failure reason',result.failureReason], ['Outcome', attempt.state], ['Bank status', result.status], ['Bank reference', result.reportedTransactionNumber],
     ['Verification method',result.verificationMethod || result.verificationMethodValue], ['Verified', result.verified], ['Amount', result.amount == null ? null : result.amount+' '+(result.currency || '')],
     ['Bank date',result.transactionDate], ['Receiver', result.receiverName], ['Receiving account check', result.receiverAccountStatus],
+    ['Provider status check',result.providerCheckStatus], ['Provider receiver check',result.providerReceiverCheck], ['Provider amount check',result.providerAmountCheck],
     ['Account confirmed by provider',result.providerCbeAccountCheck], ['Provider duplicate', result.providerDuplicate], ['Administrator',attempt.adminId], ['Detail',attempt.message]
   ];
   return '<section><strong>'+esc(title)+'</strong><dl>'+fields.filter(([,v])=>v!=null && v!=='')
