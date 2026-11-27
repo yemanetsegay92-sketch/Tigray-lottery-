@@ -17,8 +17,10 @@ if(!process.env.FIRESTORE_EMULATOR_HOST ||
 const app=initializeApp({projectId:process.env.GCLOUD_PROJECT});
 const db=getFirestore(app);
 after(async()=>{await deleteApp(app);});
-const { _approveRequestForEmulator:approve }=require('../api/admin/approvals');
+const { _approveRequestForEmulator:approve,
+  _rejectRequestAutoCbeForEmulator:rejectAuto }=require('../api/admin/approvals');
 assert.equal(typeof approve,'function');
+assert.equal(typeof rejectAuto,'function');
 const account='1000123452968';
 const holder='MAHLIET TSEGAY GIDEY';
 const now=Date.now();
@@ -144,6 +146,21 @@ test('missing persisted evidence must not approve or consume claim',async()=>{
   await assert.rejects(run('missing-a',lot,ref),/guard did not pass/);
   assert.equal((await rows('tickets',lot)).length,0);
   assert.equal((await db.collection('paymentClaims').doc(makePaymentClaimId(ref)).get()).exists,false);
+});
+
+test('automatic rejection is atomic, idempotent, audited, and never consumes a payment claim',async()=>{
+  const lotteryId='emul-auto-reject',reference='FTEMULATORREJECT19',id='reject-a';
+  await setup(lotteryId,[[id,reference]]);
+  const rejection={code:'amount_mismatch',reason:'The verified payment amount is lower than the required ticket total.'};
+  await Promise.all([rejectAuto(db,id,lotteryId,reference,rejection),rejectAuto(db,id,lotteryId,reference,rejection)]);
+  const request=(await db.collection('ticketRequests').doc(id).get()).data();
+  assert.equal(request.status,'rejected');
+  assert.equal(request.automaticRejection.code,'amount_mismatch');
+  assert.equal((await db.collection('autoPaymentQueue').doc(id).get()).data().state,'rejected');
+  assert.equal((await db.collection('buyerNotificationQueue').doc(id+'_rejected').get()).exists,true);
+  assert.equal((await db.collection('auditLogs').doc('auto_cbe_reject_'+id).get()).data().action,'rejectRequestAutoCBE');
+  assert.equal((await db.collection('paymentClaims').doc(makePaymentClaimId(reference)).get()).exists,false);
+  assert.equal((await rows('tickets',lotteryId)).length,0);
 });
 
 test('duplicate Firestore event delivery leases a queue record only once',async()=>{
