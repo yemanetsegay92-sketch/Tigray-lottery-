@@ -1,6 +1,7 @@
 'use strict';
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
+const {readFileSync}=require('node:fs');
 const { verifyCheckEtPayment } = require('../lib/checket-verify');
 
 function mock(status, data, onCall) {
@@ -200,6 +201,19 @@ test('unexpected provider status has numeric diagnostic but never leaks response
   await assert.rejects(verifyCheckEtPayment(base,options(mock(418,{receipt:'secret buyer name'}))),
     err=>err.statusCode===502 && err.providerHttpStatus===418 &&
       /provider HTTP 418/.test(err.message) && !err.message.includes('secret'));
+});
+test('400 validation failure exposes only safe provider diagnostics',async()=>{
+ await assert.rejects(verifyCheckEtPayment(base,options(mock(400,{code:'invalid_account',message:'Bad account 1000123456789',errors:{account_number:['The account 1000123456789 is invalid.']}}))),err=>{
+   assert.equal(err.providerHttpStatus,400);assert.equal(err.providerCode,'invalid_account');
+   assert.deepEqual(err.providerValidationFields,['account_number']);
+   assert.ok(!JSON.stringify(err.providerErrorReasons).includes('1000123456789'));
+   return true;
+ });
+});
+test('admin review displays provider checks and sanitized validation diagnostics',()=>{
+ const source=readFileSync('admin/js/paymentReview.mjs','utf8');
+ for(const field of ['providerCheckStatus','providerReceiverCheck','providerAmountCheck',
+   'providerValidationFields','providerErrorReasons'])assert.match(source,new RegExp(field));
 });
 test('provider queue response 202 is not mistaken for a confirmed payment', async()=>{
   await assert.rejects(verifyCheckEtPayment(base,options(mock(202,{success:true,exists:true}))),

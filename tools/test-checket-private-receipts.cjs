@@ -55,7 +55,7 @@ test('direct PDF uses multipart receipt_file and receiving account, never client
     assert.ok(opts.body instanceof FormData);
     assert.equal(opts.body.get('bank'),'cbe');
     assert.equal(opts.body.get('account_number'),'1000123412345');
-    assert.equal(opts.body.get('require_receiver_match'),'true');
+    assert.equal(opts.body.get('require_receiver_match'),'1');
     assert.equal(opts.body.get('expected_amount'),'1000');
     assert.equal(opts.body.get('transaction_number'),null);
     const part=opts.body.get('receipt_file');
@@ -85,6 +85,22 @@ test('image is sent without transaction_number and unreadable response remains u
   }});
   assert.equal(result.verified,false);
   assert.equal(result.providerCode,'unreadable_image');
+});
+test('multipart amount remains a decimal form value and validation diagnostics are privacy-safe',async()=>{
+  const result=await verifyCheckEtPayment({bank:'cbe',accountNumber:'1000123412345',expectedAmount:20.5,
+    receiptFile:{buffer:PDF,mime:'application/pdf'}},{apiKey:key,fetchImpl:async(_url,opts)=>{
+    assert.equal(opts.body.get('require_receiver_match'),'1');
+    assert.equal(opts.body.get('expected_amount'),'20.5');
+    return {status:422,json:async()=>({message:'The given data was invalid.',errors:{
+      require_receiver_match:['The require receiver match field must be true or false.'],
+      expected_amount:['Account 1000123412345 and FT26001SECRET are invalid.']}})};
+  }});
+  assert.equal(result.verified,false);
+  assert.equal(result.providerCode,'validation_error');
+  assert.deepEqual(result.providerValidationFields,['require_receiver_match','expected_amount']);
+  assert.equal(result.providerErrorReasons[0],'Field must be a boolean value.');
+  assert.ok(!JSON.stringify(result).includes('1000123412345'));
+  assert.ok(!JSON.stringify(result).includes('FT26001SECRET'));
 });
 test('screenshot signature check works without OCR',()=>{
   assert.equal(validSignature(PNG,'image/png'),true);
