@@ -9,6 +9,8 @@ const purchase={lotteryId:'lot1',reference:'',proofPath:'payment-proofs/lot1/abc
 const verified={verified:true,reportedBank:'cbe',bank:'cbe',verificationMethod:'official',
   status:'completed',amount:1000,currency:'ETB',providerDuplicate:false,
   providerCbeAccountCheck:true,receiverAccountStatus:'masked_unverifiable',
+  providerCheckStatus:'pass',providerReceiverCheck:'match',providerAmountCheck:'match',
+  strictReceiverMatchRequested:true,warnings:[],
   maskedReceiverSuffix:'2968',receiverName:'Mahliet Tsegay Gidey',
   reportedTransactionNumber:'FTTESTIMAGE89',transactionDate:new Date(now-65000).toISOString(),
   apiKey:'SECRET_MUST_NOT_PERSIST',receiptBuffer:'not-permitted'};

@@ -6,7 +6,8 @@ const {readFinalReceipt,validSignature}=require('../lib/checket-private-receipt'
 const PDF=Buffer.from('%PDF-1.7\n1 0 obj\n<<>>\nendobj\n%%EOF\n');
 const PNG=Buffer.concat([Buffer.from('89504e470d0a1a0a','hex'),Buffer.alloc(30)]);
 const RECEIPT={
-  verified:true,success:true,exists:true,duplicate:false,
+  verified:true,success:true,exists:true,duplicate:false,code:'verified',
+  checks:{status:'pass',receiver:'match',amount:'match'},warnings:[],
   data:{bank:'cbe',transaction_number:'FTPDFTEST123',verification_method:'official',
     receipt:{status:'completed',amount:1000,currency:'ETB',
       receiver_account:'1********1234',transaction_date:'2026-10-29T14:00:00+03:00'}}
@@ -45,6 +46,7 @@ test('direct PDF uses multipart receipt_file and receiving account, never client
   let tested=false;
   const response=await verifyCheckEtPayment({
     bank:'cbe',accountNumber:'1000123412345',
+    expectedAmount:1000,
     receiptFile:{buffer:PDF,mime:'application/pdf'}
   },{apiKey:key,fetchImpl:async(url,opts)=>{
     assert.equal(url,'https://api.check.et/api/v1/verify');
@@ -53,6 +55,8 @@ test('direct PDF uses multipart receipt_file and receiving account, never client
     assert.ok(opts.body instanceof FormData);
     assert.equal(opts.body.get('bank'),'cbe');
     assert.equal(opts.body.get('account_number'),'1000123412345');
+    assert.equal(opts.body.get('require_receiver_match'),'true');
+    assert.equal(opts.body.get('expected_amount'),'1000');
     assert.equal(opts.body.get('transaction_number'),null);
     const part=opts.body.get('receipt_file');
     assert.equal(part.name,'bank-receipt.pdf');
@@ -67,15 +71,20 @@ test('direct PDF uses multipart receipt_file and receiving account, never client
   assert.equal(response.verified,true);
   assert.ok(!JSON.stringify(response).includes(key));
 });
-test('image is tested without OCR and 422 produces an honest, safe error',async()=>{
-  await assert.rejects(verifyCheckEtPayment({
+test('image is sent without transaction_number and unreadable response remains unverified',async()=>{
+  const result=await verifyCheckEtPayment({
     bank:'cbe',accountNumber:'1000123412345',
+    expectedAmount:1000,
     receiptFile:{buffer:PNG,mime:'image/png'}
   },{apiKey:key,fetchImpl:async(_url,opts)=>{
     assert.equal(opts.body.get('receipt_text'),null);
+    assert.equal(opts.body.get('transaction_number'),null);
     assert.equal(opts.body.get('receipt_file').type,'image/png');
-    return {status:422,json:async()=>({message:'image receipt_text required'})};
-  }}),error=>error.statusCode===422 && /could not process/.test(error.message));
+    return {status:422,json:async()=>({success:false,exists:false,duplicate:false,
+      code:'unreadable_image',warnings:[],message:'image receipt_text required'})};
+  }});
+  assert.equal(result.verified,false);
+  assert.equal(result.providerCode,'unreadable_image');
 });
 test('screenshot signature check works without OCR',()=>{
   assert.equal(validSignature(PNG,'image/png'),true);

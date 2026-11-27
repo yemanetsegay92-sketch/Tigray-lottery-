@@ -126,8 +126,8 @@ async function approveRequest(db, caller, profile, requestId, requestedLotteryId
         enabledFor(lottery,activationSnap?.exists?activationSnap.data():null) && lottery.status==='active' &&
         String(autoGuard.requestId)===requestId &&
         String(autoGuard.lotteryId)===lotteryId &&
-        autoGuard.policy==='CBE_UNATTENDED_V1' &&
-        autoGuard.bankMethod==='official' &&
+        autoGuard.policy==='CBE_UNATTENDED_V2' &&
+        autoGuard.bankMethod==='strict_receiver_match' &&
         Number(autoGuard.cutoffMs)===cutoverMs() &&
         isAfterCutover(request.createdAt,autoGuard.transactionDate) &&
         normalizePaymentReference(autoGuard.reference)===normalized &&
@@ -138,8 +138,12 @@ async function approveRequest(db, caller, profile, requestId, requestedLotteryId
         bankEvidence.verifiedAt===guardTime &&
         stored.verified===true && stored.providerDuplicate===false &&
         stored.providerCbeAccountCheck===true &&
+        stored.strictReceiverMatchRequested===true &&
+        stored.providerCheckStatus==='pass' &&
+        stored.providerReceiverCheck==='match' &&
+        stored.providerAmountCheck==='match' &&
         stored.bank==='cbe' && stored.reportedBank==='cbe' &&
-        stored.verificationMethod==='official' && stored.status==='completed' &&
+        ['official','mobile_api'].includes(stored.verificationMethod) && stored.status==='completed' &&
         normalizePaymentReference(stored.reportedTransactionNumber)===normalized &&
         stored.transactionDate===autoGuard.transactionDate &&
         stored.receiverName===autoGuard.receiveName &&
@@ -147,7 +151,10 @@ async function approveRequest(db, caller, profile, requestId, requestedLotteryId
         ['exact_match','masked_unverifiable'].includes(stored.receiverAccountStatus) &&
         (stored.receiverAccountStatus!=='masked_unverifiable' ||
           (/^\d{4,8}$/.test(String(stored.maskedReceiverSuffix||'')) &&
-            String(autoGuard.account).endsWith(String(stored.maskedReceiverSuffix)))) &&
+            String(autoGuard.account).endsWith(String(stored.maskedReceiverSuffix))) ||
+          (!/^\d{4,8}$/.test(String(stored.maskedReceiverSuffix||'')) &&
+            stored.strictReceiverMatchRequested===true &&
+            stored.providerReceiverCheck==='match')) &&
         configured && cbeAccounts(lottery).length===1 &&
         String(configured.number).replace(/\s/g,'')===String(autoGuard.account) &&
         activationSnap?.data()?.account===String(autoGuard.account) &&
@@ -856,7 +863,8 @@ module.exports = async (req, res) => {
         await require('../../lib/wallet-checket-diagnostic').claimDiagnosticLookup(db,{
           depositId,actorId:caller.uid});
         const provider=await require('../../lib/checket-verify').verifyCheckEtPayment({
-          bank:'cbe',transactionNumber:String(deposit.reference||''),accountNumber:account});
+          bank:'cbe',transactionNumber:String(deposit.reference||''),accountNumber:account,
+          expectedAmount:Number(deposit.amountSantim||0)/100});
         const assurance=process.env.CHECK_ET_CBE_RECEIVER_ASSURANCE==='authorized';
         const assessment=require('../../lib/wallet-deposit-verification').assessAutomaticDeposit({
           deposit,provider,receiver:{account,holderName},providerReceiverAccountAssurance:assurance});

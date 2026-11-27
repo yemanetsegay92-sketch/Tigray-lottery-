@@ -15,6 +15,8 @@ const lottery={status:'active',approvalMode:'automatic',paymentAccounts:[{
 }]};
 const verification={bank:'cbe',reportedBank:'cbe',verified:true,status:'completed',verificationMethod:'official',
   providerDuplicate:false,providerCbeAccountCheck:true,
+  providerCheckStatus:'pass',providerReceiverCheck:'match',providerAmountCheck:'match',
+  strictReceiverMatchRequested:true,warnings:[],
   receiverAccountStatus:'masked_unverifiable',maskedReceiverSuffix:'6789',
   receiverName:'Mrs Mahliet Tsegay Gidey',currency:'ETB',amount:1000,
   reportedTransactionNumber:'FTTEST12345',
@@ -84,10 +86,10 @@ test('reference and screenshot payment become eligible after official receipt ve
   assert.equal(assess({}, {...purchase,reference:''}).eligible,true);
   assert.equal(nameKey('Mrs Mahliet Tsegay Gidey'),'MAHLIET TSEGAY GIDEY');
 });
-test('no CBE account configured, wrong receiving holder, or wrong suffix prevents approval',()=>{
+test('no CBE account, wrong holder, or contradictory visible suffix prevents approval',()=>{
   assert.equal(assess({receiverName:'Other Person'}).eligible,false);
   assert.equal(assess({maskedReceiverSuffix:'0000'}).eligible,false);
-  assert.equal(assess({maskedReceiverSuffix:''}).eligible,false);
+  assert.equal(assess({maskedReceiverSuffix:''}).eligible,true);
   assert.equal(assess({},purchase,{...lottery,paymentAccounts:[]}).eligible,false);
   assert.equal(assess({},purchase,{...lottery,paymentAccounts:[
     ...lottery.paymentAccounts,{bank:'CBE',number:'1000999912345',holderName:'Other'}
@@ -188,7 +190,7 @@ test('an uploaded receipt is the first provider input, with the local reference 
   let calls=0;
   const result=await inspectRequest(db,'req-2',{env,readReceipt:async()=>image,verify:async input=>{
    calls++;
-   assert.deepEqual(input,{bank:'cbe',accountNumber:'1000123456789',receiptFile:image});
+   assert.deepEqual(input,{bank:'cbe',accountNumber:'1000123456789',expectedAmount:1000,receiptFile:image});
    assert.equal(db.queue.get('req-2').firstCheckEtInputMethod,'receipt');
    assert.equal(db.queue.get('req-2').firstSubmittedReference,'FTTEST12340');
    return {...verification,reportedTransactionNumber:'FTTEST12340'};
@@ -206,16 +208,30 @@ test('missing original receipt never falls back to sending the OCR number',async
  assert.equal(calls,0);
  assert.equal(db.queue.get('missing-receipt').verificationAttemptStartedAt,undefined);
 });
-test('verified mobile_api receipt with a masked receiver remains in manual review',async()=>{
+test('verified mobile_api receipt with strict receiver match can approve a short mask',async()=>{
  const db=fakeDb({p:receiptPurchase});
  let approvals=0;
  const state=await processOne(db,'mobile-receipt',{env,readReceipt:async()=>receiptFile,
-  verify:async()=>({...verification,verificationMethod:'mobile_api',providerCbeAccountCheck:false,
+  verify:async()=>({...verification,verificationMethod:'mobile_api',maskedReceiverSuffix:'89',
    providerHttpStatus:200,providerCode:'verified'}),
   approve:async()=>{approvals++;}});
- assert.equal(state,'manual_review');
- assert.equal(approvals,0);
+ assert.equal(state,'approved');
+ assert.equal(approvals,1);
  assert.equal(db.queue.get('mobile-receipt').firstCheckEtResult.providerHttpStatus,200);
+});
+
+test('unknown receiver, insufficient amount, and missing provider checks remain manual',async()=>{
+ let index=0;
+ for(const change of [
+  {providerReceiverCheck:'unknown',providerCbeAccountCheck:false},
+  {providerAmountCheck:'lower',amount:900,verified:false,providerCode:'amount_mismatch'},
+  {providerCheckStatus:'unknown',providerReceiverCheck:'unknown',providerCbeAccountCheck:false}
+ ]){
+  const db=fakeDb({p:receiptPurchase});let approvals=0;
+  const state=await processOne(db,'strict-failure-'+index++,{env,readReceipt:async()=>receiptFile,
+   verify:async()=>({...verification,...change}),approve:async()=>{approvals++;}});
+  assert.equal(state,'manual_review');assert.equal(approvals,0);
+ }
 });
 test('failed receipt extraction never calls provider',async()=>{
  const db=fakeDb({p:{...purchase,reference:'',proofPath:'payment-proofs/safe-lottery/final.pdf',receiptExtraction:{ok:false,reason:'reference_not_found'}}});
@@ -281,7 +297,7 @@ test('valid candidate calls the actual atomic approval hook; queue records succe
   const state=await processOne(db,'req-1',{env,verify:async()=>verification,
     approve:async(id,lot,ref,guard)=>{
       approved++;assert.equal(id,'req-1');assert.equal(lot,'safe-lottery');
-      assert.equal(ref,'FTTEST12345');assert.equal(guard.policy,'CBE_UNATTENDED_V1');
+      assert.equal(ref,'FTTEST12345');assert.equal(guard.policy,'CBE_UNATTENDED_V2');
     }});
   assert.equal(state,'approved');assert.equal(approved,1);
   assert.equal(db.logs.at(-1).update.state,'approved');
