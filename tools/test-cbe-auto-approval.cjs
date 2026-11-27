@@ -424,3 +424,40 @@ test('only corroborated documented provider failures are automatically rejected'
   assert.equal(result.decision,'manual_review');
  }
 });
+
+// Regression: Check.et identifies a wrong account from the submitted file,
+ // but returns a V2 receipt identifier rather than the locally extracted FT.
+test('explicit receipt account mismatch rejects without matching FT or bank date',async()=>{
+  const response={...verification,providerHttpStatus:422,providerCode:'account_mismatch',
+    inputMethod:'pdf',providerSuccess:false,verified:false,exists:false,
+    providerDuplicate:false,providerCbeAccountCheck:false,
+    reportedTransactionNumber:'V2-HFHCXOM2R36VLYQFRVZY37567346',
+    status:'unknown',verificationMethod:'unknown',transactionDate:null,
+    providerCheckStatus:'unknown',providerReceiverCheck:'unknown',
+    receiverAccountStatus:'not_returned',amount:null};
+  const db=fakeDb({p:receiptPurchase});let calls=0,rejections=0;
+  const state=await processOne(db,'receipt-account-mismatch',{env,
+    readReceipt:async()=>receiptFile,verify:async input=>{
+      calls++;assert.equal(input.receiptFile,receiptFile);
+      assert.equal(input.accountNumber,'1000123456789');
+      return response;
+    },approve:async()=>assert.fail('must not approve'),
+    reject:async(id,lot,ref,rejection)=>{
+      rejections++;assert.equal(ref,'FTTEST12345');
+      assert.equal(rejection.code,'account_mismatch');
+      assert.equal(rejection.receiptMismatchFingerprint,db.queue.get(id).verificationAttemptFingerprint);
+    }});
+  assert.equal(state,'rejected');assert.equal(calls,1);assert.equal(rejections,1);
+  assert.equal(db.queue.get('receipt-account-mismatch').firstCheckEtResult.reportedTransactionNumber,response.reportedTransactionNumber);
+  for(const [name,change,p] of [
+    ['not-found',{providerHttpStatus:404,providerCode:'not_found'},receiptPurchase],
+    ['other-422',{providerCode:'receiver_unknown'},receiptPurchase],
+    ['reference-only',{inputMethod:'reference'},purchase],
+    ['contradictory-match',{providerReceiverCheck:'match'},receiptPurchase],
+    ['no-strict-match-request',{strictReceiverMatchRequested:false},receiptPurchase]
+  ]){
+    const manual=await inspectRequest(fakeDb({p}),'mismatch-'+name,{env,
+      readReceipt:async()=>receiptFile,verify:async()=>({...response,...change})});
+    assert.equal(manual.decision,'manual_review',name);
+  }
+});
